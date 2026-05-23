@@ -1,0 +1,105 @@
+#!/usr/bin/bash
+# ------------------------------------------------------------
+# run – simple command‑line shortcut for migrating resources
+#
+# Usage examples:
+#   $ ./run migrate absences          # migrate only absences
+#   $ ./run migrate                   # migrate all resources
+#   $ ./run m caterers                # short alias for "migrate caterers"
+#
+# The script maps short names to the corresponding Python migration
+# modules located under the "migrations/" directory.
+# ------------------------------------------------------------
+
+# Directory containing migration scripts (relative to repository root)
+MIGRATION_DIR="migrations"
+
+export PYTHONPATH=$PYTHONPATH:"$PWD"/"$MIGRATION_DIR"
+
+# Helper to show usage
+function usage() {
+    cat <<EOF
+Usage:
+  $0 migrate [resource]
+  $0 m [resource]
+
+resource can be one of:
+  caterers, contacts, menus, sessions, students, absences, exclusions, all
+
+If no resource is supplied, all migrations are run.
+EOF
+}
+
+# Resolve short resource names to script filenames
+declare -A RES_MAP=(
+    [caterers]="caterers.py"
+    [contacts]="caterer_contacts.py"
+    [menus]="caterer_menus.py"
+    [sessions]="sessions.py"
+    [students]="students.py"
+    [absences]="absences.py"
+    [exclusions]="exclusions.py"
+    [all]="all"
+)
+
+# ------------------------------------------------------------
+# Parse arguments
+COMMAND="${1:-}"
+RESOURCE="${2:-}"
+
+if [[ -z "$COMMAND" ]]; then
+    usage
+    exit 1
+fi
+
+# Allow both "migrate" and shorthand "m"
+if [[ "$COMMAND" != "migrate" && "$COMMAND" != "m" ]]; then
+    usage
+    exit 1
+fi
+
+# If no resource supplied, default to "all"
+if [[ -z "$RESOURCE" ]]; then
+    RESOURCE="all"
+fi
+
+# ------------------------------------------------------------
+# Run a single migration script
+run_one() {
+    local script_path="$1"
+    local name="$(basename "$script_path" .py)"
+    echo "Migrating $name"
+    python3 "$script_path"
+    local status=$?
+    if (( status != 0 )); then
+        echo "[WARNING] Migration of $script_path failed with exit code $status"
+    fi
+}
+
+# ------------------------------------------------------------
+# Main execution
+if [[ "$RESOURCE" == "all" ]]; then
+    echo "Migrating all resources"
+    for script in "$MIGRATION_DIR"/*.py; do
+        # Skip support modules that aren't migrations
+        [[ "$(basename "$script")" == "__init__.py" ]] && continue
+        run_one "$script"
+    done
+else
+    script_file="${RES_MAP[$RESOURCE]}"
+    if [[ -z "$script_file" ]]; then
+        echo "[ERROR] Unknown resource: $RESOURCE"
+        usage
+        exit 1
+    fi
+
+    script_path="$MIGRATION_DIR/$script_file"
+    if [[ ! -f "$script_path" ]]; then
+        echo "[ERROR] Migration script not found: $script_path"
+        exit 1
+    fi
+
+    run_one "$script_path"
+fi
+
+exit 0
