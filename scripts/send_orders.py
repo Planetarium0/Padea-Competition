@@ -37,55 +37,55 @@ def load_order_details(order_record):
     order_id = order_record["id"]
     fields = order_record["fields"]
 
-    # Get caterer info
+    # Direct record lookup for the caterer
     caterer_id = fields.get("Caterer", [None])[0]
-    caterer = None
+    caterer = {}
     if caterer_id:
-        recs = s.airtable_get("Caterers", filter_formula=f"RECORD_ID()='{caterer_id}'")
-        caterer = recs[0]["fields"] if recs else {}
+        rec = s.get_table("Caterers").get(caterer_id)
+        caterer = rec["fields"] if rec else {}
 
-    # Get line items for this order
+    # Line items for this order
     line_items = s.airtable_get(
         "Order Line Items",
         filter_formula=f"FIND('{order_id}', {{Line Item ID}})"
     )
 
-    # Resolve each line item's session and menu item details
+    # Collect unique session and menu item IDs across all line items
+    session_ids  = list({li["fields"].get("Session",  [None])[0] for li in line_items} - {None})
+    menu_item_ids = list({li["fields"].get("Menu Item", [None])[0] for li in line_items} - {None})
+
+    # Fetch each unique session and menu item directly by record ID
+    sessions_table    = s.get_table("Sessions")
+    menu_items_table  = s.get_table("Menu Items")
+    schools_table     = s.get_table("Schools")
+    managers_table    = s.get_table("On-Site Managers")
+
+    session_map   = {sid: sessions_table.get(sid)["fields"]   for sid in session_ids}
+    menu_item_map = {mid: menu_items_table.get(mid)["fields"] for mid in menu_item_ids}
+
+    # Annotate each unique session with school name and manager details
+    for sess_fields in session_map.values():
+        school_links = sess_fields.get("School", [])
+        if school_links:
+            school_rec = schools_table.get(school_links[0])
+            sess_fields["_school_name"] = school_rec["fields"].get("School Name", "?") if school_rec else "?"
+
+        mgr_links = sess_fields.get("On-Site Manager", [])
+        if mgr_links:
+            mgr_rec = managers_table.get(mgr_links[0])
+            if mgr_rec:
+                sess_fields["_manager_name"]   = mgr_rec["fields"].get("Manager Name", "?")
+                sess_fields["_manager_mobile"] = mgr_rec["fields"].get("Mobile", "?")
+
     resolved_items = []
     for li in line_items:
-        li_fields = li["fields"]
-        session_id = li_fields.get("Session", [None])[0]
+        li_fields    = li["fields"]
+        session_id   = li_fields.get("Session",  [None])[0]
         menu_item_id = li_fields.get("Menu Item", [None])[0]
-
-        session_fields = {}
-        if session_id:
-            recs = s.airtable_get("Sessions", filter_formula=f"RECORD_ID()='{session_id}'")
-            if recs:
-                session_fields = recs[0]["fields"]
-                # Resolve school name
-                school_links = session_fields.get("School", [])
-                if school_links:
-                    school_recs = s.airtable_get("Schools", filter_formula=f"RECORD_ID()='{school_links[0]}'")
-                    if school_recs:
-                        session_fields["_school_name"] = school_recs[0]["fields"].get("School Name", "?")
-                # Resolve on-site manager
-                mgr_links = session_fields.get("On-Site Manager", [])
-                if mgr_links:
-                    mgr_recs = s.airtable_get("On-Site Managers", filter_formula=f"RECORD_ID()='{mgr_links[0]}'")
-                    if mgr_recs:
-                        session_fields["_manager_name"] = mgr_recs[0]["fields"].get("Manager Name", "?")
-                        session_fields["_manager_mobile"] = mgr_recs[0]["fields"].get("Mobile", "?")
-
-        menu_item_fields = {}
-        if menu_item_id:
-            recs = s.airtable_get("Menu Items", filter_formula=f"RECORD_ID()='{menu_item_id}'")
-            if recs:
-                menu_item_fields = recs[0]["fields"]
-
         resolved_items.append({
-            "quantity": li_fields.get("Quantity", 0),
-            "session": session_fields,
-            "menu_item": menu_item_fields,
+            "quantity":  li_fields.get("Quantity", 0),
+            "session":   session_map.get(session_id, {}),
+            "menu_item": menu_item_map.get(menu_item_id, {}),
         })
 
     return caterer, resolved_items

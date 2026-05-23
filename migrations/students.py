@@ -159,24 +159,23 @@ Raw Strings to Map:
 
 # 3. Fetch active sessions to resolve linked student sessions
 sessions_list = s.airtable_get("Sessions")
+schools_list  = s.airtable_get("Schools")
+school_name_by_id = {r["id"]: r["fields"].get("School Name", "") for r in schools_list}
 
 # Dictionary to look up sessions by (School Name, Day)
-# Since School is a relational field, we extract the school name
 session_lookup = {}  # (school_name, day) -> list of session_record_ids
 for sess in sessions_list:
     fields = sess["fields"]
     sess_id = sess["id"]
     sess_day = fields.get("Day")
     school_links = fields.get("School", [])
-    
+
     if not school_links or not sess_day:
         continue
-        
-    # Retrieve school name
-    school_rec = s.airtable_get("Schools", filter_formula=f"RECORD_ID()='{school_links[0]}'")
-    if not school_rec:
+
+    school_name = school_name_by_id.get(school_links[0])
+    if not school_name:
         continue
-    school_name = school_rec[0]["fields"]["School Name"]
 
     key_pair = (school_name, sess_day)
     if key_pair not in session_lookup:

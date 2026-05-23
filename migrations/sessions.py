@@ -107,7 +107,8 @@ for _, row in df.iterrows():
         s.log.warning(f"Session at '{school_name}' missing a valid date. Skipping.")
         continue
 
-    session_id = f"{school_name} - {session_date}"
+    day_name = clean_str(row["day"])
+    session_id = f"{school_name} - {day_name}"
 
     rec = {
         "Session ID": session_id,
