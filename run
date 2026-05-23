@@ -29,6 +29,7 @@ Usage:
   $0 orders generate [--dry-run] [--round 1|2]
   $0 orders preview
   $0 orders send
+  $0 qr [--base-url URL] [--session ID]
 
 resource can be one of:
   caterers, contacts, menus, sessions, students, absences, exclusions, all
@@ -95,6 +96,13 @@ if [[ "$COMMAND" == "orders" ]]; then
             exit 1
             ;;
     esac
+    exit 0
+fi
+
+# --- QR code generation ---
+if [[ "$COMMAND" == "qr" ]]; then
+    echo "Generating QR codes..."
+    python scripts/generate_qr.py "${@:2}"
     exit 0
 fi
 
