@@ -41,16 +41,16 @@ html, body {
 }
 
 /* -------------------------------------------------------
-   Screens
+   Error banner
    ------------------------------------------------------- */
-.screen {
-  display: none;
-  flex-direction: column;
-  min-height: 100vh;
-}
-
-.screen.active {
-  display: flex;
+.error-banner {
+  background: rgba(224,92,92,.1);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  color: var(--danger);
+  font-size: .9rem;
+  padding: 12px 16px;
+  margin: 12px 20px 0;
 }
 
 /* -------------------------------------------------------
@@ -117,19 +117,8 @@ html, body {
 }
 
 /* -------------------------------------------------------
-   Loading / Error screens
+   Spinner
    ------------------------------------------------------- */
-.loading-container, .error-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 40px 20px;
-  text-align: center;
-}
-
 .spinner {
   width: 40px;
   height: 40px;
@@ -137,18 +126,75 @@ html, body {
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin .8s linear infinite;
+  flex-shrink: 0;
+}
+
+.spinner-sm {
+  width: 20px;
+  height: 20px;
+  border-width: 2px;
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.loading-text { color: var(--text-muted); }
-
-.error-icon { font-size: 3rem; }
-
-.error-container h2 { color: var(--danger); }
+/* -------------------------------------------------------
+   Meals loading inline state
+   ------------------------------------------------------- */
+.meals-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px 0;
+  color: var(--text-muted);
+  font-size: .9rem;
+}
 
 /* -------------------------------------------------------
-   Student list
+   Dietary filter chips
+   ------------------------------------------------------- */
+.dietary-filter-section {
+  margin-bottom: 16px;
+}
+
+.filter-label {
+  font-size: .8rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.filter-chip {
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: .8rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  transition: border-color var(--transition), background var(--transition), color var(--transition);
+}
+
+.filter-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.filter-chip.active {
+  border-color: var(--accent);
+  background: rgba(245,166,35,.12);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* -------------------------------------------------------
+   Student list (kept for reference, no longer used in main flow)
    ------------------------------------------------------- */
 .student-list {
   display: flex;
@@ -490,6 +536,107 @@ html, body {
    Utilities
    ------------------------------------------------------- */
 .hidden { display: none !important; }
+
+/* -------------------------------------------------------
+   Combined main screen
+   ------------------------------------------------------- */
+.header-student {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-change {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: .8rem;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition), background var(--transition);
+  white-space: nowrap;
+}
+
+.btn-change:hover { color: var(--text); background: var(--surface-2); }
+
+.form-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.section-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 14px;
+  color: var(--text);
+}
+
+/* Today's meal display */
+.todays-meal-card { margin-bottom: 14px; }
+
+.todays-meal-name {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--accent);
+  padding: 10px 14px;
+  background: rgba(245,166,35,.08);
+  border: 1px solid rgba(245,166,35,.2);
+  border-radius: var(--radius-sm);
+}
+
+.no-meal-note {
+  font-size: .9rem;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 10px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+/* Inline rating saved confirmation */
+.saved-msg {
+  text-align: center;
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--success);
+  padding: 8px 0 0;
+  animation: fadeIn .2s ease;
+}
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; } }
+
+/* Remembered student in picker */
+.student-btn.remembered {
+  border-color: var(--accent);
+  background: rgba(245,166,35,.06);
+}
+
+.student-btn.remembered:hover { background: rgba(245,166,35,.12); }
+
+.student-avatar.remembered-avatar {
+  background: var(--accent);
+  color: #0f0f13;
+  border-color: var(--accent);
+  font-size: 1rem;
+}
+
+.remembered-label {
+  margin-left: auto;
+  font-size: .72rem;
+  color: var(--accent);
+  font-weight: 600;
+  padding: 2px 8px;
+  border: 1px solid rgba(245,166,35,.3);
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.student-btn-info { flex: 1; }
 
 /* Previously-selected callout */
 .prev-note {

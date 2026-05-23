@@ -61,7 +61,7 @@ if [[ -z "$COMMAND" ]]; then
 fi
 
 if [[ "$COMMAND" == "script" ]]; then
-    echo "Runnning script"
+    echo "Running script"
     python "scripts/$RESOURCE.py"
     exit 0
 fi
@@ -123,7 +123,7 @@ run_one() {
     local script_path="$1"
     local name="$(basename "$script_path" .py)"
     echo "Migrating $name"
-    python3 "$script_path"
+    python "$script_path"
     local status=$?
     if (( status != 0 )); then
         echo "[WARNING] Migration of $script_path failed with exit code $status"
