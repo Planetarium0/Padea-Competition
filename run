@@ -22,6 +22,8 @@ function usage() {
 Usage:
   $0 migrate [resource]
   $0 m [resource]
+  $0 schema update
+  $0 script [name]
 
 resource can be one of:
   caterers, contacts, menus, sessions, students, absences, exclusions, all
@@ -50,6 +52,18 @@ RESOURCE="${2:-}"
 if [[ -z "$COMMAND" ]]; then
     usage
     exit 1
+fi
+
+if [[ "$COMMAND" == "script" ]]; then
+    echo "Runnning script"
+    python "scripts/$RESOURCE.py"
+    exit 0
+fi
+
+if [[ "$COMMAND" == "schema" ]]; then
+    echo "updating schema"
+    python "scripts/update_schema.py"
+    exit 0
 fi
 
 # Allow both "migrate" and shorthand "m"

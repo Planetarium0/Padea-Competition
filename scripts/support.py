@@ -1,105 +1,100 @@
 import os
 import json
 import logging
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from dotenv import load_dotenv
+from pyairtable import Api
+from .prompt_user import prompt_user
 
-# -------------------------------------------------
-# Logging
-# -------------------------------------------------
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(levelname)s] %(asctime)s %(name)s – %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-log = logging.getLogger("padea_migration")
+# Initialize dotenv
+load_dotenv()
 
-# -------------------------------------------------
-# Environment
-# -------------------------------------------------
-def load_env() -> None:
-    """Load .env if present."""
-    from dotenv import load_dotenv
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+log = logging.getLogger("PadeaMigration")
 
-    dotenv_path = Path.cwd() / ".env"
-    if dotenv_path.is_file():
-        load_dotenv(dotenv_path)
-        log.info("Loaded environment from %s", dotenv_path)
-    else:
-        log.warning(".env file not found – ensure AIRTABLE_API_KEY is set in the shell.")
+# Initialize Airtable
+AIRTABLE_API_KEY = os.environ.get("AIRTABLE_API_KEY")
+AIRTABLE_ID = os.environ.get("AIRTABLE_ID")
 
+if not AIRTABLE_API_KEY or not AIRTABLE_ID:
+    log.error("Missing Airtable configuration in .env!")
 
-# -------------------------------------------------
-# Airtable helpers
-# -------------------------------------------------
-BASE_ID = os.getenv("AIRTABLE_ID")  # constant base ID
-AIRTABLE_TOKEN = os.getenv("AIRTABLE_API_KEY")
-HEADERS = {
-    "Authorization": f"Bearer {AIRTABLE_TOKEN}",
-    "Content-Type": "application/json",
-}
+api = Api(AIRTABLE_API_KEY) if AIRTABLE_API_KEY else None
+base = api.base(AIRTABLE_ID) if api and AIRTABLE_ID else None
 
+def get_table(name):
+    if not base:
+        raise ValueError("Airtable Base is not initialized. Check your .env file.")
+    return base.table(name)
 
-def airtable_post(table_name: str, records: List[Dict[str, Any]]) -> None:
-    """
-    POST a batch of records (max 10 per request) to the Data API.
-    """
-    from urllib import request
-    import urllib.error
-
-    url = f"https://api.airtable.com/v0/{BASE_ID}/{table_name}"
-    payload = json.dumps({"records": records}).encode()
-    req = request.Request(url, data=payload, headers=HEADERS, method="POST")
-
+def airtable_get(table_name, filter_formula=None):
     try:
-        with request.urlopen(req) as resp:
-            result = json.load(resp)
-            log.info("Inserted %d rows into %s", len(result.get("records", [])), table_name)
-    except urllib.error.HTTPError as e:
-        body = e.read().decode()
-        log.error("Airtable POST failed (%s) – %s", e.code, body)
-        raise
-
-
-def airtable_get(table_name: str, filter_formula: Optional[str] = None) -> List[Dict]:
-    """
-    Retrieve all records from a table (simple pagination, 100 per page).
-    """
-    from urllib import request
-    import urllib.parse
-
-    records = []
-    offset = None
-    while True:
-        params = {}
+        table = get_table(table_name)
         if filter_formula:
-            params["filterByFormula"] = filter_formula
-        if offset:
-            params["offset"] = offset
-        query = urllib.parse.urlencode(params)
-        url = f"https://api.airtable.com/v0/{BASE_ID}/{table_name}?{query}"
-        req = request.Request(url, headers=HEADERS, method="GET")
-        with request.urlopen(req) as resp:
-            data = json.load(resp)
-            records.extend(data.get("records", []))
-            offset = data.get("offset")
-            if not offset:
-                break
-    return records
+            return table.all(formula=filter_formula)
+        return table.all()
+    except Exception as e:
+        log.error(f"Error fetching from Airtable table {table_name}: {e}")
+        return []
 
-
-# -------------------------------------------------
-# LLM proxy (Claude) – placeholder until API key is added
-# -------------------------------------------------
-def ask_llm(prompt: str) -> str:
+def airtable_post(table_name, records):
     """
-    Send `prompt` to Claude via the Claude Code API.
-    Returns the raw response text.
+    Posts records to Airtable.
+    records can be a list of dicts:
+      - either: [{"fields": {...}}]
+      - or: [{...}] (flat list of fields)
     """
-    from scripts.support import log  # local import to avoid circularity
+    if not records:
+        return []
+    
+    formatted_records = []
+    for r in records:
+        if isinstance(r, dict) and "fields" in r:
+            formatted_records.append(r["fields"])
+        else:
+            formatted_records.append(r)
+            
+    table = get_table(table_name)
+    inserted_records = []
+    # Batch in 10s
+    for i in range(0, len(formatted_records), 10):
+        batch = formatted_records[i:i+10]
+        try:
+            res = table.batch_create(batch)
+            inserted_records.extend(res)
+        except Exception as e:
+            log.error(f"Error posting batch to table {table_name}: {e}")
+            raise e
+    return inserted_records
 
-    # This is a thin wrapper – actual implementation will be added once
-    # `CLAUDE_API_KEY` is present in .env.
-    log.info("[AGENT] %s", prompt)
-    # Placeholder – the calling script should handle `NotImplemented` by flagging the record.
-    return NotImplemented
+def clear_table(table_name):
+    table = get_table(table_name)
+    try:
+        records = table.all()
+        if not records:
+            return
+        record_ids = [r["id"] for r in records]
+        log.info(f"Clearing {len(record_ids)} records from {table_name}")
+        for i in range(0, len(record_ids), 10):
+            table.batch_delete(record_ids[i:i+10])
+    except Exception as e:
+        log.warning(f"Failed to clear table {table_name}: {e}")
+
+def ask_llm(prompt):
+    key = os.environ.get("CLAUDE_CODE_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        log.warning("No Claude or Anthropic API key found. LLM queries will try prompt the user.")
+        answer = prompt_user(prompt)
+        return answer
+    try:
+        from anthropic import Anthropic
+        client = Anthropic(api_key=key)
+        response = client.messages.create(
+            model="claude-3-5-sonnet-latest",
+            max_tokens=4000,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.content[0].text
+    except Exception as e:
+        log.error(f"Error calling Anthropic API: {e}")
+        return NotImplemented
