@@ -13,38 +13,16 @@ TABLES_SCHEMA = {
                         {"name": "Central Brisbane"}
                     ]
                 }
-            },
-            {
-                "name": "Sessions",
-                "type": "multipleRecordLinks",
-                "link_target": "Sessions"
-            },
-            {
-                "name": "Students",
-                "type": "multipleRecordLinks",
-                "link_target": "Students"
-            },
-            {
-                "name": "Serves Schools",
-                "type": "multipleRecordLinks",
-                "link_target": "Caterers"
-            },
-            {
-                "name": "Able to Serve Schools",
-                "type": "multipleRecordLinks",
-                "link_target": "Caterers"
             }
+            # Back-links (Sessions, Serves Schools, Able to Serve Schools, Exclusions)
+            # are auto-created by Airtable when the owning side creates the link.
         ]
     },
     "On-Site Managers": {
         "primary": {"name": "Manager Name", "type": "singleLineText"},
         "fields": [
-            {"name": "Mobile", "type": "phoneNumber"},
-            {
-                "name": "Sessions",
-                "type": "multipleRecordLinks",
-                "link_target": "Sessions"
-            }
+            {"name": "Mobile", "type": "phoneNumber"}
+            # Sessions back-link is auto-created by Sessions.'On-Site Manager'
         ]
     },
     "Caterers": {
@@ -92,12 +70,8 @@ TABLES_SCHEMA = {
                 "name": "Able to Serve Schools",
                 "type": "multipleRecordLinks",
                 "link_target": "Schools"
-            },
-            {
-                "name": "Menu Items",
-                "type": "multipleRecordLinks",
-                "link_target": "Menu Items"
             }
+            # Menu Items back-link is auto-created by Menu Items.'Caterer'
         ]
     },
     "Menu Items": {
