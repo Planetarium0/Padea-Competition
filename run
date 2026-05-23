@@ -1,14 +1,16 @@
 #!/usr/bin/bash
 # ------------------------------------------------------------
-# run – simple command‑line shortcut for migrating resources
+# run – simple command‑line shortcut for Padea operations
 #
 # Usage examples:
 #   $ ./run migrate absences          # migrate only absences
 #   $ ./run migrate                   # migrate all resources
 #   $ ./run m caterers                # short alias for "migrate caterers"
-#
-# The script maps short names to the corresponding Python migration
-# modules located under the "migrations/" directory.
+#   $ ./run schema update             # sync Airtable schema
+#   $ ./run orders generate           # compile next week's orders
+#   $ ./run orders generate --dry-run # preview without writing
+#   $ ./run orders preview            # show formatted emails
+#   $ ./run orders send               # log emails (doesn't actually send)
 # ------------------------------------------------------------
 
 # Directory containing migration scripts (relative to repository root)
@@ -24,6 +26,9 @@ Usage:
   $0 m [resource]
   $0 schema update
   $0 script [name]
+  $0 orders generate [--dry-run] [--round 1|2]
+  $0 orders preview
+  $0 orders send
 
 resource can be one of:
   caterers, contacts, menus, sessions, students, absences, exclusions, all
@@ -63,6 +68,33 @@ fi
 if [[ "$COMMAND" == "schema" ]]; then
     echo "updating schema"
     python "scripts/update_schema.py"
+    exit 0
+fi
+
+# --- Orders command ---
+if [[ "$COMMAND" == "orders" ]]; then
+    SUBCOMMAND="${2:-}"
+    shift 2 2>/dev/null || true
+
+    case "$SUBCOMMAND" in
+        generate)
+            echo "Generating orders..."
+            python scripts/generate_orders.py "$@"
+            ;;
+        preview)
+            echo "Previewing order emails..."
+            python scripts/send_orders.py --preview
+            ;;
+        send)
+            echo "Logging order emails..."
+            python scripts/send_orders.py
+            ;;
+        *)
+            echo "[ERROR] Unknown orders subcommand: $SUBCOMMAND"
+            echo "Use: orders generate|preview|send"
+            exit 1
+            ;;
+    esac
     exit 0
 fi
 
@@ -117,3 +149,4 @@ else
 fi
 
 exit 0
+

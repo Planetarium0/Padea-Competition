@@ -1,15 +1,23 @@
-# Task Checklist - Padea Data Migration
+# Tasks
 
-- [x] Create `scripts/__init__.py` and the shared helper library `scripts/support.py`
-- [x] Create `scripts/schema.py` containing the schema specification
-- [x] Create `scripts/update_schema.py` to programmatically update the Airtable database schema
-- [x] Run `python3 scripts/update_schema.py` to build the Airtable schema
-- [x] Implement and run migration for `caterers` (`migrations/caterers.py`)
-- [x] Implement and run migration for `caterer_contacts` (`migrations/caterer_contacts.py`)
-- [x] Implement and run migration for `caterer_menus` (`migrations/caterer_menus.py`)
-- [x] Implement and run migration for `sessions` (`migrations/sessions.py`)
-- [x] Implement and run migration for `students` (`migrations/students.py`)
-- [x] Implement and run migration for `absences` (`migrations/absences.py`)
-- [x] Implement and run migration for `exclusions` (`migrations/exclusions.py`)
-- [x] Create and run `scripts/verify_migration.py` to validate record counts and relations
-- [x] Complete the migration walkthrough report (`walkthrough.md`)
+## Phase 1: Schema + Order Engine
+- [ ] Add Weekly Orders + Order Line Items tables to `scripts/schema.py`
+- [ ] Run `./run schema update` to sync new tables
+- [ ] Create `scripts/generate_orders.py` — core order compilation
+- [ ] Add `orders` commands to `run` script
+- [ ] Test with `--dry-run` against live Airtable data
+
+## Phase 2: Student Web App
+- [ ] Create `output/webapp/index.html` — SPA shell
+- [ ] Create `output/webapp/style.css` — mobile-first premium design
+- [ ] Create `output/webapp/app.js` — Airtable API integration
+- [ ] Browser test the web app locally
+
+## Phase 3: Email + QR
+- [ ] Create `scripts/send_orders.py` — email formatting + logging
+- [ ] Create `scripts/generate_qr.py` — QR code generation
+- [ ] Test email output in `output/emails/`
+
+## Phase 4: Verification
+- [ ] End-to-end dry run walkthrough
+- [ ] Review generated emails against expected format

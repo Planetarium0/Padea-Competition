@@ -258,5 +258,61 @@ TABLES_SCHEMA = {
             },
             {"name": "Selection Date", "type": "date", "options": {"dateFormat": {"name": "iso"}}}
         ]
+    },
+    "Weekly Orders": {
+        "primary": {"name": "Order ID", "type": "singleLineText"},
+        "fields": [
+            {
+                "name": "Caterer",
+                "type": "multipleRecordLinks",
+                "link_target": "Caterers"
+            },
+            {
+                "name": "Round",
+                "type": "singleSelect",
+                "options": {
+                    "choices": [
+                        {"name": "Round 1 (Mon–Wed)"},
+                        {"name": "Round 2 (Thu–Fri)"}
+                    ]
+                }
+            },
+            {"name": "Week Start", "type": "date", "options": {"dateFormat": {"name": "iso"}}},
+            {"name": "Total Meals", "type": "number", "options": {"precision": 0}},
+            {"name": "Total Cost", "type": "currency", "options": {"precision": 2, "symbol": "$"}},
+            {
+                "name": "Status",
+                "type": "singleSelect",
+                "options": {
+                    "choices": [
+                        {"name": "Draft"},
+                        {"name": "Sent"},
+                        {"name": "Confirmed"}
+                    ]
+                }
+            },
+            {"name": "Notes", "type": "multilineText"}
+        ]
+    },
+    "Order Line Items": {
+        "primary": {"name": "Line Item ID", "type": "singleLineText"},
+        "fields": [
+            {
+                "name": "Weekly Order",
+                "type": "multipleRecordLinks",
+                "link_target": "Weekly Orders"
+            },
+            {
+                "name": "Menu Item",
+                "type": "multipleRecordLinks",
+                "link_target": "Menu Items"
+            },
+            {
+                "name": "Session",
+                "type": "multipleRecordLinks",
+                "link_target": "Sessions"
+            },
+            {"name": "Quantity", "type": "number", "options": {"precision": 0}}
+        ]
     }
 }

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Padea Meals</title>
+    <meta name="description" content="Select your meal and rate your dinner for Padea tutoring sessions.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Loading state -->
+        <div id="screen-loading" class="screen active">
+            <div class="loading-container">
+                <div class="logo">
+                    <span class="logo-icon">🍱</span>
+                    <h1>Padea Meals</h1>
+                </div>
+                <div class="spinner"></div>
+                <p class="loading-text">Loading session...</p>
+            </div>
+        </div>
+
+        <!-- Error state -->
+        <div id="screen-error" class="screen">
+            <div class="error-container">
+                <span class="error-icon">⚠️</span>
+                <h2>Something went wrong</h2>
+                <p id="error-message">Could not load session data.</p>
+                <button onclick="location.reload()" class="btn btn-primary">Try Again</button>
+            </div>
+        </div>
+
+        <!-- Screen 1: Student picker -->
+        <div id="screen-students" class="screen">
+            <header class="app-header">
+                <div class="logo-sm">
+                    <span class="logo-icon">🍱</span>
+                    <span>Padea Meals</span>
+                </div>
+                <div id="session-info" class="session-badge"></div>
+            </header>
+            <main class="content">
+                <h2 class="screen-title">Who are you?</h2>
+                <p class="screen-subtitle">Tap your name to get started</p>
+                <div id="student-list" class="student-list"></div>
+            </main>
+        </div>
+
+        <!-- Screen 2: Action picker -->
+        <div id="screen-actions" class="screen">
+            <header class="app-header">
+                <button onclick="app.goTo('students')" class="btn-back" aria-label="Back">← Back</button>
+                <div id="student-name-display" class="student-badge"></div>
+            </header>
+            <main class="content">
+                <h2 class="screen-title">What would you like to do?</h2>
+                <div class="action-cards">
+                    <button id="btn-rate" class="action-card" onclick="app.startRating()">
+                        <span class="action-icon">⭐</span>
+                        <span class="action-label">Rate Today's Meal</span>
+                        <span class="action-desc">Tell us what you thought</span>
+                    </button>
+                    <button id="btn-select" class="action-card" onclick="app.startSelection()">
+                        <span class="action-icon">🍽️</span>
+                        <span class="action-label">Pick Next Week's Meal</span>
+                        <span class="action-desc">Choose what you want to eat</span>
+                    </button>
+                </div>
+            </main>
+        </div>
+
+        <!-- Screen 3: Rate meal -->
+        <div id="screen-rate" class="screen">
+            <header class="app-header">
+                <button onclick="app.goTo('actions')" class="btn-back" aria-label="Back">← Back</button>
+                <div class="student-badge" id="rate-student-badge"></div>
+            </header>
+            <main class="content">
+                <h2 class="screen-title">Rate Your Meal</h2>
+                <p class="screen-subtitle" id="rate-subtitle">How was your meal today?</p>
+
+                <div id="rate-items-list" class="menu-list"></div>
+
+                <div id="rate-form" class="rate-form hidden">
+                    <div id="rate-item-name" class="rate-item-name"></div>
+                    <div class="star-rating" id="star-rating">
+                        <button class="star" data-value="1" onclick="app.setRating(1)">★</button>
+                        <button class="star" data-value="2" onclick="app.setRating(2)">★</button>
+                        <button class="star" data-value="3" onclick="app.setRating(3)">★</button>
+                        <button class="star" data-value="4" onclick="app.setRating(4)">★</button>
+                        <button class="star" data-value="5" onclick="app.setRating(5)">★</button>
+                    </div>
+                    <textarea id="rate-comment" class="comment-box" placeholder="Any comments? (optional)" rows="3"></textarea>
+                    <button id="btn-submit-rating" class="btn btn-primary btn-lg" onclick="app.submitRating()">
+                        Submit Rating
+                    </button>
+                </div>
+            </main>
+        </div>
+
+        <!-- Screen 4: Select meal -->
+        <div id="screen-select" class="screen">
+            <header class="app-header">
+                <button onclick="app.goTo('actions')" class="btn-back" aria-label="Back">← Back</button>
+                <div class="student-badge" id="select-student-badge"></div>
+            </header>
+            <main class="content">
+                <h2 class="screen-title">Pick Your Meal</h2>
+                <p class="screen-subtitle">Choose one meal for next week</p>
+                <div id="menu-items-list" class="menu-list"></div>
+            </main>
+        </div>
+
+        <!-- Screen 5: Confirmation -->
+        <div id="screen-confirm" class="screen">
+            <div class="confirm-container">
+                <div class="confirm-icon" id="confirm-icon">✅</div>
+                <h2 id="confirm-title">Done!</h2>
+                <p id="confirm-message">Your response has been recorded.</p>
+                <div class="confirm-actions">
+                    <button class="btn btn-secondary" onclick="app.goTo('actions')">Do Something Else</button>
+                    <button class="btn btn-primary" onclick="app.goTo('students')">Switch Student</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
