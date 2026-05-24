@@ -1,2 +1,2 @@
 # Package initialization for scripts
-from support import *
+from .support import *

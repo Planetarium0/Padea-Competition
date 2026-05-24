@@ -69,11 +69,24 @@ def load_order_details(weekly_order_record):
         rec = s.get_table("Caterers").get(caterer_id)
         caterer_fields = rec["fields"] if rec else {}
 
-    # Fetch all per-student Orders for this Weekly Order
-    individual_orders = s.airtable_get(
-        "Orders",
-        filter_formula=f"FIND('{wo_id}', ARRAYJOIN({{Weekly Order}}))"
-    )
+    # Fetch Orders for this week by date range, then filter by record ID
+    # client-side. ARRAYJOIN({Weekly Order}) returns primary-field values, not
+    # record IDs, so we can't use it to search for wo_id directly.
+    week_start = wo_fields.get("Week Start", "")
+    if week_start:
+        from datetime import datetime, timedelta
+        monday = datetime.strptime(week_start, "%Y-%m-%d").date()
+        friday = (monday + timedelta(days=4)).isoformat()
+        all_orders = s.airtable_get(
+            "Orders",
+            filter_formula=f"AND({{Date}} >= '{week_start}', {{Date}} <= '{friday}')"
+        )
+    else:
+        all_orders = s.airtable_get("Orders")
+    individual_orders = [
+        o for o in all_orders
+        if wo_id in (o["fields"].get("Weekly Order") or [])
+    ]
     s.log.info(f"  Found {len(individual_orders)} individual order records")
 
     # Aggregate: session_id → item_id → count

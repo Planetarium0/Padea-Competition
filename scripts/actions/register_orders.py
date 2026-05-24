@@ -34,6 +34,11 @@ import support as s
 
 DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 
+# When fewer than this many students have an explicit preference for a caterer,
+# use variety assignment (least-ordered first) instead of popularity weighting,
+# so the order doesn't collapse to a single item.
+VARIETY_THRESHOLD = 10
+
 NEGATIVE_DIETARY_KEYWORDS = {
     "No Beef":     ["beef", "bulgogi"],
     "No Pork":     ["pork", "bacon", "ham"],
@@ -83,7 +88,7 @@ def load_all_data():
         "dietary_restrictions": s.airtable_get("Dietary Restrictions"),
         "absences":             s.airtable_get("Absences"),
         "exclusions":           s.airtable_get("Exclusions"),
-        "feedback":             s.airtable_get("Meal Feedback"),
+        "feedback":             s.airtable_get("Caterer Feedback"),
     }
     s.log.info(
         f"Loaded: {len(data['sessions'])} sessions, {len(data['students'])} students, "
@@ -122,15 +127,15 @@ def build_lookups(data):
 
     lk["exclusions"] = data["exclusions"]
 
-    # Average feedback rating per menu item (for popularity weighting)
-    item_ratings = defaultdict(list)
+    # Average feedback rating per caterer
+    caterer_ratings = defaultdict(list)
     for fb in data["feedback"]:
-        rating  = fb["fields"].get("Rating")
-        item_id = (fb["fields"].get("Menu Item") or [None])[0]
-        if rating is not None and item_id:
-            item_ratings[item_id].append(rating)
-    lk["item_avg_rating"] = {
-        iid: sum(rs) / len(rs) for iid, rs in item_ratings.items()
+        rating     = fb["fields"].get("Rating")
+        caterer_id = (fb["fields"].get("Caterer") or [None])[0]
+        if rating is not None and caterer_id:
+            caterer_ratings[caterer_id].append(rating)
+    lk["caterer_avg_rating"] = {
+        cid: sum(rs) / len(rs) for cid, rs in caterer_ratings.items()
     }
 
     return lk
@@ -199,9 +204,8 @@ def is_student_excluded(student_fields, session_fields, lk):
 def assign_fallback_meal(student_dietary_names, caterer_menu, item_counts, lk):
     """
     Pick the best compatible meal weighted by:
-      - Current batch popularity (40%)
-      - Historical average rating  (40%)
-      - Random variety             (20%)
+      - Current batch popularity (80%)
+      - Random variety           (20%)
     """
     compatible = [
         item for item in caterer_menu
@@ -215,13 +219,63 @@ def assign_fallback_meal(student_dietary_names, caterer_menu, item_counts, lk):
     for item in compatible:
         iid         = item["id"]
         order_share = item_counts.get(iid, 0) / total_orders
-        avg_rating  = lk["item_avg_rating"].get(iid, 3.0) / 5.0
         variety     = random.uniform(0, 1)
-        score       = order_share * 0.4 + avg_rating * 0.4 + variety * 0.2
+        score       = order_share * 0.8 + variety * 0.2
         scored.append((score, item))
 
     scored.sort(key=lambda x: -x[0])
     return scored[0][1]["id"]
+
+
+def compute_max_variety(caterer_fields, total_students):
+    """
+    Return the most distinct items we can order while still satisfying the
+    caterer's min-qty constraint.
+
+    Checks Min Qty 6/5/4 Items in descending order and returns the highest n
+    where total_students >= n * min_qty_for_n.
+
+    Falls back to total_students // 3 (minimum 3 orders per item) when no
+    explicit constraint is set, so variety never spreads so thin that items
+    are ordered with qty 1 or 2.
+    """
+    for n in range(6, 3, -1):
+        min_qty = caterer_fields.get(f"Min Qty {n} Items")
+        if min_qty is not None and int(min_qty) > 0 and total_students >= n * int(min_qty):
+            return n
+    return max(1, total_students // 3)
+
+
+def assign_variety_meal(student_dietary_names, caterer_menu, item_counts, lk,
+                        max_items=None):
+    """
+    Pick the least-ordered compatible meal to spread variety across the batch.
+    Used when few students have set an explicit preference.
+
+    max_items: if set, once that many distinct items are already in item_counts,
+    only pick from those existing items (avoids spreading too thin and violating
+    min-qty constraints). Dietary exceptions can still introduce a new item.
+    """
+    compatible = [
+        item for item in caterer_menu
+        if is_item_compatible(item["fields"], student_dietary_names, lk["dietary_name_by_id"])
+    ]
+    if not compatible:
+        return None
+
+    if max_items is not None:
+        active_ids = {iid for iid, cnt in item_counts.items() if cnt > 0}
+        if len(active_ids) >= max_items:
+            capped = [item for item in compatible if item["id"] in active_ids]
+            if capped:
+                compatible = capped
+            # else: all active items are dietarily incompatible — allow a new item
+
+    compatible.sort(key=lambda item: (
+        item_counts.get(item["id"], 0),
+        random.uniform(0, 1),
+    ))
+    return compatible[0]["id"]
 
 
 # ---------------------------------------------------------------------------
@@ -407,6 +461,33 @@ def register_orders(dry_run=False):
         s.log.warning("No sessions found for next week.")
         return
 
+    # Pre-scan: count enrolled students and explicit preferences per caterer.
+    # Used to pick fallback assignment mode and to cap variety to min-qty limits.
+    explicit_pref_counts:   defaultdict = defaultdict(int)
+    caterer_student_counts: defaultdict = defaultdict(int)
+    for sess_rec in next_week_sessions:
+        cid = (sess_rec["fields"].get("Caterer") or [None])[0]
+        if not cid:
+            continue
+        menu_ids = {item["id"] for item in lk["menu_items_by_caterer"].get(cid, [])}
+        for stu in lk["students_by_session"].get(sess_rec["id"], []):
+            caterer_student_counts[cid] += 1
+            pref_ids = stu["fields"].get("Meal Preference") or []
+            if pref_ids and pref_ids[0] in menu_ids:
+                explicit_pref_counts[cid] += 1
+
+    caterer_max_variety = {
+        cid: compute_max_variety(lk["caterer_by_id"].get(cid, {}), total)
+        for cid, total in caterer_student_counts.items()
+    }
+
+    for cid, count in explicit_pref_counts.items():
+        caterer_name = lk["caterer_by_id"].get(cid, {}).get("Caterer Name", cid)
+        mode     = "popularity" if count >= VARIETY_THRESHOLD else "variety"
+        max_v    = caterer_max_variety.get(cid)
+        cap_str  = f", capped at {max_v} items" if (mode == "variety" and max_v) else ""
+        s.log.info(f"Caterer '{caterer_name}': {count} explicit preferences — using {mode} fallback{cap_str}")
+
     # -----------------------------------------------------------------------
     # Build per-caterer assignment list
     # (student_id, session_id, item_id, is_explicit)
@@ -481,8 +562,11 @@ def register_orders(dry_run=False):
 
             # --- Fallback assignment ---
             if item_id is None:
-                item_id = assign_fallback_meal(
-                    dietary_names, caterer_menu, caterer_item_counts[caterer_id], lk
+                use_variety = explicit_pref_counts[caterer_id] < VARIETY_THRESHOLD
+                assign_fn   = assign_variety_meal if use_variety else assign_fallback_meal
+                kwargs      = {"max_items": caterer_max_variety.get(caterer_id)} if use_variety else {}
+                item_id     = assign_fn(
+                    dietary_names, caterer_menu, caterer_item_counts[caterer_id], lk, **kwargs
                 )
                 if item_id is None:
                     s.log.warning(f"  {stu_name}: no compatible meal found — skipping.")
@@ -494,7 +578,12 @@ def register_orders(dry_run=False):
             stats["assigned"] += 1
 
             item_name = lk["menu_item_by_id"].get(item_id, {}).get("Menu Item Name", "?")
-            source    = "explicit" if is_explicit else "assigned"
+            if is_explicit:
+                source = "explicit"
+            elif explicit_pref_counts[caterer_id] < VARIETY_THRESHOLD:
+                source = "variety"
+            else:
+                source = "assigned"
             s.log.debug(f"  {stu_name} → {item_name} [{source}]")
 
     s.log.info(

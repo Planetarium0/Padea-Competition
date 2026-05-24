@@ -3,6 +3,7 @@
 # run – simple command‑line shortcut for Padea operations
 #
 # Usage examples:
+#   $ ./run help                      # show usage
 #   $ ./run migrate absences          # migrate only absences
 #   $ ./run migrate                   # migrate all resources
 #   $ ./run schema update             # sync Airtable schema
@@ -28,7 +29,8 @@ Usage:
   $0 orders generate [--dry-run]
   $0 orders preview
   $0 orders send
-  $0 qr [--base-url URL] [--session ID]
+  $0 host [--port PORT]
+  $0 qr [--origin URL_ORIGIN] [--base-url URL] [--session ID]
 
 resource can be one of:
   diet, caterers, contacts, menus, sessions, students, absences, exclusions, all
@@ -55,9 +57,9 @@ declare -A RES_MAP=(
 COMMAND="${1:-}"
 RESOURCE="${2:-}"
 
-if [[ -z "$COMMAND" ]]; then
+if [[ -z "$COMMAND" || "$COMMAND" == "help" ]]; then
     usage
-    exit 1
+    exit 0
 fi
 
 if [[ "$COMMAND" == "script" ]]; then
@@ -80,7 +82,7 @@ if [[ "$COMMAND" == "orders" ]]; then
     case "$SUBCOMMAND" in
         generate)
             echo "Generating orders..."
-            python scripts/actions/generate_orders.py "$@"
+            python scripts/actions/register_orders.py "$@"
             ;;
         preview)
             echo "Previewing order emails..."
@@ -96,6 +98,12 @@ if [[ "$COMMAND" == "orders" ]]; then
             exit 1
             ;;
     esac
+    exit 0
+fi
+
+# --- Webapp host ---
+if [[ "$COMMAND" == "host" ]]; then
+    python scripts/actions/host_webapp.py "${@:2}"
     exit 0
 fi
 

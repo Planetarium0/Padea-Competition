@@ -264,11 +264,12 @@ async function loadDietaryRestrictions() {
   return data;
 }
 
-async function loadExistingFeedback(studentId, sessionId) {
-  const key = `padea_fb_${studentId}_${sessionId}`;
+async function loadExistingFeedback(studentId, sessionId, catererId) {
+  const key = `padea_fb_${studentId}_${sessionId}_${catererId || ""}`;
   const cached = cacheGet(key, "feedback");
   if (cached !== null) return cached;
-  const formula = `AND(FIND('${studentId}', ARRAYJOIN({Student})), FIND('${sessionId}', ARRAYJOIN({Session})))`;
+  const catererClause = catererId ? `, FIND('${catererId}', ARRAYJOIN({Caterer}))` : "";
+  const formula = `AND(FIND('${studentId}', ARRAYJOIN({Student})), FIND('${sessionId}', ARRAYJOIN({Session}))${catererClause})`;
   const recs = await atList("Caterer Feedback", {
     filterByFormula: formula,
     "fields[]": ["Rating", "Comment"],
@@ -647,8 +648,9 @@ async function loadFormData(studentId) {
     return;
   }
 
-  // Background: existing feedback for this student+session.
-  loadExistingFeedback(studentId, state.sessionId)
+  // Background: existing feedback for this student+session+caterer.
+  const catererId = (state.session?.fields?.Caterer || [])[0];
+  loadExistingFeedback(studentId, state.sessionId, catererId)
     .then(fb => {
       state.feedbackRecordId = fb.recordId;
       state.initialRating = fb.rating;
@@ -911,7 +913,8 @@ async function persistChanges() {
     state.initialMealItemId = state.mealItemId;
   }
 
-  ls.remove(`padea_fb_${state.studentId}_${state.sessionId}`);
+  const _catererId = (state.session?.fields?.Caterer || [])[0] || "";
+  ls.remove(`padea_fb_${state.studentId}_${state.sessionId}_${_catererId}`);
 }
 
 function doneMessage() {

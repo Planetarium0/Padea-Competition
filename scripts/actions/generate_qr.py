@@ -32,7 +32,9 @@ OUTPUT_DIR = Path.cwd() / "output" / "qrcodes"
 WEBAPP_PATH = Path.cwd() / "webapp" / "index.html"
 
 
-def make_session_url(session_id, base_url=None):
+def make_session_url(session_id, base_url=None, origin=None):
+    if origin:
+        return f"{origin.rstrip('/')}/index.html?session={session_id}"
     if base_url:
         return f"{base_url.rstrip('/')}?session={session_id}"
     # Local file URL
@@ -62,7 +64,7 @@ def generate_qr(url, output_path):
     s.log.info(f"  QR saved: {output_path}")
 
 
-def main(base_url=None, filter_session=None):
+def main(base_url=None, origin=None, filter_session=None):
     sessions = s.airtable_get("Sessions")
 
     if not sessions:
@@ -84,7 +86,7 @@ def main(base_url=None, filter_session=None):
         sess_id = sess["id"]
         sess_label = sess["fields"].get("Session ID", sess_id)
 
-        url = make_session_url(sess_id, base_url)
+        url = make_session_url(sess_id, base_url=base_url, origin=origin)
         safe_name = sess_label.replace(" ", "_").replace("/", "-")
         out_path = OUTPUT_DIR / f"{safe_name}.png"
 
@@ -98,8 +100,13 @@ def main(base_url=None, filter_session=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate session QR codes")
     parser.add_argument(
+        "--origin",
+        help="URL origin of the hosted webapp (e.g. http://192.168.1.5:8000); appends /index.html automatically",
+        default=None,
+    )
+    parser.add_argument(
         "--base-url",
-        help="Base URL for the web app (default: local file:// path)",
+        help="Full base URL for the web app; ?session=ID is appended as-is (default: local file:// path)",
         default=None,
     )
     parser.add_argument(
@@ -109,4 +116,4 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    main(base_url=args.base_url, filter_session=args.session)
+    main(base_url=args.base_url, origin=args.origin, filter_session=args.session)
