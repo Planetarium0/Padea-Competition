@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#A51C30">
+    <title>Padea Meals</title>
+    <meta name="description" content="Rate today's meal and pick next week's.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="app">
+
+        <header class="topbar">
+            <div class="brand">Padea Meals</div>
+            <div id="session-label" class="session-label"></div>
+        </header>
+
+        <div id="error-banner" class="error-banner hidden">
+            <span id="error-text"></span>
+        </div>
+
+        <main id="main">
+
+            <!-- ============================================================
+                  Picker view — "Who are you?"
+                  ============================================================ -->
+            <section id="view-picker" class="view hidden">
+                <h1 class="view-title">Who are you?</h1>
+                <p class="view-sub">Tap your name to continue.</p>
+
+                <div class="search-wrap">
+                    <input id="student-search" type="search" autocomplete="off"
+                        placeholder="Search your name…" />
+                </div>
+
+                <div id="picker-loading" class="loading-row">
+                    <div class="spinner"></div>
+                    <span>Loading the list…</span>
+                </div>
+
+                <ul id="student-list" class="student-list hidden"></ul>
+                <div id="picker-empty" class="empty hidden">No matching student.</div>
+            </section>
+
+            <!-- ============================================================
+                  Form view — rating + current meal + submit
+                  ============================================================ -->
+            <section id="view-form" class="view hidden">
+
+                <div class="identity-row">
+                    <div>
+                        <div class="hi-label">Hi,</div>
+                        <div id="student-name" class="hi-name">—</div>
+                    </div>
+                    <button class="link-btn" onclick="app.changeStudent()">Not you?</button>
+                </div>
+
+                <!-- Rating -->
+                <div class="card">
+                    <h2 class="card-title">How was today's meal?</h2>
+                    <div id="stars" class="stars">
+                        <button class="star" data-v="1" onclick="app.setRating(1)" aria-label="1 star">★</button>
+                        <button class="star" data-v="2" onclick="app.setRating(2)" aria-label="2 stars">★</button>
+                        <button class="star" data-v="3" onclick="app.setRating(3)" aria-label="3 stars">★</button>
+                        <button class="star" data-v="4" onclick="app.setRating(4)" aria-label="4 stars">★</button>
+                        <button class="star" data-v="5" onclick="app.setRating(5)" aria-label="5 stars">★</button>
+                    </div>
+
+                    <div id="comment-wrap" class="comment-wrap hidden">
+                        <label class="field-label" for="comment">What went wrong? <span class="muted">(optional)</span></label>
+                        <textarea id="comment" rows="3"
+                            placeholder="e.g., cold, small portion, didn't like the taste"
+                            oninput="app.setComment(this.value)"></textarea>
+                    </div>
+                </div>
+
+                <!-- Meal preference -->
+                <div class="card">
+                    <h2 class="card-title">Next week's meal preference</h2>
+                    <button id="meal-trigger" class="meal-trigger" onclick="app.openMealPicker()">
+                        <div class="meal-trigger-content">
+                            <div id="meal-trigger-label" class="muted">Loading menu…</div>
+                            <div id="meal-trigger-name" class="meal-trigger-name"></div>
+                        </div>
+                        <span class="chev">›</span>
+                    </button>
+                </div>
+
+                <button id="submit-btn" class="submit-btn" onclick="app.submit()" disabled>
+                    Submit
+                </button>
+
+                <p class="footnote">
+                    Ratings help us pick better caterers. Your preference helps us
+                    order meals you'll actually want to eat.
+                </p>
+            </section>
+
+            <!-- ============================================================
+                  Meal picker view — full-screen overlay list
+                  ============================================================ -->
+            <section id="view-meals" class="view hidden">
+                <div class="meals-header">
+                    <button class="link-btn" onclick="app.closeMealPicker()">‹ Back</button>
+                    <h2 class="meals-title">Choose a meal</h2>
+                    <div style="width:64px"></div>
+                </div>
+
+                <p id="meals-sub" class="view-sub"></p>
+
+                <div id="meals-loading" class="loading-row">
+                    <div class="spinner"></div>
+                    <span>Loading menu…</span>
+                </div>
+
+                <ul id="meals-list" class="meals-list hidden"></ul>
+                <div id="meals-empty" class="empty hidden"></div>
+            </section>
+
+            <!-- ============================================================
+                  Done view — success
+                  ============================================================ -->
+            <section id="view-done" class="view hidden">
+                <div class="done-wrap">
+                    <div class="check-circle">✓</div>
+                    <h1 class="view-title">Thanks!</h1>
+                    <p class="view-sub" id="done-msg">Your response has been saved.</p>
+                    <button class="link-btn" onclick="app.reset()">Edit response</button>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Toast -->
+        <div id="toast" class="toast hidden"></div>
+    </div>
+
+    <script src="config.env.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>

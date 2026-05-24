@@ -9,6 +9,11 @@
     "ast_hash": "479f0e806a8360fa0f7825fbc81bab24",
     "semantic_hash": "479f0e806a8360fa0f7825fbc81bab24"
   },
+  "/home/daniel/Downloads/Padea/output/webapp/app.js": {
+    "mtime": 1779528275.6145167,
+    "ast_hash": "42e04773e75c528c286b7a2b63a45516",
+    "semantic_hash": "42e04773e75c528c286b7a2b63a45516"
+  },
   "/home/daniel/Downloads/Padea/migrations/students.py": {
     "mtime": 1779528637.1847475,
     "ast_hash": "de7a5b4b865994a0cdee6afe51709b8c",
@@ -25,9 +30,9 @@
     "semantic_hash": "d230ccbfe8c5e83b907685535870c22e"
   },
   "/home/daniel/Downloads/Padea/migrations/sessions.py": {
-    "mtime": 1779533969.4942272,
-    "ast_hash": "cac6c2f68422f7c85e56661113f53050",
-    "semantic_hash": ""
+    "mtime": 1779499635.7839837,
+    "ast_hash": "24db0839a8a509d326ea2e3e38ecdddd",
+    "semantic_hash": "24db0839a8a509d326ea2e3e38ecdddd"
   },
   "/home/daniel/Downloads/Padea/migrations/absences.py": {
     "mtime": 1779499791.0224292,
@@ -124,10 +129,30 @@
     "ast_hash": "088162446bdfa5783b4aa5bf4f16e41d",
     "semantic_hash": "088162446bdfa5783b4aa5bf4f16e41d"
   },
+  "/home/daniel/Downloads/Padea/output/webapp/index.html": {
+    "mtime": 1779527671.372935,
+    "ast_hash": "7621fd6c218f1dfe31eaa9aafd42bf0f",
+    "semantic_hash": "7621fd6c218f1dfe31eaa9aafd42bf0f"
+  },
+  "/home/daniel/Downloads/Padea/plans/implementation_plan.md": {
+    "mtime": 1779511874.9114704,
+    "ast_hash": "bac032fae3fb5f550ca20e9e79bbddb6",
+    "semantic_hash": "bac032fae3fb5f550ca20e9e79bbddb6"
+  },
   "/home/daniel/Downloads/Padea/plans/purpose.md": {
     "mtime": 1779514334.829727,
     "ast_hash": "3b5339292e5982babb6344145bd24781",
     "semantic_hash": "3b5339292e5982babb6344145bd24781"
+  },
+  "/home/daniel/Downloads/Padea/plans/implementation_plan_revised.md": {
+    "mtime": 1779513908.306808,
+    "ast_hash": "82efd2c94f4c024b64144aac0c93189b",
+    "semantic_hash": "82efd2c94f4c024b64144aac0c93189b"
+  },
+  "/home/daniel/Downloads/Padea/plans/task.md": {
+    "mtime": 1779514770.0199895,
+    "ast_hash": "41a022b296a24c9947333b3970cf0e4c",
+    "semantic_hash": "41a022b296a24c9947333b3970cf0e4c"
   },
   "/home/daniel/Downloads/Padea/plans/old/migration/implementation_plan.md": {
     "mtime": 1779499054.6927614,
@@ -145,17 +170,17 @@
     "semantic_hash": "b7c8257ff217d4ef4d6b8f13e73c14a4"
   },
   "/home/daniel/Downloads/Padea/graphify-out/converted/students_b2717fca.md": {
-    "mtime": 1779585681.9295576,
+    "mtime": 1779532438.2419646,
     "ast_hash": "6d4eebca461161af444d8a8718f775a0",
     "semantic_hash": "6d4eebca461161af444d8a8718f775a0"
   },
   "/home/daniel/Downloads/Padea/graphify-out/converted/sessions_1350dcdc.md": {
-    "mtime": 1779585682.03693,
+    "mtime": 1779532438.3516347,
     "ast_hash": "911bfeb60b7c461ae0abf434e516f98e",
     "semantic_hash": "911bfeb60b7c461ae0abf434e516f98e"
   },
   "/home/daniel/Downloads/Padea/graphify-out/converted/caterers_01f88415.md": {
-    "mtime": 1779585682.0407262,
+    "mtime": 1779532438.3551724,
     "ast_hash": "0329d218d428377ee11844dcca4b918a",
     "semantic_hash": "0329d218d428377ee11844dcca4b918a"
   },
@@ -183,40 +208,5 @@
     "mtime": 1779515552.9595137,
     "ast_hash": "b0e19b8bb7ce6b3ec183c4389c59fc04",
     "semantic_hash": "b0e19b8bb7ce6b3ec183c4389c59fc04"
-  },
-  "/home/daniel/Downloads/Padea/webapp/app.js": {
-    "mtime": 1779585581.5564084,
-    "ast_hash": "c6d56f83e5c0ac8596eb64a9d5cac216",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Downloads/Padea/webapp/index.html": {
-    "mtime": 1779585075.2220676,
-    "ast_hash": "64f0271d4fc4a3bc7460a167f7918a54",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Downloads/Padea/plans/webapp.md": {
-    "mtime": 1779584436.7126718,
-    "ast_hash": "0df15ca4cfc2ba137df614d44795e7df",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Downloads/Padea/plans/old/emailing/implementation_plan.md": {
-    "mtime": 1779511874.9114704,
-    "ast_hash": "bac032fae3fb5f550ca20e9e79bbddb6",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Downloads/Padea/plans/old/emailing/implementation_plan_revised.md": {
-    "mtime": 1779513908.306808,
-    "ast_hash": "82efd2c94f4c024b64144aac0c93189b",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Downloads/Padea/plans/old/emailing/task.md": {
-    "mtime": 1779514770.0199895,
-    "ast_hash": "41a022b296a24c9947333b3970cf0e4c",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Downloads/Padea/graphify-out/memory/query_20260523_104100_why_does_airtable_get___connect_data_migration_pip.md": {
-    "mtime": 1779532860.4005973,
-    "ast_hash": "3ad3fc123e4a643517bb5e58a16ca9f1",
-    "semantic_hash": ""
   }
 }
