@@ -26,9 +26,7 @@ import random
 from datetime import datetime, timedelta
 from pathlib import Path
 from collections import defaultdict
-
-sys.path.append(str(Path(__file__).parent.parent.absolute()))
-from scripts import support as s
+import support as s
 
 # ---------------------------------------------------------------------------
 # Constants

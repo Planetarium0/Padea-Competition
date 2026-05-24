@@ -1,10 +1,4 @@
-import sys
-from pathlib import Path
-
-# Add repository root to system path
-sys.path.append(str(Path(__file__).parent.parent.absolute()))
-
-from scripts import support as s
+import support as s
 
 def verify_migration():
     s.log.info("=== STARTING DATA MIGRATION VERIFICATION ===")

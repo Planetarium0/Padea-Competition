@@ -16,11 +16,9 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 from collections import defaultdict
+import support as s
 
-sys.path.append(str(Path(__file__).parent.parent.absolute()))
-from scripts import support as s
-
-OUTPUT_DIR = Path(__file__).parent.parent / "output" / "emails"
+OUTPUT_DIR = Path.cwd() / "output" / "emails"
 
 
 # ---------------------------------------------------------------------------

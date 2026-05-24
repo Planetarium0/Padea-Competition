@@ -1,12 +1,7 @@
-import os
 import sys
-from pathlib import Path
 
-# Add the repository root to sys.path so we can import scripts
-sys.path.append(str(Path(__file__).parent.parent.absolute()))
-
-from scripts.support import base, log
-from scripts.schema import TABLES_SCHEMA
+from support import base, log
+from data.schema import TABLES_SCHEMA
 
 # The personal access token used to push schema changes can rename but not
 # delete tables/fields. Anything in Airtable that's no longer in TABLES_SCHEMA

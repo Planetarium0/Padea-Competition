@@ -3,16 +3,12 @@ import sys
 import re
 import json
 from pathlib import Path
-
-# Add repository root to system path
-sys.path.append(str(Path(__file__).parent.parent.absolute()))
-
-from scripts import support as s
+import support as s
 
 s.log.info("Migrating caterer-contacts.pdf → Airtable")
 
 # Read extracted text
-txt_path = Path(__file__).parent.parent / "cache" / "caterer-contacts.txt"
+txt_path = Path.cwd() / "cache" / "caterer-contacts.txt"
 if not txt_path.is_file():
     s.log.error(f"Extracted contact text not found at {txt_path}. Please run PDF extraction first.")
     sys.exit(1)

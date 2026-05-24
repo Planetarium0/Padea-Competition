@@ -17,19 +17,11 @@ Usage:
   python scripts/generate_orders.py [--dry-run] [--round 1|2]
 """
 
-import os
-import sys
-import json
 import argparse
 import random
 from datetime import datetime, timedelta
-from pathlib import Path
 from collections import defaultdict
-
-# Add repository root to system path
-sys.path.append(str(Path(__file__).parent.parent.absolute()))
-
-from scripts import support as s
+import support as s
 
 # ---------------------------------------------------------------------------
 # Helpers

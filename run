@@ -5,7 +5,6 @@
 # Usage examples:
 #   $ ./run migrate absences          # migrate only absences
 #   $ ./run migrate                   # migrate all resources
-#   $ ./run m caterers                # short alias for "migrate caterers"
 #   $ ./run schema update             # sync Airtable schema
 #   $ ./run orders generate           # compile next week's orders
 #   $ ./run orders generate --dry-run # preview without writing
@@ -14,19 +13,19 @@
 # ------------------------------------------------------------
 
 # Directory containing migration scripts (relative to repository root)
-MIGRATION_DIR="migrations"
+MIGRATION_DIR="scripts/migrations"
+SCRIPTS_DIR="scripts"
 
-export PYTHONPATH=$PYTHONPATH:"$PWD"/"$MIGRATION_DIR"
+export PYTHONPATH=$PYTHONPATH:"$PWD"/"$SCRIPTS_DIR"
 
 # Helper to show usage
 function usage() {
     cat <<EOF
 Usage:
   $0 migrate [resource]
-  $0 m [resource]
   $0 schema update
   $0 script [name]
-  $0 orders generate [--dry-run] [--round 1|2]
+  $0 orders generate [--dry-run]
   $0 orders preview
   $0 orders send
   $0 qr [--base-url URL] [--session ID]
@@ -63,13 +62,13 @@ fi
 
 if [[ "$COMMAND" == "script" ]]; then
     echo "Running script"
-    python "scripts/$RESOURCE.py"
+    python "scripts/actions/$RESOURCE.py"
     exit 0
 fi
 
 if [[ "$COMMAND" == "schema" ]]; then
     echo "updating schema"
-    python "scripts/update_schema.py"
+    python "scripts/actions/update_schema.py"
     exit 0
 fi
 
@@ -81,15 +80,15 @@ if [[ "$COMMAND" == "orders" ]]; then
     case "$SUBCOMMAND" in
         generate)
             echo "Generating orders..."
-            python scripts/generate_orders.py "$@"
+            python scripts/actions/generate_orders.py "$@"
             ;;
         preview)
             echo "Previewing order emails..."
-            python scripts/send_orders.py --preview
+            python scripts/actions/send_orders.py --preview
             ;;
         send)
             echo "Logging order emails..."
-            python scripts/send_orders.py
+            python scripts/actions/send_orders.py
             ;;
         *)
             echo "[ERROR] Unknown orders subcommand: $SUBCOMMAND"
@@ -103,12 +102,12 @@ fi
 # --- QR code generation ---
 if [[ "$COMMAND" == "qr" ]]; then
     echo "Generating QR codes..."
-    python scripts/generate_qr.py "${@:2}"
+    python scripts/actions/generate_qr.py "${@:2}"
     exit 0
 fi
 
-# Allow both "migrate" and shorthand "m"
-if [[ "$COMMAND" != "migrate" && "$COMMAND" != "m" ]]; then
+# --- Migration ---
+if [[ "$COMMAND" != "migrate" ]]; then
     usage
     exit 1
 fi

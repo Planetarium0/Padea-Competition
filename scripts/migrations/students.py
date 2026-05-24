@@ -3,11 +3,7 @@ import sys
 import pandas as pd
 import json
 from pathlib import Path
-
-# Add repository root to system path
-sys.path.append(str(Path(__file__).parent.parent.absolute()))
-
-from scripts import support as s
+import support as s
 
 s.log.info("Migrating students.xlsx → Airtable")
 
@@ -32,7 +28,7 @@ def resolve_school_name(raw_header):
             return std_name
     return None
 
-xlsx_path = Path(__file__).parent.parent / "resources" / "students.xlsx"
+xlsx_path = Path.cwd() / "resources" / "students.xlsx"
 xls = pd.ExcelFile(xlsx_path)
 
 # 1. Collect all unique dietary requirements from all sheets
@@ -62,7 +58,7 @@ for name in xls.sheet_names:
 s.log.info(f"Collected {len(unique_dietary)} unique dietary requirements strings across all sheets.")
 
 # 2. Load or Build Dietary Mapping Cache
-cache_path = Path(__file__).parent.parent / "cache" / "dietary_mappings.json"
+cache_path = Path.cwd() / "cache" / "dietary_mappings.json"
 cache_path.parent.mkdir(exist_ok=True)
 dietary_mappings = {}
 

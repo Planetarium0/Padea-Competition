@@ -1,11 +1,6 @@
-import os
 import sys
 import pandas as pd
 from pathlib import Path
-
-# Add repository root to system path
-sys.path.append(str(Path(__file__).parent.parent.absolute()))
-
 from scripts import support as s
 
 s.log.info("Migrating caterers.xlsx → Airtable")
@@ -35,7 +30,7 @@ s.log.info(f"Seeding {len(schools_records)} schools into Schools table...")
 s.airtable_post("Schools", schools_records)
 
 # Read caterers Excel
-xlsx_path = Path(__file__).parent.parent / "resources" / "caterers.xlsx"
+xlsx_path = Path.cwd() / "resources" / "caterers.xlsx"
 df = pd.read_excel(xlsx_path, sheet_name="caterers")
 
 # Validation

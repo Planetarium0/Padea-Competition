@@ -17,10 +17,7 @@ import os
 import sys
 import argparse
 from pathlib import Path
-
-sys.path.append(str(Path(__file__).parent.parent.absolute()))
-
-from scripts import support as s
+import support as s
 
 try:
     import qrcode
@@ -31,8 +28,8 @@ except ImportError:
     import qrcode
     STYLED = False
 
-OUTPUT_DIR = Path(__file__).parent.parent / "output" / "qrcodes"
-WEBAPP_PATH = Path(__file__).parent.parent / "webapp" / "index.html"
+OUTPUT_DIR = Path.cwd() / "output" / "qrcodes"
+WEBAPP_PATH = Path.cwd() / "webapp" / "index.html"
 
 
 def make_session_url(session_id, base_url=None):

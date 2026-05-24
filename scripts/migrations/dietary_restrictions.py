@@ -4,13 +4,8 @@ Seed the Dietary Restrictions table from `scripts/dietary_data.py`.
 This MUST run before `students.py` and `caterer_menus.py`, because both rely
 on the name → record-id map for their linked-record dietary fields.
 """
-import sys
-from pathlib import Path
-
-sys.path.append(str(Path(__file__).parent.parent.absolute()))
-
-from scripts import support as s
-from scripts.dietary_data import DIETARY_HIERARCHY, all_restriction_names
+import support as s
+from data.dietary_data import DIETARY_HIERARCHY, all_restriction_names
 
 
 s.log.info("Migrating Dietary Restrictions → Airtable")

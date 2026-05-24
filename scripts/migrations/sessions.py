@@ -2,11 +2,7 @@ import os
 import sys
 import pandas as pd
 from pathlib import Path
-
-# Add repository root to system path
-sys.path.append(str(Path(__file__).parent.parent.absolute()))
-
-from scripts import support as s
+import support as s
 
 s.log.info("Migrating sessions.xlsx → Airtable")
 
@@ -15,7 +11,7 @@ s.clear_table("Sessions")
 s.clear_table("On-Site Managers")
 
 # Load sessions Excel
-xlsx_path = Path(__file__).parent.parent / "resources" / "sessions.xlsx"
+xlsx_path = Path.cwd() / "resources" / "sessions.xlsx"
 df = pd.read_excel(xlsx_path, sheet_name="sessions")
 
 # Validation

@@ -3,11 +3,7 @@ import sys
 import re
 import json
 from pathlib import Path
-
-# Add repository root to system path
-sys.path.append(str(Path(__file__).parent.parent.absolute()))
-
-from scripts import support as s
+import support as s
 
 s.log.info("Migrating exclusions.pdf → Airtable")
 
@@ -15,7 +11,7 @@ s.log.info("Migrating exclusions.pdf → Airtable")
 s.clear_table("Exclusions")
 
 # Read extracted text
-txt_path = Path(__file__).parent.parent / "cache" / "exclusions.txt"
+txt_path = Path.cwd() / "cache" / "exclusions.txt"
 if not txt_path.is_file():
     s.log.error(f"Extracted exclusions text not found at {txt_path}. Please run PDF extraction first.")
     sys.exit(1)

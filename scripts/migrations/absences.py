@@ -1,12 +1,7 @@
-import os
 import sys
 import re
 from pathlib import Path
-
-# Add repository root to system path
-sys.path.append(str(Path(__file__).parent.parent.absolute()))
-
-from scripts import support as s
+import support as s
 
 s.log.info("Migrating absences.pdf → Airtable")
 
@@ -14,7 +9,7 @@ s.log.info("Migrating absences.pdf → Airtable")
 s.clear_table("Absences")
 
 # Read extracted text
-txt_path = Path(__file__).parent.parent / "cache" / "absences.txt"
+txt_path = Path.cwd() / "cache" / "absences.txt"
 if not txt_path.is_file():
     s.log.error(f"Extracted absences text not found at {txt_path}. Please run PDF extraction first.")
     sys.exit(1)
