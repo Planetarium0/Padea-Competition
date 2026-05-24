@@ -1,26 +1,28 @@
 # Graph Report - Padea  (2026-05-24)
 
 ## Corpus Check
-- 35 files · ~34,692 words
+- 34 files · ~32,892 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 405 nodes · 520 edges · 34 communities (27 shown, 7 thin omitted)
+- 396 nodes · 506 edges · 35 communities (28 shown, 7 thin omitted)
 - Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 41 edges (avg confidence: 0.9)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `725d8442`
+- Built from commit: `7ae196ff`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
+- [[_COMMUNITY_Student Webapp & QR System|Student Webapp & QR System]]
 - [[_COMMUNITY_Meal Resolution & Order Generation|Meal Resolution & Order Generation]]
 - [[_COMMUNITY_Data Migration Pipeline|Data Migration Pipeline]]
 - [[_COMMUNITY_Dietary Requirements Data|Dietary Requirements Data]]
 - [[_COMMUNITY_Business Logic & System Overview|Business Logic & System Overview]]
 - [[_COMMUNITY_Caterer Directory|Caterer Directory]]
 - [[_COMMUNITY_Design Decisions & Rationale|Design Decisions & Rationale]]
+- [[_COMMUNITY_LLM Extraction & Heuristic Parsers|LLM Extraction & Heuristic Parsers]]
 - [[_COMMUNITY_Order Email Dispatch|Order Email Dispatch]]
 - [[_COMMUNITY_Schema Architecture|Schema Architecture]]
 - [[_COMMUNITY_Absence Records|Absence Records]]
@@ -50,9 +52,9 @@
 5. `atFetch()` - 9 edges
 6. `cacheGet()` - 9 edges
 7. `cacheSet()` - 9 edges
-8. `loadFormData()` - 9 edges
-9. `Step-by-Step Migration` - 9 edges
-10. `process_orders()` - 8 edges
+8. `Step-by-Step Migration` - 9 edges
+9. `process_orders()` - 8 edges
+10. `Migration Scripts` - 8 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `atFetch()` --semantically_similar_to--> `airtable_get()`  [INFERRED] [semantically similar]
@@ -63,8 +65,8 @@
   scripts/generate_qr.py → webapp/app.js
 - `is_item_compatible()` --semantically_similar_to--> `isItemCompatible()`  [INFERRED] [semantically similar]
   scripts/generate_orders.py → output/webapp/app.js
-- `Upsert Pattern for Meal Selections (overwrite on re-scan)` --implements--> `Student Meal Web App SPA (index.html)`  [INFERRED]
-  plans/implementation_plan.md → output/webapp/index.html
+- `LLM-with-Heuristic-Fallback Pattern` --rationale_for--> `ask_llm()`  [INFERRED]
+  migrations/students.py → scripts/support.py
 
 ## Hyperedges (group relationships)
 - **Full Migration Pipeline: PDF Cache → Parse (LLM/Heuristic) → Airtable Post** — scripts_cache_pdf_cache_pdf, scripts_support_ask_llm, scripts_support_airtable_post [INFERRED 0.85]
@@ -74,15 +76,19 @@
 - **Caterer Data Flow: PDF → Cache → Airtable** — resources_caterer_menus_pdf, cache_caterer_menus_lakehouse, converted_caterers_lakehouse [EXTRACTED 0.95]
 - **Order Validation: Dietary + Min Qty + Fallback Logic** — plans_impl_plan_dietary_filtering, plans_impl_plan_min_qty_enforcement, plans_impl_revised_fallback_logic [INFERRED 0.85]
 
-## Communities (34 total, 7 thin omitted)
+## Communities (35 total, 7 thin omitted)
+
+### Community 0 - "Student Webapp & QR System"
+Cohesion: 0.11
+Nodes (19): Dietary Compatibility Filter (Positive + Negative Requirements), is_item_compatible(), Check if a menu item is compatible with a student's dietary requirements., apiKey(), app, atGetRecord(), atPatch(), atPost() (+11 more)
 
 ### Community 1 - "Meal Resolution & Order Generation"
-Cohesion: 0.09
-Nodes (31): Dietary Compatibility Filter (Positive + Negative Requirements), 3-Step Meal Resolution: Explicit Selection → Previous Week → AI Assigned, ai_assign_meal(), build_lookups(), determine_round(), enforce_min_qty(), find_previous_selection(), generate_orders() (+23 more)
+Cohesion: 0.10
+Nodes (27): 3-Step Meal Resolution: Explicit Selection → Previous Week → AI Assigned, ai_assign_meal(), build_lookups(), determine_round(), enforce_min_qty(), find_previous_selection(), generate_orders(), get_next_week_monday() (+19 more)
 
 ### Community 2 - "Data Migration Pipeline"
-Cohesion: 0.08
-Nodes (39): dietary_mappings.json — Dietary String Translation Cache, LLM-with-Heuristic-Fallback Pattern, Clear-Parse-Link-Post Migration Pattern, Two-Pass Schema Creation (Resolves Circular Links), absences.py — Absences Migration, caterer_contacts.py — Caterer Contacts Migration, clean_school_names(), parse_contacts_heuristic() (+31 more)
+Cohesion: 0.12
+Nodes (32): dietary_mappings.json — Dietary String Translation Cache, Clear-Parse-Link-Post Migration Pattern, Two-Pass Schema Creation (Resolves Circular Links), absences.py — Absences Migration, caterer_contacts.py — Caterer Contacts Migration, caterer_menus.py — Caterer Menus Migration, caterers.py — Caterers & Schools Migration, exclusions.py — Exclusions Migration (+24 more)
 
 ### Community 3 - "Dietary Requirements Data"
 Cohesion: 0.11
@@ -97,8 +103,12 @@ Cohesion: 0.13
 Nodes (18): Guzman y Gomez Contact: Big Chicken + Medium Giraffe, Kenko Sushi House Contact: Big Mom (contact + chef), Lakehouse VP Contact: Carmen Gabrielle, Terrific Noodles Contact: Dylan + James Chern, Guzman y Gomez Menu, Kenko Sushi House Menu, Lakehouse Victoria Point Menu, Terrific Noodles Menu (+10 more)
 
 ### Community 6 - "Design Decisions & Rationale"
-Cohesion: 0.06
-Nodes (57): apiKey(), app, applyOptedOutLock(), atCreate(), atFetch(), atGet(), atGetRecord(), atList() (+49 more)
+Cohesion: 0.10
+Nodes (35): atCreate(), atFetch(), atGet(), atList(), atUpdate(), cacheGet(), cacheSet(), clearKnownStudent() (+27 more)
+
+### Community 7 - "LLM Extraction & Heuristic Parsers"
+Cohesion: 0.15
+Nodes (7): LLM-with-Heuristic-Fallback Pattern, clean_school_names(), parse_contacts_heuristic(), Fallback high-fidelity parser for caterer contacts using regex/heuristics., parse_menus_heuristic(), parse_exclusions_heuristic(), map_dietary_heuristically()
 
 ### Community 8 - "Order Email Dispatch"
 Cohesion: 0.06
@@ -153,7 +163,7 @@ Cohesion: 0.50
 Nodes (3): Answer, Q: Why does airtable_get() connect Data Migration Pipeline to Order Email Dispatch, Meal Resolution & Order Generation, Student Webapp & QR System?, Source Nodes
 
 ## Knowledge Gaps
-- **142 isolated node(s):** `Halal`, `Opted out of Catering`, `No Beef, No Pork`, `Gluten Free`, `No Pork, No Shellfish` (+137 more)
+- **140 isolated node(s):** `Halal`, `Opted out of Catering`, `No Beef, No Pork`, `Gluten Free`, `No Pork, No Shellfish` (+135 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **7 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -161,16 +171,16 @@ Nodes (3): Answer, Q: Why does airtable_get() connect Data Migration Pipeline to
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `airtable_get()` connect `Data Migration Pipeline` to `Meal Resolution & Order Generation`, `Community 27`, `Design Decisions & Rationale`?**
-  _High betweenness centrality (0.061) - this node is a cross-community bridge._
-- **Why does `atFetch()` connect `Design Decisions & Rationale` to `Data Migration Pipeline`?**
-  _High betweenness centrality (0.054) - this node is a cross-community bridge._
+  _High betweenness centrality (0.056) - this node is a cross-community bridge._
+- **Why does `atFetch()` connect `Design Decisions & Rationale` to `Student Webapp & QR System`, `Data Migration Pipeline`?**
+  _High betweenness centrality (0.048) - this node is a cross-community bridge._
 - **Why does `generate_orders()` connect `Meal Resolution & Order Generation` to `Data Migration Pipeline`?**
-  _High betweenness centrality (0.022) - this node is a cross-community bridge._
+  _High betweenness centrality (0.023) - this node is a cross-community bridge._
 - **What connects `Halal`, `Opted out of Catering`, `No Beef, No Pork` to the rest of the system?**
-  _173 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _171 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `Student Webapp & QR System` be split into smaller, more focused modules?**
+  _Cohesion score 0.11 - nodes in this community are weakly interconnected._
 - **Should `Meal Resolution & Order Generation` be split into smaller, more focused modules?**
-  _Cohesion score 0.0907258064516129 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.10317460317460317 - nodes in this community are weakly interconnected._
 - **Should `Data Migration Pipeline` be split into smaller, more focused modules?**
-  _Cohesion score 0.07607843137254902 - nodes in this community are weakly interconnected._
-- **Should `Dietary Requirements Data` be split into smaller, more focused modules?**
-  _Cohesion score 0.10526315789473684 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.11711711711711711 - nodes in this community are weakly interconnected._

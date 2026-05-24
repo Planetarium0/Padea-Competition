@@ -26,30 +26,30 @@ const POSITIVE_TAGS = new Set(["Gluten Free", "Dairy Free", "Nut Free", "Vegetar
 
 const TAG_LABEL = {
   "Gluten Free": "GF",
-  "Dairy Free":  "DF",
-  "Nut Free":    "NF",
-  "Vegetarian":  "Veg",
-  "Halal":       "Halal",
+  "Dairy Free": "DF",
+  "Nut Free": "NF",
+  "Vegetarian": "Veg",
+  "Halal": "Halal",
 };
 
 // Name-keyword fallback for negative dietary requirements that aren't
 // expressed as Menu Item tags.
 const NEGATIVE_KEYWORDS = {
-  "No Beef":      ["beef", "bulgogi"],
-  "No Pork":      ["pork", "bacon", "ham"],
-  "No Seafood":   ["seafood", "shrimp", "prawn", "fish", "salmon", "tuna", "shellfish", "crab", "lobster"],
+  "No Beef": ["beef", "bulgogi"],
+  "No Pork": ["pork", "bacon", "ham"],
+  "No Seafood": ["seafood", "shrimp", "prawn", "fish", "salmon", "tuna", "shellfish", "crab", "lobster"],
   "No Shellfish": ["shellfish", "shrimp", "prawn", "crab", "lobster"],
-  "No Fish":      ["fish", "salmon", "tuna"],
-  "No Red Meat":  ["beef", "lamb", "pork", "bulgogi"],
+  "No Fish": ["fish", "salmon", "tuna"],
+  "No Red Meat": ["beef", "lamb", "pork", "bulgogi"],
 };
 
 const CACHE_TTL = {
-  session:   60 * 60 * 1000,         // 1h
-  student:   24 * 60 * 60 * 1000,    // 24h
-  students:  60 * 60 * 1000,         // 1h
-  menu:      24 * 60 * 60 * 1000,    // 24h
+  session: 60 * 60 * 1000,         // 1h
+  student: 24 * 60 * 60 * 1000,    // 24h
+  students: 60 * 60 * 1000,         // 1h
+  menu: 24 * 60 * 60 * 1000,    // 24h
   selection: 5 * 60 * 1000,          // 5m  — may change as user submits
-  feedback:  5 * 60 * 1000,
+  feedback: 5 * 60 * 1000,
 };
 
 // ============================================================
@@ -117,9 +117,9 @@ async function atUpdate(table, id, fields) {
 // ============================================================
 
 const ls = {
-  get(k)        { try { return localStorage.getItem(k); } catch { return null; } },
-  set(k, v)     { try { localStorage.setItem(k, v); } catch {} },
-  remove(k)     { try { localStorage.removeItem(k); } catch {} },
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { } },
+  remove(k) { try { localStorage.removeItem(k); } catch { } },
 };
 
 function cacheGet(key, type) {
@@ -137,9 +137,9 @@ function cacheSet(key, data) {
 }
 
 function knownStudentKey(sessionId) { return `padea_known_student_${sessionId}`; }
-function getKnownStudent(sessionId)  { return ls.get(knownStudentKey(sessionId)); }
+function getKnownStudent(sessionId) { return ls.get(knownStudentKey(sessionId)); }
 function setKnownStudent(sessionId, sid) { ls.set(knownStudentKey(sessionId), sid); }
-function clearKnownStudent(sessionId)    { ls.remove(knownStudentKey(sessionId)); }
+function clearKnownStudent(sessionId) { ls.remove(knownStudentKey(sessionId)); }
 
 // ============================================================
 // Data loaders (cache-first, returns the cached value if fresh)
@@ -148,8 +148,14 @@ function clearKnownStudent(sessionId)    { ls.remove(knownStudentKey(sessionId))
 async function loadSession(sessionId) {
   const key = `padea_session_${sessionId}`;
   const cached = cacheGet(key, "session");
-  if (cached) return cached;
+  if (cached) {
+    console.log(`[padea] session (cache hit): ${cached.fields["Session ID"]}`);
+    return cached;
+  }
+  console.log(`[padea] fetching session ${sessionId}…`);
   const rec = await atGet("Sessions", sessionId);
+  console.log(`[padea] session loaded: ${rec.fields["Session ID"]}`,
+              "caterer:", rec.fields.Caterer, "students:", (rec.fields.Students || []).length);
   cacheSet(key, rec);
   return rec;
 }
@@ -185,11 +191,32 @@ async function loadStudentsForSession(sessionId, studentIds) {
 async function loadMenuItems(catererId) {
   const key = `padea_menu_${catererId}`;
   const cached = cacheGet(key, "menu");
-  if (cached) return cached;
+  if (cached) {
+    console.log(`[padea] menu (cache hit, ${cached.length} items)`);
+    return cached;
+  }
+  // Two-step fetch: the previous `FIND(catId, ARRAYJOIN({Caterer}))` approach
+  // can't work because Airtable renders linked-record fields as their primary
+  // field (caterer NAME) in formulas, never the record ID. So we fetch the
+  // caterer first and pull menu item IDs from its `Menu Items` back-link.
+  console.log(`[padea] fetching caterer ${catererId}…`);
+  const caterer = await atGet("Caterers", catererId);
+  const menuIds = caterer.fields["Menu Items"] || [];
+  console.log(
+    `[padea] caterer "${caterer.fields["Caterer Name"]}" has ${menuIds.length} menu items`,
+  );
+
+  if (!menuIds.length) {
+    cacheSet(key, []);
+    return [];
+  }
+
+  const formula = `OR(${menuIds.map(id => `RECORD_ID()='${id}'`).join(",")})`;
   const items = await atList("Menu Items", {
-    filterByFormula: `FIND('${catererId}', ARRAYJOIN({Caterer}))`,
+    filterByFormula: formula,
     "fields[]": ["Menu Item Name", "Dietary Tags"],
   });
+  console.log(`[padea] menu loaded: ${items.length} items`);
   cacheSet(key, items);
   return items;
 }
@@ -222,10 +249,10 @@ async function loadExistingFeedback(studentId, sessionId) {
   });
   const fb = recs[0]
     ? {
-        recordId: recs[0].id,
-        rating: recs[0].fields.Rating || 0,
-        comment: recs[0].fields.Comment || "",
-      }
+      recordId: recs[0].id,
+      rating: recs[0].fields.Rating || 0,
+      comment: recs[0].fields.Comment || "",
+    }
     : { recordId: null, rating: 0, comment: "" };
   cacheSet(key, fb);
   return fb;
@@ -235,17 +262,49 @@ async function loadExistingFeedback(studentId, sessionId) {
 // Dietary compatibility
 // ============================================================
 
-function isCompatible(itemFields, requirements) {
-  if (!requirements || !requirements.length) return true;
+// Friendly label for a positive tag that the student requires but the item
+// doesn't have.
+const MISSING_TAG_LABEL = {
+  "Gluten Free": "Contains gluten",
+  "Dairy Free":  "Contains dairy",
+  "Nut Free":    "May contain nuts",
+  "Vegetarian":  "Not vegetarian",
+  "Halal":       "Not halal",
+};
+
+// Plain-language word for a "No <food>" requirement.
+const NEGATIVE_FOOD = {
+  "No Beef":      "beef",
+  "No Pork":      "pork",
+  "No Seafood":   "seafood",
+  "No Shellfish": "shellfish",
+  "No Fish":      "fish",
+  "No Red Meat":  "red meat",
+};
+
+function checkCompatibility(itemFields, requirements) {
+  const issues = [];
+  if (!requirements || !requirements.length) return { compatible: true, issues };
+
   const tags = new Set(itemFields["Dietary Tags"] || []);
   const name = (itemFields["Menu Item Name"] || "").toLowerCase();
+
   for (const req of requirements) {
     if (req === "Opted out of Catering") continue;
-    if (POSITIVE_TAGS.has(req) && !tags.has(req)) return false;
+    if (POSITIVE_TAGS.has(req) && !tags.has(req)) {
+      issues.push(MISSING_TAG_LABEL[req] || `Not ${req.toLowerCase()}`);
+    }
     const kws = NEGATIVE_KEYWORDS[req];
-    if (kws && kws.some(k => name.includes(k))) return false;
+    if (kws && kws.some(k => name.includes(k))) {
+      issues.push(`Contains ${NEGATIVE_FOOD[req] || req.replace(/^No /, "").toLowerCase()}`);
+    }
   }
-  return true;
+  return { compatible: issues.length === 0, issues };
+}
+
+function hasOptedOut(student) {
+  const reqs = student?.fields?.["Dietary Requirements"] || [];
+  return reqs.includes("Opted out of Catering");
 }
 
 // ============================================================
@@ -342,7 +401,7 @@ const app = {
 
     // 4. Drive the chosen view.
     if (studentId) await loadFormData(studentId);
-    else           await loadPickerData();
+    else await loadPickerData();
   },
 
   // -------------- Picker --------------
@@ -392,6 +451,24 @@ const app = {
     updateSubmitState();
     // small delay so the user sees the selection animate
     setTimeout(() => showView("form"), 140);
+  },
+
+  attemptIncompatibleSelect(itemId) {
+    const item = state.menuItems.find(i => i.id === itemId);
+    if (!item) return;
+    const reqs = (state.student?.fields["Dietary Requirements"] || [])
+      .filter(r => r !== "Opted out of Catering");
+    const { issues } = checkCompatibility(item.fields, reqs);
+    const name = item.fields["Menu Item Name"] || "this meal";
+    openConfirm({
+      title: "Are you sure?",
+      body: `"${name}" doesn't match your dietary requirements: ${issues.join(", ")}.`,
+      confirmLabel: "Choose it anyway",
+      onConfirm: () => {
+        closeConfirm();
+        app.selectMeal(itemId);
+      },
+    });
   },
 
   // -------------- Submit --------------
@@ -454,6 +531,7 @@ async function loadPickerData() {
 function showFormSkeleton() {
   showView("form");
   resetFormState();
+  clearOptedOutLock();
   document.getElementById("student-name").textContent = "…";
   document.querySelectorAll("#stars .star").forEach(s => s.classList.remove("active"));
   document.getElementById("comment-wrap").classList.add("hidden");
@@ -489,8 +567,18 @@ async function loadFormData(studentId) {
     return;
   }
   state.student = student;
+  console.log(`[padea] student loaded: ${student.fields["Student Name"]}`,
+              "diet:", student.fields["Dietary Requirements"] || []);
   document.getElementById("student-name").textContent =
     student.fields["Student Name"] || "—";
+
+  // If the student has opted out of catering, block the form entirely.
+  if (hasOptedOut(student)) {
+    applyOptedOutLock();
+    return;
+  } else {
+    clearOptedOutLock();
+  }
 
   // 2. Existing selection & feedback — both background, don't block UI.
   loadExistingSelection(studentId, state.sessionId)
@@ -583,12 +671,12 @@ function renderMealList() {
   ul.classList.add("hidden");
   empty.classList.add("hidden");
 
-  const reqs = state.student?.fields["Dietary Requirements"] || [];
+  const reqs = (state.student?.fields["Dietary Requirements"] || [])
+    .filter(r => r !== "Opted out of Catering");
   sub.textContent = reqs.length
     ? `Filtered for: ${reqs.join(", ")}`
     : "All available meals from your caterer.";
 
-  // If menu hasn't arrived yet, show spinner.
   if (!state.menuItems) {
     loading.classList.remove("hidden");
     if (state.menuPromise) {
@@ -600,35 +688,53 @@ function renderMealList() {
   }
   loading.classList.add("hidden");
 
-  const compatible = state.menuItems.filter(i =>
-    isCompatible(i.fields, reqs)
-  );
-
-  if (!compatible.length) {
+  if (!state.menuItems.length) {
     empty.classList.remove("hidden");
-    empty.textContent = state.menuItems.length
-      ? "No meals match your dietary requirements. Speak to your on-site manager."
-      : "No menu items found for this caterer.";
+    empty.textContent = "No menu items found for this caterer.";
     return;
   }
 
-  ul.classList.remove("hidden");
-  ul.innerHTML = compatible.map(item => {
+  // Split into compatible + incompatible. Incompatible items are still
+  // selectable (with a confirmation step) so we render them grayed at the
+  // bottom of the list.
+  const compatible = [];
+  const incompatible = [];
+  for (const item of state.menuItems) {
+    const { compatible: ok, issues } = checkCompatibility(item.fields, reqs);
+    (ok ? compatible : incompatible).push({ item, issues });
+  }
+
+  const renderRow = ({ item, issues }) => {
     const name = item.fields["Menu Item Name"] || "—";
     const tags = item.fields["Dietary Tags"] || [];
     const selected = item.id === state.mealItemId;
-    const tagsHtml = tags
-      .map(t => `<span class="tag">${TAG_LABEL[t] || t}</span>`).join("");
+    const incompat = issues.length > 0;
+    const tagsHtml = tags.map(t => `<span class="tag">${TAG_LABEL[t] || t}</span>`).join("");
+    const reasonHtml = incompat
+      ? `<div class="meal-reason">${escapeHtml(issues.join(" · "))}</div>`
+      : "";
+    const onclick = incompat
+      ? `app.attemptIncompatibleSelect('${item.id}')`
+      : `app.selectMeal('${item.id}')`;
     return `
-      <li class="meal-item${selected ? " selected" : ""}"
-          onclick="app.selectMeal('${item.id}')">
+      <li class="meal-item${selected ? " selected" : ""}${incompat ? " incompatible" : ""}"
+          onclick="${onclick}">
         <div class="meal-radio"></div>
         <div class="meal-content">
           <div class="meal-name">${escapeHtml(name)}</div>
+          ${reasonHtml}
           <div class="meal-tags">${tagsHtml}</div>
         </div>
       </li>`;
-  }).join("");
+  };
+
+  let html = compatible.map(renderRow).join("");
+  if (incompatible.length) {
+    html += `<li class="meal-divider">May not match your preferences</li>`;
+    html += incompatible.map(renderRow).join("");
+  }
+  ul.classList.remove("hidden");
+  ul.innerHTML = html;
 }
 
 function updateMealTrigger() {
@@ -772,14 +878,59 @@ function escapeHtml(s) {
 
 function formatSessionLabel(fields) {
   const id = fields["Session ID"] || "";
-  const date = fields["Date"] || "";
-  return [id, date].filter(Boolean).join(" · ");
+  // const date = fields["Date"] || "";
+  return id; // [id, date].filter(Boolean).join(" · ");
 }
 
 function showError(msg) {
   document.getElementById("error-text").textContent = msg;
   document.getElementById("error-banner").classList.remove("hidden");
 }
+
+// ============================================================
+// Opted-out lock
+// ============================================================
+
+function applyOptedOutLock() {
+  document.getElementById("opted-out-banner").classList.remove("hidden");
+  // Disable all interactive form bits.
+  document.querySelectorAll("#stars .star").forEach(s => s.disabled = true);
+  document.getElementById("comment").disabled = true;
+  document.getElementById("meal-trigger").disabled = true;
+  document.getElementById("meal-trigger-label").textContent = "Catering opted out";
+  document.getElementById("meal-trigger-name").textContent = "";
+  document.getElementById("submit-btn").disabled = true;
+}
+
+function clearOptedOutLock() {
+  document.getElementById("opted-out-banner").classList.add("hidden");
+  document.querySelectorAll("#stars .star").forEach(s => s.disabled = false);
+  document.getElementById("comment").disabled = false;
+  // meal-trigger / submit are managed by updateMealTrigger/updateSubmitState
+}
+
+// ============================================================
+// Confirm modal
+// ============================================================
+
+let confirmCallback = null;
+
+function openConfirm({ title, body, confirmLabel, onConfirm }) {
+  document.getElementById("confirm-title").textContent = title;
+  document.getElementById("confirm-body").textContent = body;
+  document.getElementById("confirm-yes").textContent = confirmLabel || "OK";
+  confirmCallback = onConfirm;
+  document.getElementById("confirm-modal").classList.remove("hidden");
+}
+
+function closeConfirm() {
+  document.getElementById("confirm-modal").classList.add("hidden");
+  confirmCallback = null;
+}
+
+// Wire button handlers via the app object so onclick="" in HTML can reach them.
+window.confirmModalYes = () => { if (confirmCallback) confirmCallback(); };
+window.confirmModalNo  = () => closeConfirm();
 
 let toastTimer = null;
 function toast(msg) {

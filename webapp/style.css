@@ -438,6 +438,44 @@ textarea:focus {
   background: var(--primary-tint);
 }
 
+.meal-item.incompatible {
+  background: #F4F0EE;
+  opacity: 0.75;
+}
+
+.meal-item.incompatible .meal-name {
+  color: var(--text-muted);
+}
+
+.meal-item.incompatible.selected {
+  /* selected wins over incompatible */
+  opacity: 1;
+  border-color: var(--primary);
+  background: var(--primary-tint);
+}
+
+.meal-item.incompatible.selected .meal-name {
+  color: var(--text);
+}
+
+.meal-reason {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--primary);
+  margin-bottom: 4px;
+}
+
+.meal-divider {
+  list-style: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 16px 4px 4px;
+  border: none;
+}
+
 .meal-radio {
   width: 22px;
   height: 22px;
@@ -553,4 +591,93 @@ textarea:focus {
   font-size: 14px;
   text-align: center;
   border-bottom: 1px solid var(--primary-tint-strong);
+}
+
+/* ============================================================
+   Opted-out banner
+   ============================================================ */
+.opted-out {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--primary-tint);
+  border: 1px solid var(--primary-tint-strong);
+  color: var(--primary-dark);
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+}
+
+/* ============================================================
+   Confirm modal
+   ============================================================ */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 22, 20, 0.45);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 160ms ease-out;
+}
+
+.modal-card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  max-width: 360px;
+  width: 100%;
+  box-shadow: var(--shadow-lg);
+  animation: pop 220ms cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+
+.modal-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  letter-spacing: -0.01em;
+}
+
+.modal-body {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.btn-ghost,
+.btn-primary {
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 10px 16px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  min-height: 40px;
+}
+
+.btn-ghost {
+  background: var(--muted-bg);
+  color: var(--text);
+}
+
+.btn-ghost:active {
+  background: var(--border-strong);
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: white;
+}
+
+.btn-primary:active {
+  background: var(--primary-dark);
 }

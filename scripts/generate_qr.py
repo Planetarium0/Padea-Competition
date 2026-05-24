@@ -32,7 +32,7 @@ except ImportError:
     STYLED = False
 
 OUTPUT_DIR = Path(__file__).parent.parent / "output" / "qrcodes"
-WEBAPP_PATH = Path(__file__).parent.parent / "output" / "webapp" / "index.html"
+WEBAPP_PATH = Path(__file__).parent.parent / "webapp" / "index.html"
 
 
 def make_session_url(session_id, base_url=None):

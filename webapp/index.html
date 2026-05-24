@@ -61,6 +61,11 @@
                     <button class="link-btn" onclick="app.changeStudent()">Not you?</button>
                 </div>
 
+                <div id="opted-out-banner" class="opted-out hidden">
+                    <strong>You're opted out of catering.</strong>
+                    <span>No rating or preference needed — enjoy your own dinner!</span>
+                </div>
+
                 <!-- Rating -->
                 <div class="card">
                     <h2 class="card-title">How was today's meal?</h2>
@@ -139,6 +144,18 @@
 
         <!-- Toast -->
         <div id="toast" class="toast hidden"></div>
+
+        <!-- Confirm modal -->
+        <div id="confirm-modal" class="modal hidden" onclick="if(event.target===this) confirmModalNo()">
+            <div class="modal-card">
+                <h3 id="confirm-title" class="modal-title"></h3>
+                <p id="confirm-body" class="modal-body"></p>
+                <div class="modal-actions">
+                    <button class="btn-ghost" onclick="confirmModalNo()">Cancel</button>
+                    <button id="confirm-yes" class="btn-primary" onclick="confirmModalYes()">OK</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="config.env.js"></script>
