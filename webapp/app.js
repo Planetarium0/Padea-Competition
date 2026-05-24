@@ -27,63 +27,63 @@
 const AT_BASE = `https://api.airtable.com/v0/${CONFIG.BASE_ID}`;
 
 const CACHE_TTL = {
-  session:   60 * 60 * 1000,         // 1h
-  student:   24 * 60 * 60 * 1000,    // 24h
-  students:  60 * 60 * 1000,         // 1h
-  menu:      24 * 60 * 60 * 1000,    // 24h
-  diet:      24 * 60 * 60 * 1000,    // 24h
-  feedback:  5 * 60 * 1000,          // 5m
-  order:     5 * 60 * 1000,          // 5m
+  session: 60 * 60 * 1000,         // 1h
+  student: 24 * 60 * 60 * 1000,    // 24h
+  students: 60 * 60 * 1000,         // 1h
+  menu: 24 * 60 * 60 * 1000,    // 24h
+  diet: 24 * 60 * 60 * 1000,    // 24h
+  feedback: 5 * 60 * 1000,          // 5m
+  order: 5 * 60 * 1000,          // 5m
 };
 
 // Short labels for badges. Anything not listed falls back to the full name.
 const TAG_SHORT = {
-  "Gluten Free":  "GF",
-  "Dairy Free":   "DF",
-  "Nut Free":     "NF",
-  "Vegetarian":   "Veg",
-  "Vegan":        "Vegan",
-  "Halal":        "Halal",
-  "Kosher":       "Kosher",
-  "Pescatarian":  "Pesc",
+  "Gluten Free": "GF",
+  "Dairy Free": "DF",
+  "Nut Free": "NF",
+  "Vegetarian": "Veg",
+  "Vegan": "Vegan",
+  "Halal": "Halal",
+  "Kosher": "Kosher",
+  "Pescatarian": "Pesc",
 };
 
 // Name-keyword heuristic. If a menu item's NAME contains any of these
 // substrings, we treat that as definite evidence it violates the listed
 // constraint — i.e. "Contains beef" rather than the softer "May contain beef".
 const NEGATIVE_KEYWORDS = {
-  "No Beef":      ["beef", "bulgogi"],
-  "No Pork":      ["pork", "bacon", "ham"],
-  "No Lamb":      ["lamb"],
-  "No Seafood":   ["seafood", "shrimp", "prawn", "fish", "salmon", "tuna", "shellfish", "crab", "lobster"],
+  "No Beef": ["beef", "bulgogi"],
+  "No Pork": ["pork", "bacon", "ham"],
+  "No Lamb": ["lamb"],
+  "No Seafood": ["seafood", "shrimp", "prawn", "fish", "salmon", "tuna", "shellfish", "crab", "lobster"],
   "No Shellfish": ["shellfish", "shrimp", "shrimps", "prawn", "crab", "lobster"],
-  "No Fish":      ["fish", "salmon", "tuna"],
-  "No Red Meat":  ["beef", "lamb", "pork", "bulgogi"],
-  "Vegetarian":   ["beef", "pork", "lamb", "chicken", "fish", "shrimp", "prawn", "salmon", "tuna", "seafood", "shellfish", "crab", "lobster", "bulgogi", "bacon", "ham"],
-  "Vegan":        ["beef", "pork", "lamb", "chicken", "fish", "shrimp", "prawn", "salmon", "tuna", "seafood", "shellfish", "crab", "lobster", "bulgogi", "bacon", "ham", "cheese", "milk", "butter", "cream", "yogurt"],
-  "Pescatarian":  ["beef", "pork", "lamb", "chicken", "bulgogi", "bacon", "ham"],
-  "Dairy Free":   ["cheese", "milk", "butter", "cream", "yogurt"],
-  "Halal":        ["pork", "bacon", "ham"],
-  "Kosher":       ["pork", "bacon", "ham", "shellfish", "shrimp", "prawn", "crab", "lobster"],
+  "No Fish": ["fish", "salmon", "tuna"],
+  "No Red Meat": ["beef", "lamb", "pork", "bulgogi"],
+  "Vegetarian": ["beef", "pork", "lamb", "chicken", "fish", "shrimp", "prawn", "salmon", "tuna", "seafood", "shellfish", "crab", "lobster", "bulgogi", "bacon", "ham"],
+  "Vegan": ["beef", "pork", "lamb", "chicken", "fish", "shrimp", "prawn", "salmon", "tuna", "seafood", "shellfish", "crab", "lobster", "bulgogi", "bacon", "ham", "cheese", "milk", "butter", "cream", "yogurt"],
+  "Pescatarian": ["beef", "pork", "lamb", "chicken", "bulgogi", "bacon", "ham"],
+  "Dairy Free": ["cheese", "milk", "butter", "cream", "yogurt"],
+  "Halal": ["pork", "bacon", "ham"],
+  "Kosher": ["pork", "bacon", "ham", "shellfish", "shrimp", "prawn", "crab", "lobster"],
 };
 
 // Plain-language phrase for each constraint, used in reason labels.
 const CONSTRAINT_PHRASE = {
-  "Gluten Free":  "gluten",
-  "Dairy Free":   "dairy",
-  "Nut Free":     "nuts",
-  "Vegetarian":   "meat",
-  "Vegan":        "animal products",
-  "Pescatarian":  "non-fish meat",
-  "Halal":        "non-halal ingredients",
-  "Kosher":       "non-kosher ingredients",
-  "No Beef":      "beef",
-  "No Pork":      "pork",
-  "No Lamb":      "lamb",
-  "No Fish":      "fish",
+  "Gluten Free": "gluten",
+  "Dairy Free": "dairy",
+  "Nut Free": "nuts",
+  "Vegetarian": "meat",
+  "Vegan": "animal products",
+  "Pescatarian": "non-fish meat",
+  "Halal": "non-halal ingredients",
+  "Kosher": "non-kosher ingredients",
+  "No Beef": "beef",
+  "No Pork": "pork",
+  "No Lamb": "lamb",
+  "No Fish": "fish",
   "No Shellfish": "shellfish",
-  "No Seafood":   "seafood",
-  "No Red Meat":  "red meat",
+  "No Seafood": "seafood",
+  "No Red Meat": "red meat",
 };
 
 // ============================================================
@@ -148,9 +148,9 @@ async function atUpdate(table, id, fields) {
 // ============================================================
 
 const ls = {
-  get(k)    { try { return localStorage.getItem(k); } catch { return null; } },
-  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
-  remove(k) { try { localStorage.removeItem(k); } catch {} },
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { } },
+  remove(k) { try { localStorage.removeItem(k); } catch { } },
 };
 
 function cacheGet(key, type) {
@@ -168,9 +168,9 @@ function cacheSet(key, data) {
 }
 
 function knownStudentKey(sessionId) { return `padea_known_student_${sessionId}`; }
-function getKnownStudent(sessionId)  { return ls.get(knownStudentKey(sessionId)); }
+function getKnownStudent(sessionId) { return ls.get(knownStudentKey(sessionId)); }
 function setKnownStudent(sessionId, sid) { ls.set(knownStudentKey(sessionId), sid); }
-function clearKnownStudent(sessionId)    { ls.remove(knownStudentKey(sessionId)); }
+function clearKnownStudent(sessionId) { ls.remove(knownStudentKey(sessionId)); }
 
 // ============================================================
 // Data loaders
@@ -186,7 +186,7 @@ async function loadSession(sessionId) {
   console.log(`[padea] fetching session ${sessionId}…`);
   const rec = await atGet("Sessions", sessionId);
   console.log(`[padea] session loaded: ${rec.fields["Session ID"]}`,
-              "caterer:", rec.fields.Caterer, "students:", (rec.fields.Students || []).length);
+    "caterer:", rec.fields.Caterer, "students:", (rec.fields.Students || []).length);
   cacheSet(key, rec);
   return rec;
 }
@@ -276,10 +276,10 @@ async function loadExistingFeedback(studentId, sessionId) {
   });
   const fb = recs[0]
     ? {
-        recordId: recs[0].id,
-        rating: recs[0].fields.Rating || 0,
-        comment: recs[0].fields.Comment || "",
-      }
+      recordId: recs[0].id,
+      rating: recs[0].fields.Rating || 0,
+      comment: recs[0].fields.Comment || "",
+    }
     : { recordId: null, rating: 0, comment: "" };
   cacheSet(key, fb);
   return fb;
@@ -487,7 +487,7 @@ const app = {
     }
 
     if (studentId) await loadFormData(studentId);
-    else           await loadPickerData();
+    else await loadPickerData();
   },
 
   async pickStudent(sid) {
@@ -535,15 +535,21 @@ const app = {
     setTimeout(() => showView("form"), 140);
   },
 
-  attemptIncompatibleSelect(itemId) {
+  attemptUnsafeSelect(itemId) {
     const item = state.menuItems.find(i => i.id === itemId);
     if (!item || !state.dietMaps) return;
     const reqs = state.student.fields["Dietary Requirements"] || [];
-    const { issues } = checkCompatibility(item, reqs, state.dietMaps);
+    const { severity, issues } = checkCompatibility(item, reqs, state.dietMaps);
     const name = item.fields["Menu Item Name"] || "this meal";
+    const phrases = issues
+      .map(i => CONSTRAINT_PHRASE[i.name] || i.name.toLowerCase())
+      .join(", ");
+    const body = severity === "no"
+      ? `"${name}" doesn't match your dietary requirements: ${issues.map(i => i.label).join(", ")}.`
+      : `We don't know if "${name}" contains ${phrases}.`;
     openConfirm({
       title: "Are you sure?",
-      body: `"${name}" doesn't match your dietary requirements: ${issues.map(i => i.label).join(", ")}.`,
+      body,
       confirmLabel: "Choose it anyway",
       onConfirm: () => {
         closeConfirm();
@@ -650,8 +656,8 @@ async function loadFormData(studentId) {
   state.mealItemId = state.initialMealItemId;
 
   console.log(`[padea] student loaded: ${student.fields["Student Name"]}`,
-              "diet ids:", student.fields["Dietary Requirements"] || [],
-              "preference:", state.initialMealItemId);
+    "diet ids:", student.fields["Dietary Requirements"] || [],
+    "preference:", state.initialMealItemId);
 
   // Apply opted-out lock if applicable. Needs dietary maps first.
   await state.dietPromise;
@@ -791,14 +797,14 @@ function renderMealList() {
     const selected = item.id === state.mealItemId;
     const sev = result.severity;
     const reasonHtml = result.issues.length
-      ? `<div class="meal-reason meal-reason-${sev}">${
-           escapeHtml(result.issues.map(i => i.label).join(" · "))
-         }</div>`
+      ? `<div class="meal-reason meal-reason-${sev}">${escapeHtml(result.issues.map(i => i.label).join(" · "))
+      }</div>`
       : "";
-    // "no" rows require confirmation; "maybe" rows can be selected directly.
-    const onclick = sev === "no"
-      ? `app.attemptIncompatibleSelect('${item.id}')`
-      : `app.selectMeal('${item.id}')`;
+    // Both "no" and "maybe" rows require confirmation; only fully-compatible
+    // rows are picked directly.
+    const onclick = sev === "ok"
+      ? `app.selectMeal('${item.id}')`
+      : `app.attemptUnsafeSelect('${item.id}')`;
     const klass = [
       "meal-item",
       selected ? "selected" : "",
@@ -979,7 +985,7 @@ function closeConfirm() {
 }
 
 window.confirmModalYes = () => { if (confirmCallback) confirmCallback(); };
-window.confirmModalNo  = () => closeConfirm();
+window.confirmModalNo = () => closeConfirm();
 
 // ============================================================
 // Utility
@@ -1000,8 +1006,9 @@ function escapeHtml(s) {
 
 function formatSessionLabel(fields) {
   const id = fields["Session ID"] || "";
-  const date = fields["Date"] || "";
-  return [id, date].filter(Boolean).join(" · ");
+  // ID is sufficient
+  // const date = fields["Date"] || "";
+  return id; //, date].filter(Boolean).join(" · ");
 }
 
 function showError(msg) {

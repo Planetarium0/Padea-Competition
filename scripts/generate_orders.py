@@ -648,13 +648,12 @@ def _write_orders_to_airtable(caterer_orders, lookups, week_label, round_label,
             count for items in sessions.values() for count in items.values()
         )
 
-        # Estimate cost
+        # Estimate cost. Caterers charge a flat per-item price across their menu.
+        price_per_item = caterer_fields.get("Price per Item", 0) or 0
         total_cost = 0.0
         for items in sessions.values():
-            for item_id, count in items.items():
-                item_fields = lookups["menu_item_by_id"].get(item_id, {})
-                price = item_fields.get("Price", 0) or 0
-                total_cost += price * count
+            for count in items.values():
+                total_cost += price_per_item * count
 
         # Add delivery fee
         delivery_fee = caterer_fields.get("Delivery Fee", 0) or 0

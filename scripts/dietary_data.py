@@ -27,7 +27,9 @@ treatment of Kosher rules (e.g. no meat+dairy together) is out of scope.
 DIETARY_HIERARCHY = [
     # name, direct supersets (less-restrictive parents)
     ("Vegan",         ["Vegetarian", "Dairy Free"]),
-    ("Vegetarian",    ["Pescatarian"]),
+    # Pescatarians eat fish, so Vegetarian must reach No Fish / No Shellfish
+    # via No Seafood rather than via Pescatarian.
+    ("Vegetarian",    ["Pescatarian", "No Seafood"]),
     ("Pescatarian",   ["No Red Meat"]),
     ("No Red Meat",   ["No Beef", "No Pork", "No Lamb"]),
     ("Halal",         ["No Pork"]),

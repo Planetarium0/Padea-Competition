@@ -91,14 +91,13 @@ def parse_menus_heuristic(text):
 
             items.append({
                 "Menu Item Name": item_name,
-                "Price": item_price,
                 "Dietary Tags": list(set(dietary_choices)),
                 "Notes": None
             })
 
         caterer_menus.append({
             "Caterer Name": caterer_name,
-            "Price": item_price,
+            "Price per Item": item_price,
             "Price Includes GST": price_includes_gst,
             "Delivery Fee": delivery_fee,
             "Delivery Fee Structure": structure,
@@ -116,7 +115,7 @@ if key:
 Extract the menu items and delivery pricing structure for each caterer from the following raw menu text.
 Return a JSON array of objects, where each object represents one caterer and has exactly these keys:
 - "Caterer Name" (string, e.g. "Lakehouse Victoria Point")
-- "Price" (number, numeric price per item)
+- "Price per Item" (number, numeric price per item — caterers charge a flat per-item price across their whole menu)
 - "Price Includes GST" (boolean, true if price includes GST, false if excluding GST)
 - "Delivery Fee" (number, numeric delivery fee per trip)
 - "Delivery Fee Structure" (string, either "Per trip" or "Per school per trip")
@@ -128,7 +127,7 @@ Return a JSON array of objects, where each object represents one caterer and has
 
 Rules for Dietary Tags:
 1. Map GF to "Gluten Free", DF to "Dairy Free", NF to "Nut Free", VO to "Vegetarian".
-2. Critically: "Assume all non-pork meals are halal." If an item does not contain pork in its name, automatically add the "Halal" tag.
+2. Critically: "Assume all non-pork meals are halal." If the item's name does not imply that it contains pork, automatically add the "Halal" tag.
 
 Raw Menu Text:
 ```
@@ -181,7 +180,8 @@ for menu in parsed_menus:
         "fields": {
             "Delivery Fee": menu["Delivery Fee"],
             "Delivery Fee Structure": menu["Delivery Fee Structure"],
-            "Price Includes GST": bool(menu["Price Includes GST"])
+            "Price Includes GST": bool(menu["Price Includes GST"]),
+            "Price per Item": menu["Price per Item"],
         }
     })
 
@@ -199,7 +199,6 @@ for menu in parsed_menus:
         menu_items_records.append({
             "Menu Item Name": item["Menu Item Name"],
             "Caterer": [caterer_id],
-            "Price": item["Price"],
             "Dietary Tags": tag_ids,
             "Notes": item.get("Notes")
         })

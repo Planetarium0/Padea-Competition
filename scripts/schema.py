@@ -43,6 +43,7 @@ TABLES_SCHEMA = {
             {"name": "Min Qty 4 Items", "type": "number", "options": {"precision": 0}},
             {"name": "Min Qty 5 Items", "type": "number", "options": {"precision": 0}},
             {"name": "Min Qty 6 Items", "type": "number", "options": {"precision": 0}},
+            {"name": "Price per Item", "type": "currency", "options": {"precision": 2, "symbol": "$"}},
             {"name": "Contact Name", "type": "singleLineText"},
             {"name": "Contact Email", "type": "email"},
             {"name": "Chef Name", "type": "singleLineText"},
@@ -82,7 +83,6 @@ TABLES_SCHEMA = {
                 "type": "multipleRecordLinks",
                 "link_target": "Caterers"
             },
-            {"name": "Price", "type": "currency", "options": {"precision": 2, "symbol": "$"}},
             {
                 "name": "Dietary Tags",
                 "type": "multipleRecordLinks",
@@ -96,11 +96,13 @@ TABLES_SCHEMA = {
         "fields": [
             # Supersets = less-restrictive parents. (e.g. Vegetarian's supersets
             # include No Red Meat — a Vegetarian item satisfies a "No Red Meat"
-            # constraint.) Airtable auto-creates the inverse 'Subsets' back-link.
+            # constraint.) `inverse_name` renames Airtable's auto-created
+            # back-link from "From field: Supersets" to the friendlier "Subsets".
             {
                 "name": "Supersets",
                 "type": "multipleRecordLinks",
-                "link_target": "Dietary Restrictions"
+                "link_target": "Dietary Restrictions",
+                "inverse_name": "Subsets",
             }
         ]
     },
@@ -242,16 +244,6 @@ TABLES_SCHEMA = {
                 "name": "Caterer",
                 "type": "multipleRecordLinks",
                 "link_target": "Caterers"
-            },
-            {
-                "name": "Round",
-                "type": "singleSelect",
-                "options": {
-                    "choices": [
-                        {"name": "Round 1 (Mon–Wed)"},
-                        {"name": "Round 2 (Thu–Fri)"}
-                    ]
-                }
             },
             {"name": "Week Start", "type": "date", "options": {"dateFormat": {"name": "iso"}}},
             {"name": "Total Meals", "type": "number", "options": {"precision": 0}},
