@@ -1,172 +1,203 @@
 """
-send_orders.py — Format and log caterer order emails.
+send_orders.py — Format and send (log) caterer order emails for next week.
 
-Reads Weekly Orders with Status="Draft" from Airtable, formats a structured
-email for each caterer, and logs it to stdout + output/emails/.
+Reads all Weekly Orders with Status='Draft', aggregates the per-student Orders
+records linked to each into per-session item counts, formats a caterer email,
+and logs it to output/emails/ via send_email().
 
-Does NOT actually send emails — this is a testing/preview tool.
+Does NOT actually send email — send_email() is a stub that writes to disk.
 
 Usage:
   python scripts/send_orders.py [--preview]
 """
 
-import os
 import sys
 import argparse
 from datetime import datetime
 from pathlib import Path
 from collections import defaultdict
 
-# Add repository root to system path
 sys.path.append(str(Path(__file__).parent.parent.absolute()))
-
 from scripts import support as s
 
 OUTPUT_DIR = Path(__file__).parent.parent / "output" / "emails"
 
 
+# ---------------------------------------------------------------------------
+# Fake send_email — logs to output/emails/ instead of actually sending
+# ---------------------------------------------------------------------------
+
+def send_email(to_email, cc_email, subject, body, filename_hint="email"):
+    """Stub: write the email to output/emails/ rather than sending it."""
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    safe_name  = filename_hint.replace(" ", "_").replace("—", "-").replace("/", "-")
+    email_path = OUTPUT_DIR / f"{safe_name}.txt"
+
+    header_lines = [f"To: {to_email}"]
+    if cc_email:
+        header_lines.append(f"CC: {cc_email}")
+    header_lines.append(f"Subject: {subject}")
+    header_lines.append("")
+
+    email_path.write_text("\n".join(header_lines) + body, encoding="utf-8")
+    s.log.info(f"[FAKE SEND] Email logged to: {email_path}")
+
+
+# ---------------------------------------------------------------------------
+# Data loading
+# ---------------------------------------------------------------------------
+
 def load_draft_orders():
-    """Load all Weekly Orders with Status=Draft."""
     orders = s.airtable_get("Weekly Orders", filter_formula="{Status}='Draft'")
-    s.log.info(f"Found {len(orders)} draft orders")
+    s.log.info(f"Found {len(orders)} draft Weekly Orders")
     return orders
 
 
-def load_order_details(order_record):
-    """Load all related data for a single Weekly Order."""
-    order_id = order_record["id"]
-    fields = order_record["fields"]
+def load_order_details(weekly_order_record):
+    """
+    Aggregate individual Orders records for a Weekly Order into line items.
 
-    # Direct record lookup for the caterer
-    caterer_id = fields.get("Caterer", [None])[0]
-    caterer = {}
+    Returns (caterer_fields, line_items) where each line item is:
+      {"quantity": int, "session": session_fields_dict, "menu_item": item_fields_dict}
+    The session dict has extra keys "_school_name", "_manager_name", "_manager_mobile".
+    """
+    wo_id     = weekly_order_record["id"]
+    wo_fields = weekly_order_record["fields"]
+
+    caterer_id     = (wo_fields.get("Caterer") or [None])[0]
+    caterer_fields = {}
     if caterer_id:
         rec = s.get_table("Caterers").get(caterer_id)
-        caterer = rec["fields"] if rec else {}
+        caterer_fields = rec["fields"] if rec else {}
 
-    # Line items for this order
-    line_items = s.airtable_get(
-        "Order Line Items",
-        filter_formula=f"FIND('{order_id}', {{Line Item ID}})"
+    # Fetch all per-student Orders for this Weekly Order
+    individual_orders = s.airtable_get(
+        "Orders",
+        filter_formula=f"FIND('{wo_id}', ARRAYJOIN({{Weekly Order}}))"
     )
+    s.log.info(f"  Found {len(individual_orders)} individual order records")
 
-    # Collect unique session and menu item IDs across all line items
-    session_ids  = list({li["fields"].get("Session",  [None])[0] for li in line_items} - {None})
-    menu_item_ids = list({li["fields"].get("Menu Item", [None])[0] for li in line_items} - {None})
+    # Aggregate: session_id → item_id → count
+    session_item_counts = defaultdict(lambda: defaultdict(int))
+    all_session_ids = set()
+    all_item_ids    = set()
 
-    # Fetch each unique session and menu item directly by record ID
-    sessions_table    = s.get_table("Sessions")
-    menu_items_table  = s.get_table("Menu Items")
-    schools_table     = s.get_table("Schools")
-    managers_table    = s.get_table("On-Site Managers")
+    for order in individual_orders:
+        sess_id  = (order["fields"].get("Session")   or [None])[0]
+        item_id  = (order["fields"].get("Menu Item") or [None])[0]
+        quantity = order["fields"].get("Quantity", 1)
+        if sess_id and item_id:
+            session_item_counts[sess_id][item_id] += quantity
+            all_session_ids.add(sess_id)
+            all_item_ids.add(item_id)
 
-    session_map   = {sid: sessions_table.get(sid)["fields"]   for sid in session_ids}
-    menu_item_map = {mid: menu_items_table.get(mid)["fields"] for mid in menu_item_ids}
+    sessions_tbl  = s.get_table("Sessions")
+    items_tbl     = s.get_table("Menu Items")
+    schools_tbl   = s.get_table("Schools")
+    managers_tbl  = s.get_table("On-Site Managers")
 
-    # Annotate each unique session with school name and manager details
-    for sess_fields in session_map.values():
-        school_links = sess_fields.get("School", [])
+    session_map = {}
+    for sid in all_session_ids:
+        rec = sessions_tbl.get(sid)
+        if not rec:
+            continue
+        sf = rec["fields"]
+        school_links = sf.get("School") or []
         if school_links:
-            school_rec = schools_table.get(school_links[0])
-            sess_fields["_school_name"] = school_rec["fields"].get("School Name", "?") if school_rec else "?"
-
-        mgr_links = sess_fields.get("On-Site Manager", [])
+            s_rec = schools_tbl.get(school_links[0])
+            if s_rec:
+                sf["_school_name"] = s_rec["fields"].get("School Name", "?")
+        mgr_links = sf.get("On-Site Manager") or []
         if mgr_links:
-            mgr_rec = managers_table.get(mgr_links[0])
-            if mgr_rec:
-                sess_fields["_manager_name"]   = mgr_rec["fields"].get("Manager Name", "?")
-                sess_fields["_manager_mobile"] = mgr_rec["fields"].get("Mobile", "?")
+            m_rec = managers_tbl.get(mgr_links[0])
+            if m_rec:
+                sf["_manager_name"]   = m_rec["fields"].get("Manager Name", "?")
+                sf["_manager_mobile"] = m_rec["fields"].get("Mobile", "?")
+        session_map[sid] = sf
 
-    resolved_items = []
-    for li in line_items:
-        li_fields    = li["fields"]
-        session_id   = li_fields.get("Session",  [None])[0]
-        menu_item_id = li_fields.get("Menu Item", [None])[0]
-        resolved_items.append({
-            "quantity":  li_fields.get("Quantity", 0),
-            "session":   session_map.get(session_id, {}),
-            "menu_item": menu_item_map.get(menu_item_id, {}),
-        })
+    item_map = {}
+    for mid in all_item_ids:
+        rec = items_tbl.get(mid)
+        if rec:
+            item_map[mid] = rec["fields"]
 
-    return caterer, resolved_items
+    line_items = [
+        {
+            "quantity":  count,
+            "session":   session_map.get(sess_id, {}),
+            "menu_item": item_map.get(item_id, {}),
+        }
+        for sess_id, item_counts in session_item_counts.items()
+        for item_id, count in item_counts.items()
+    ]
+
+    return caterer_fields, line_items
 
 
-def format_email(order_fields, caterer, line_items):
-    """Format a structured order email."""
-    order_id = order_fields.get("Order ID", "?")
-    round_label = order_fields.get("Round", "?")
-    week_start = order_fields.get("Week Start", "?")
-    total_meals = order_fields.get("Total Meals", 0)
-    total_cost = order_fields.get("Total Cost", 0)
+# ---------------------------------------------------------------------------
+# Email formatting
+# ---------------------------------------------------------------------------
 
-    caterer_name = caterer.get("Caterer Name", "?") if caterer else "?"
-    contact_name = caterer.get("Contact Name", "there") if caterer else "there"
-    contact_email = caterer.get("Contact Email", "?") if caterer else "?"
-    chef_email = caterer.get("Chef Email") if caterer else None
-    chef_wants_cc = caterer.get("Chef Wants CC", False) if caterer else False
-    delivery_fee = caterer.get("Delivery Fee", 0) if caterer else 0
-    fee_structure = caterer.get("Delivery Fee Structure", "Per trip") if caterer else "Per trip"
+def format_email_body(wo_fields, caterer_fields, line_items):
+    """Return the email body (without To/CC/Subject headers)."""
+    week_start  = wo_fields.get("Week Start", "?")
+    total_meals = wo_fields.get("Total Meals", 0)
 
-    # Format week start nicely
+    caterer_name  = caterer_fields.get("Caterer Name", "?")
+    contact_name  = caterer_fields.get("Contact Name", "there") or "there"
+    delivery_fee  = caterer_fields.get("Delivery Fee", 0) or 0
+    fee_structure = caterer_fields.get("Delivery Fee Structure", "Per trip")
+
     try:
-        ws_date = datetime.strptime(week_start, "%Y-%m-%d")
-        week_display = ws_date.strftime("%-d %B %Y")
+        week_display = datetime.strptime(week_start, "%Y-%m-%d").strftime("%-d %B %Y")
     except (ValueError, TypeError):
         week_display = week_start
 
     # Group line items by session
     by_session = defaultdict(list)
     for li in line_items:
-        sess = li["session"]
-        sess_key = sess.get("Session ID", "Unknown")
-        by_session[sess_key].append(li)
+        by_session[li["session"].get("Session ID", "unknown")].append(li)
 
-    # Build email
     lines = []
-    lines.append(f"Subject: Padea Meal Order — Week of {week_display} ({round_label})")
-    lines.append("")
-
-    to_line = f"To: {contact_email}"
-    if chef_wants_cc and chef_email:
-        to_line += f"  CC: {chef_email}"
-    lines.append(to_line)
-    lines.append("")
-    lines.append(f"Hi {contact_name.split()[0] if contact_name else 'there'},")
+    lines.append(f"Hi {contact_name.split()[0]},")
     lines.append("")
     lines.append(f"Here is the meal order for {caterer_name} for the week of {week_display}:")
     lines.append("")
 
     num_deliveries = 0
-    for sess_key, items in sorted(by_session.items()):
-        sess = items[0]["session"]
-        day = sess.get("Day", "?")
-        school_name = sess.get("_school_name", "?")
-        delivery_time = sess.get("Dinner Time", "?")
-        building = sess.get("Building", "?")
-        manager_name = sess.get("_manager_name")
+    for sess_key in sorted(by_session):
+        items = by_session[sess_key]
+        sess  = items[0]["session"]
+
+        day            = sess.get("Day", "?")
+        school_name    = sess.get("_school_name", "?")
+        dinner_time    = sess.get("Dinner Time", "?")
+        building       = sess.get("Building", "?")
+        manager_name   = sess.get("_manager_name")
         manager_mobile = sess.get("_manager_mobile")
 
         lines.append(f"┌{'─'*58}┐")
         lines.append(f"│ {day.upper():56s} │")
         lines.append(f"│ {school_name:56s} │")
 
-        delivery_info = f"Deliver by: {delivery_time}"
+        delivery_info = f"Deliver by: {dinner_time}"
         if building:
             delivery_info += f" | Building: {building}"
         lines.append(f"│ {delivery_info:56s} │")
 
         if manager_name:
-            mgr_info = f"On-site manager: {manager_name}"
+            mgr_str = f"On-site manager: {manager_name}"
             if manager_mobile:
-                mgr_info += f" ({manager_mobile})"
-            lines.append(f"│ {mgr_info:56s} │")
+                mgr_str += f" ({manager_mobile})"
+            lines.append(f"│ {mgr_str:56s} │")
 
         lines.append(f"│{'':58s}│")
 
         session_total = 0
         for li in sorted(items, key=lambda x: -x["quantity"]):
             item_name = li["menu_item"].get("Menu Item Name", "?")
-            qty = li["quantity"]
+            qty       = li["quantity"]
             item_line = f"  {item_name:42s} ×{qty}"
             lines.append(f"│{item_line:58s}│")
             session_total += qty
@@ -179,7 +210,6 @@ def format_email(order_fields, caterer, line_items):
         lines.append("")
         num_deliveries += 1
 
-    # Delivery fee calculation
     if fee_structure == "Per school per trip":
         total_delivery = delivery_fee * num_deliveries
         fee_note = f"{num_deliveries} deliveries × ${delivery_fee:.2f}"
@@ -196,45 +226,68 @@ def format_email(order_fields, caterer, line_items):
     return "\n".join(lines)
 
 
-def process_orders(preview_only=False):
-    """Process all draft orders."""
-    orders = load_draft_orders()
+# ---------------------------------------------------------------------------
+# Main pipeline
+# ---------------------------------------------------------------------------
 
-    if not orders:
+def process_orders(preview_only=False):
+    draft_orders = load_draft_orders()
+    if not draft_orders:
         s.log.info("No draft orders to process.")
         return
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    for wo_record in draft_orders:
+        wo_fields    = wo_record["fields"]
+        wo_id_label  = wo_fields.get("Order ID", wo_record["id"])
+        s.log.info(f"\nProcessing: {wo_id_label}")
 
-    for order in orders:
-        order_fields = order["fields"]
-        order_id = order_fields.get("Order ID", "unknown")
+        caterer_fields, line_items = load_order_details(wo_record)
 
-        s.log.info(f"Processing order: {order_id}")
+        if not line_items:
+            s.log.warning(f"No order records found for '{wo_id_label}' — skipping.")
+            continue
 
-        caterer, line_items = load_order_details(order)
-        email_text = format_email(order_fields, caterer, line_items)
+        week_start = wo_fields.get("Week Start", "?")
+        try:
+            week_display = datetime.strptime(week_start, "%Y-%m-%d").strftime("%-d %B %Y")
+        except (ValueError, TypeError):
+            week_display = week_start
 
-        # Log to stdout
-        print("\n" + "=" * 62)
-        print(email_text)
+        contact_email = caterer_fields.get("Contact Email", "")
+        chef_email    = (
+            caterer_fields.get("Chef Email")
+            if caterer_fields.get("Chef Wants CC")
+            else None
+        )
+        subject  = f"Padea Meal Order — Week of {week_display}"
+        body     = format_email_body(wo_fields, caterer_fields, line_items)
+
+        # Print to stdout
+        print(f"\n{'='*62}")
+        to_line = f"To: {contact_email}"
+        if chef_email:
+            to_line += f"  CC: {chef_email}"
+        print(to_line)
+        print(f"Subject: {subject}")
+        print()
+        print(body)
         print("=" * 62)
 
-        # Save to file
-        safe_name = order_id.replace(" ", "_").replace("—", "-").replace("/", "-")
-        email_path = OUTPUT_DIR / f"{safe_name}.txt"
-        email_path.write_text(email_text, encoding="utf-8")
-        s.log.info(f"Email saved to: {email_path}")
-
         if not preview_only:
-            # Mark as "Sent" in Airtable (even though we didn't actually send)
-            s.log.info(f"[LOG] Email would be sent to: {caterer.get('Contact Email', '?')}")
+            send_email(
+                to_email=contact_email,
+                cc_email=chef_email,
+                subject=subject,
+                body=body,
+                filename_hint=wo_id_label,
+            )
             try:
-                table = s.get_table("Weekly Orders")
-                table.update(order["id"], {"Status": "Sent"})
-                s.log.info(f"Order status updated to 'Sent'")
+                s.get_table("Weekly Orders").update(wo_record["id"], {"Status": "Sent"})
+                s.log.info(f"Marked '{wo_id_label}' as Sent.")
             except Exception as e:
-                s.log.error(f"Failed to update order status: {e}")
+                s.log.error(f"Failed to mark '{wo_id_label}' as Sent: {e}")
+        else:
+            s.log.info(f"[PREVIEW] Would send to {contact_email}")
 
 
 # ---------------------------------------------------------------------------
@@ -242,11 +295,8 @@ def process_orders(preview_only=False):
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Format and log caterer order emails")
-    parser.add_argument(
-        "--preview", action="store_true",
-        help="Preview emails without marking orders as sent"
-    )
+    parser = argparse.ArgumentParser(description="Send caterer order emails")
+    parser.add_argument("--preview", action="store_true",
+                        help="Preview emails without sending or marking as Sent")
     args = parser.parse_args()
-
     process_orders(preview_only=args.preview)

@@ -33,7 +33,6 @@ const CACHE_TTL = {
   menu: 24 * 60 * 60 * 1000,    // 24h
   diet: 24 * 60 * 60 * 1000,    // 24h
   feedback: 5 * 60 * 1000,          // 5m
-  order: 5 * 60 * 1000,          // 5m
 };
 
 // Short labels for badges. Anything not listed falls back to the full name.
@@ -270,9 +269,9 @@ async function loadExistingFeedback(studentId, sessionId) {
   const cached = cacheGet(key, "feedback");
   if (cached !== null) return cached;
   const formula = `AND(FIND('${studentId}', ARRAYJOIN({Student})), FIND('${sessionId}', ARRAYJOIN({Session})))`;
-  const recs = await atList("Meal Feedback", {
+  const recs = await atList("Caterer Feedback", {
     filterByFormula: formula,
-    "fields[]": ["Rating", "Comment", "Menu Item"],
+    "fields[]": ["Rating", "Comment"],
   });
   const fb = recs[0]
     ? {
@@ -285,22 +284,6 @@ async function loadExistingFeedback(studentId, sessionId) {
   return fb;
 }
 
-async function loadTodayOrder(studentId, sessionId) {
-  // Most-recent Order for this student+session — used to link the Feedback
-  // record back to the actual meal eaten today.
-  const key = `padea_order_${studentId}_${sessionId}`;
-  const cached = cacheGet(key, "order");
-  if (cached !== null) return cached;
-  const formula = `AND(FIND('${studentId}', ARRAYJOIN({Student})), FIND('${sessionId}', ARRAYJOIN({Session})))`;
-  const recs = await atList("Orders", {
-    filterByFormula: formula,
-    "fields[]": ["Menu Item", "Date"],
-  });
-  recs.sort((a, b) => (b.fields.Date || "").localeCompare(a.fields.Date || ""));
-  const itemId = recs[0] ? (recs[0].fields["Menu Item"] || [])[0] || null : null;
-  cacheSet(key, { itemId });
-  return { itemId };
-}
 
 // ============================================================
 // Dietary hierarchy
@@ -411,7 +394,6 @@ const state = {
   mealItemId: null,
 
   feedbackRecordId: null,
-  todayMealItemId: null,  // what the student actually ate today, from Orders
 
   view: "loading",
 };
@@ -635,7 +617,6 @@ function resetFormState() {
   state.comment = "";
   state.mealItemId = null;
   state.feedbackRecordId = null;
-  state.todayMealItemId = null;
 }
 
 async function loadFormData(studentId) {
@@ -685,11 +666,6 @@ async function loadFormData(studentId) {
       }
       updateSubmitState();
     })
-    .catch(err => console.error(err));
-
-  // Background: today's actual order — for linking Menu Item on Feedback.
-  loadTodayOrder(studentId, state.sessionId)
-    .then(order => { state.todayMealItemId = order.itemId; })
     .catch(err => console.error(err));
 
   if (state.menuPromise) {
@@ -895,21 +871,21 @@ async function persistChanges() {
 
   const ops = [];
 
-  // Meal Feedback (Student, Session, Rating, Comment, Menu Item)
+  // Caterer Feedback (Student, Session, Caterer, Rating, Comment)
   if (ratingChanged) {
+    const catererId = (state.session?.fields?.Caterer || [])[0];
     const fields = {
       "Student": [state.studentId],
       "Session": [state.sessionId],
       "Rating": state.rating,
       "Comment": state.comment.trim(),
-      // Link to what they actually ate today, if known.
-      ...(state.todayMealItemId ? { "Menu Item": [state.todayMealItemId] } : {}),
+      ...(catererId ? { "Caterer": [catererId] } : {}),
     };
     if (state.feedbackRecordId) {
-      ops.push(atUpdate("Meal Feedback", state.feedbackRecordId, fields));
+      ops.push(atUpdate("Caterer Feedback", state.feedbackRecordId, fields));
     } else {
       fields["Feedback ID"] = makeId("FB", state.studentId, state.sessionId);
-      ops.push(atCreate("Meal Feedback", fields).then(rec => {
+      ops.push(atCreate("Caterer Feedback", fields).then(rec => {
         state.feedbackRecordId = rec.id;
       }));
     }

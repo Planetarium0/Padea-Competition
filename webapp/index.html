@@ -68,7 +68,7 @@
 
                 <!-- Rating -->
                 <div class="card">
-                    <h2 class="card-title">How was today's meal?</h2>
+                    <h2 class="card-title">How was today's caterer?</h2>
                     <div id="stars" class="stars">
                         <button class="star" data-v="1" onclick="app.setRating(1)" aria-label="1 star">★</button>
                         <button class="star" data-v="2" onclick="app.setRating(2)" aria-label="2 stars">★</button>
@@ -80,7 +80,7 @@
                     <div id="comment-wrap" class="comment-wrap hidden">
                         <label class="field-label" for="comment">What went wrong? <span class="muted">(optional)</span></label>
                         <textarea id="comment" rows="3"
-                            placeholder="e.g., cold, small portion, didn't like the taste"
+                            placeholder="e.g., late delivery, incorrect order, poor food quality"
                             oninput="app.setComment(this.value)"></textarea>
                     </div>
                 </div>

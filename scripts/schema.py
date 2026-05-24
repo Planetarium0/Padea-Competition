@@ -215,7 +215,7 @@ TABLES_SCHEMA = {
             {"name": "Reason", "type": "singleLineText"}
         ]
     },
-    "Meal Feedback": {
+    "Caterer Feedback": {
         "primary": {"name": "Feedback ID", "type": "singleLineText"},
         "fields": [
             {
@@ -229,9 +229,9 @@ TABLES_SCHEMA = {
                 "link_target": "Sessions"
             },
             {
-                "name": "Menu Item",
+                "name": "Caterer",
                 "type": "multipleRecordLinks",
-                "link_target": "Menu Items"
+                "link_target": "Caterers"
             },
             {"name": "Rating", "type": "number", "options": {"precision": 0}},
             {"name": "Comment", "type": "multilineText"}
@@ -263,21 +263,15 @@ TABLES_SCHEMA = {
         ]
     },
     "Orders": {
-        # Per-student-per-meal historical record. Acts as both the audit trail
-        # ("who ate what on which date") and the source-of-truth for the
-        # upcoming week's caterer order, which is rolled up by Menu Item /
-        # Session via grouping at query time.
+        # Per-session-per-item quantity record. One row per unique (Session,
+        # Menu Item) pair for a given week; Quantity holds the total portions
+        # to order. Rolled up from student preferences by register_orders.py.
         "primary": {"name": "Order ID", "type": "singleLineText"},
         "fields": [
             {
                 "name": "Weekly Order",
                 "type": "multipleRecordLinks",
                 "link_target": "Weekly Orders"
-            },
-            {
-                "name": "Student",
-                "type": "multipleRecordLinks",
-                "link_target": "Students"
             },
             {
                 "name": "Menu Item",
@@ -289,7 +283,8 @@ TABLES_SCHEMA = {
                 "type": "multipleRecordLinks",
                 "link_target": "Sessions"
             },
-            {"name": "Date", "type": "date", "options": {"dateFormat": {"name": "iso"}}}
+            {"name": "Date", "type": "date", "options": {"dateFormat": {"name": "iso"}}},
+            {"name": "Quantity", "type": "number", "options": {"precision": 0}}
         ]
     }
 }
