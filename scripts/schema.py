@@ -85,18 +85,23 @@ TABLES_SCHEMA = {
             {"name": "Price", "type": "currency", "options": {"precision": 2, "symbol": "$"}},
             {
                 "name": "Dietary Tags",
-                "type": "multipleSelects",
-                "options": {
-                    "choices": [
-                        {"name": "Gluten Free"},
-                        {"name": "Dairy Free"},
-                        {"name": "Nut Free"},
-                        {"name": "Vegetarian"},
-                        {"name": "Halal"}
-                    ]
-                }
+                "type": "multipleRecordLinks",
+                "link_target": "Dietary Restrictions"
             },
             {"name": "Notes", "type": "multilineText"}
+        ]
+    },
+    "Dietary Restrictions": {
+        "primary": {"name": "Restriction Name", "type": "singleLineText"},
+        "fields": [
+            # Supersets = less-restrictive parents. (e.g. Vegetarian's supersets
+            # include No Red Meat — a Vegetarian item satisfies a "No Red Meat"
+            # constraint.) Airtable auto-creates the inverse 'Subsets' back-link.
+            {
+                "name": "Supersets",
+                "type": "multipleRecordLinks",
+                "link_target": "Dietary Restrictions"
+            }
         ]
     },
     "Students": {
@@ -106,23 +111,8 @@ TABLES_SCHEMA = {
             {"name": "Subjects", "type": "singleLineText"},
             {
                 "name": "Dietary Requirements",
-                "type": "multipleSelects",
-                "options": {
-                    "choices": [
-                        {"name": "Dairy Free"},
-                        {"name": "Gluten Free"},
-                        {"name": "Nut Free"},
-                        {"name": "Vegetarian"},
-                        {"name": "Halal"},
-                        {"name": "No Beef"},
-                        {"name": "No Pork"},
-                        {"name": "No Seafood"},
-                        {"name": "No Shellfish"},
-                        {"name": "No Fish"},
-                        {"name": "No Red Meat"},
-                        {"name": "Opted out of Catering"}
-                    ]
-                }
+                "type": "multipleRecordLinks",
+                "link_target": "Dietary Restrictions"
             },
             {"name": "Student Email", "type": "email"},
             {"name": "Parent Name", "type": "singleLineText"},
@@ -132,6 +122,13 @@ TABLES_SCHEMA = {
                 "name": "Sessions",
                 "type": "multipleRecordLinks",
                 "link_target": "Sessions"
+            },
+            # Current preference for next week's meal. The webapp upserts this
+            # field directly; the weekly cron snapshots it into the Orders table.
+            {
+                "name": "Meal Preference",
+                "type": "multipleRecordLinks",
+                "link_target": "Menu Items"
             }
         ]
     },
@@ -238,27 +235,6 @@ TABLES_SCHEMA = {
             {"name": "Comment", "type": "multilineText"}
         ]
     },
-    "Meal Selections": {
-        "primary": {"name": "Selection ID", "type": "singleLineText"},
-        "fields": [
-            {
-                "name": "Student",
-                "type": "multipleRecordLinks",
-                "link_target": "Students"
-            },
-            {
-                "name": "Session",
-                "type": "multipleRecordLinks",
-                "link_target": "Sessions"
-            },
-            {
-                "name": "Menu Item",
-                "type": "multipleRecordLinks",
-                "link_target": "Menu Items"
-            },
-            {"name": "Selection Date", "type": "date", "options": {"dateFormat": {"name": "iso"}}}
-        ]
-    },
     "Weekly Orders": {
         "primary": {"name": "Order ID", "type": "singleLineText"},
         "fields": [
@@ -294,13 +270,22 @@ TABLES_SCHEMA = {
             {"name": "Notes", "type": "multilineText"}
         ]
     },
-    "Order Line Items": {
-        "primary": {"name": "Line Item ID", "type": "singleLineText"},
+    "Orders": {
+        # Per-student-per-meal historical record. Acts as both the audit trail
+        # ("who ate what on which date") and the source-of-truth for the
+        # upcoming week's caterer order, which is rolled up by Menu Item /
+        # Session via grouping at query time.
+        "primary": {"name": "Order ID", "type": "singleLineText"},
         "fields": [
             {
                 "name": "Weekly Order",
                 "type": "multipleRecordLinks",
                 "link_target": "Weekly Orders"
+            },
+            {
+                "name": "Student",
+                "type": "multipleRecordLinks",
+                "link_target": "Students"
             },
             {
                 "name": "Menu Item",
@@ -312,7 +297,7 @@ TABLES_SCHEMA = {
                 "type": "multipleRecordLinks",
                 "link_target": "Sessions"
             },
-            {"name": "Quantity", "type": "number", "options": {"precision": 0}}
+            {"name": "Date", "type": "date", "options": {"dateFormat": {"name": "iso"}}}
         ]
     }
 }

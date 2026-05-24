@@ -32,7 +32,7 @@ Usage:
   $0 qr [--base-url URL] [--session ID]
 
 resource can be one of:
-  caterers, contacts, menus, sessions, students, absences, exclusions, all
+  diet, caterers, contacts, menus, sessions, students, absences, exclusions, all
 
 If no resource is supplied, all migrations are run.
 EOF
@@ -40,6 +40,7 @@ EOF
 
 # Resolve short resource names to script filenames
 declare -A RES_MAP=(
+    [diet]="dietary_restrictions.py"
     [caterers]="caterers.py"
     [contacts]="caterer_contacts.py"
     [menus]="caterer_menus.py"
@@ -134,9 +135,16 @@ run_one() {
 # Main execution
 if [[ "$RESOURCE" == "all" ]]; then
     echo "Migrating all resources"
+    # Dietary Restrictions must run first — students.py and caterer_menus.py
+    # both depend on it for name → record-id lookups.
+    diet_script="$MIGRATION_DIR/dietary_restrictions.py"
+    if [[ -f "$diet_script" ]]; then
+        run_one "$diet_script"
+    fi
     for script in "$MIGRATION_DIR"/*.py; do
-        # Skip support modules that aren't migrations
-        [[ "$(basename "$script")" == "__init__.py" ]] && continue
+        base="$(basename "$script")"
+        [[ "$base" == "__init__.py" ]] && continue
+        [[ "$base" == "dietary_restrictions.py" ]] && continue
         run_one "$script"
     done
 else

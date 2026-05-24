@@ -5,15 +5,19 @@
  *   session  — Airtable Session record ID (required)
  *   student  — Airtable Student record ID (optional; from personalised QR)
  *
- * Flow:
- *   1. Fetch session in background. Kick off menu fetch as soon as we know
- *      the caterer.
- *   2. If we have (or remember) a student ID, go straight to the form view
- *      and kick off existing-feedback/selection fetches.
- *   3. Otherwise show a picker, fetching the session's students. Once one is
- *      picked we remember it (localStorage) and continue.
+ * Data model (post-iteration-3):
+ *   - Students.Dietary Requirements is a multipleRecordLinks → Dietary Restrictions.
+ *   - Students.Meal Preference is a multipleRecordLinks → Menu Items (one item).
+ *   - Menu Items.Dietary Tags is a multipleRecordLinks → Dietary Restrictions.
+ *   - Dietary Restrictions has a 'Supersets' self-link describing the hierarchy
+ *     (e.g. Vegetarian.Supersets = [No Red Meat]). An item is compatible with
+ *     a constraint C iff one of its tags is in subset-closure(C).
+ *   - Meal Selections is gone. Preference is upserted onto Students.Meal Preference.
  *
- * The menu is pre-fetched so the meal picker opens instantly.
+ * Loading strategy:
+ *   - First paint is synchronous (picker or form skeleton) based on URL + localStorage.
+ *   - Session, Dietary Restrictions and Menu Items load in parallel in the background.
+ *   - The meal picker opens instantly once the menu has arrived.
  */
 
 // ============================================================
@@ -22,34 +26,64 @@
 
 const AT_BASE = `https://api.airtable.com/v0/${CONFIG.BASE_ID}`;
 
-const POSITIVE_TAGS = new Set(["Gluten Free", "Dairy Free", "Nut Free", "Vegetarian", "Halal"]);
-
-const TAG_LABEL = {
-  "Gluten Free": "GF",
-  "Dairy Free": "DF",
-  "Nut Free": "NF",
-  "Vegetarian": "Veg",
-  "Halal": "Halal",
-};
-
-// Name-keyword fallback for negative dietary requirements that aren't
-// expressed as Menu Item tags.
-const NEGATIVE_KEYWORDS = {
-  "No Beef": ["beef", "bulgogi"],
-  "No Pork": ["pork", "bacon", "ham"],
-  "No Seafood": ["seafood", "shrimp", "prawn", "fish", "salmon", "tuna", "shellfish", "crab", "lobster"],
-  "No Shellfish": ["shellfish", "shrimp", "prawn", "crab", "lobster"],
-  "No Fish": ["fish", "salmon", "tuna"],
-  "No Red Meat": ["beef", "lamb", "pork", "bulgogi"],
-};
-
 const CACHE_TTL = {
-  session: 60 * 60 * 1000,         // 1h
-  student: 24 * 60 * 60 * 1000,    // 24h
-  students: 60 * 60 * 1000,         // 1h
-  menu: 24 * 60 * 60 * 1000,    // 24h
-  selection: 5 * 60 * 1000,          // 5m  — may change as user submits
-  feedback: 5 * 60 * 1000,
+  session:   60 * 60 * 1000,         // 1h
+  student:   24 * 60 * 60 * 1000,    // 24h
+  students:  60 * 60 * 1000,         // 1h
+  menu:      24 * 60 * 60 * 1000,    // 24h
+  diet:      24 * 60 * 60 * 1000,    // 24h
+  feedback:  5 * 60 * 1000,          // 5m
+  order:     5 * 60 * 1000,          // 5m
+};
+
+// Short labels for badges. Anything not listed falls back to the full name.
+const TAG_SHORT = {
+  "Gluten Free":  "GF",
+  "Dairy Free":   "DF",
+  "Nut Free":     "NF",
+  "Vegetarian":   "Veg",
+  "Vegan":        "Vegan",
+  "Halal":        "Halal",
+  "Kosher":       "Kosher",
+  "Pescatarian":  "Pesc",
+};
+
+// Name-keyword heuristic. If a menu item's NAME contains any of these
+// substrings, we treat that as definite evidence it violates the listed
+// constraint — i.e. "Contains beef" rather than the softer "May contain beef".
+const NEGATIVE_KEYWORDS = {
+  "No Beef":      ["beef", "bulgogi"],
+  "No Pork":      ["pork", "bacon", "ham"],
+  "No Lamb":      ["lamb"],
+  "No Seafood":   ["seafood", "shrimp", "prawn", "fish", "salmon", "tuna", "shellfish", "crab", "lobster"],
+  "No Shellfish": ["shellfish", "shrimp", "shrimps", "prawn", "crab", "lobster"],
+  "No Fish":      ["fish", "salmon", "tuna"],
+  "No Red Meat":  ["beef", "lamb", "pork", "bulgogi"],
+  "Vegetarian":   ["beef", "pork", "lamb", "chicken", "fish", "shrimp", "prawn", "salmon", "tuna", "seafood", "shellfish", "crab", "lobster", "bulgogi", "bacon", "ham"],
+  "Vegan":        ["beef", "pork", "lamb", "chicken", "fish", "shrimp", "prawn", "salmon", "tuna", "seafood", "shellfish", "crab", "lobster", "bulgogi", "bacon", "ham", "cheese", "milk", "butter", "cream", "yogurt"],
+  "Pescatarian":  ["beef", "pork", "lamb", "chicken", "bulgogi", "bacon", "ham"],
+  "Dairy Free":   ["cheese", "milk", "butter", "cream", "yogurt"],
+  "Halal":        ["pork", "bacon", "ham"],
+  "Kosher":       ["pork", "bacon", "ham", "shellfish", "shrimp", "prawn", "crab", "lobster"],
+};
+
+// Plain-language phrase for each constraint, used in reason labels.
+const CONSTRAINT_PHRASE = {
+  "Gluten Free":  "gluten",
+  "Dairy Free":   "dairy",
+  "Nut Free":     "nuts",
+  "Vegetarian":   "meat",
+  "Vegan":        "animal products",
+  "Pescatarian":  "non-fish meat",
+  "Halal":        "non-halal ingredients",
+  "Kosher":       "non-kosher ingredients",
+  "No Beef":      "beef",
+  "No Pork":      "pork",
+  "No Lamb":      "lamb",
+  "No Fish":      "fish",
+  "No Shellfish": "shellfish",
+  "No Seafood":   "seafood",
+  "No Red Meat":  "red meat",
 };
 
 // ============================================================
@@ -69,10 +103,7 @@ async function atFetch(url, options = {}) {
       ...(options.headers || {}),
     },
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Airtable ${res.status}: ${text}`);
-  }
+  if (!res.ok) throw new Error(`Airtable ${res.status}: ${await res.text()}`);
   return res.json();
 }
 
@@ -113,13 +144,13 @@ async function atUpdate(table, id, fields) {
 }
 
 // ============================================================
-// Local storage helpers
+// localStorage helpers
 // ============================================================
 
 const ls = {
-  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
-  set(k, v) { try { localStorage.setItem(k, v); } catch { } },
-  remove(k) { try { localStorage.removeItem(k); } catch { } },
+  get(k)    { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  remove(k) { try { localStorage.removeItem(k); } catch {} },
 };
 
 function cacheGet(key, type) {
@@ -137,12 +168,12 @@ function cacheSet(key, data) {
 }
 
 function knownStudentKey(sessionId) { return `padea_known_student_${sessionId}`; }
-function getKnownStudent(sessionId) { return ls.get(knownStudentKey(sessionId)); }
+function getKnownStudent(sessionId)  { return ls.get(knownStudentKey(sessionId)); }
 function setKnownStudent(sessionId, sid) { ls.set(knownStudentKey(sessionId), sid); }
-function clearKnownStudent(sessionId) { ls.remove(knownStudentKey(sessionId)); }
+function clearKnownStudent(sessionId)    { ls.remove(knownStudentKey(sessionId)); }
 
 // ============================================================
-// Data loaders (cache-first, returns the cached value if fresh)
+// Data loaders
 // ============================================================
 
 async function loadSession(sessionId) {
@@ -177,12 +208,11 @@ async function loadStudentsForSession(sessionId, studentIds) {
   const formula = `OR(${studentIds.map(id => `RECORD_ID()='${id}'`).join(",")})`;
   const recs = await atList("Students", {
     filterByFormula: formula,
-    "fields[]": ["Student Name", "Dietary Requirements"],
+    "fields[]": ["Student Name"],
   });
   const result = recs.map(r => ({
     id: r.id,
     name: r.fields["Student Name"] || "(no name)",
-    dietary: r.fields["Dietary Requirements"] || [],
   })).sort((a, b) => a.name.localeCompare(b.name));
   cacheSet(key, result);
   return result;
@@ -195,22 +225,19 @@ async function loadMenuItems(catererId) {
     console.log(`[padea] menu (cache hit, ${cached.length} items)`);
     return cached;
   }
-  // Two-step fetch: the previous `FIND(catId, ARRAYJOIN({Caterer}))` approach
-  // can't work because Airtable renders linked-record fields as their primary
-  // field (caterer NAME) in formulas, never the record ID. So we fetch the
-  // caterer first and pull menu item IDs from its `Menu Items` back-link.
+  // Fetch caterer to get its Menu Items back-link IDs, then fetch the items.
+  // We can't filter Menu Items by Caterer record ID because Airtable formulas
+  // render linked-record fields as the primary field (name), not the ID.
   console.log(`[padea] fetching caterer ${catererId}…`);
   const caterer = await atGet("Caterers", catererId);
   const menuIds = caterer.fields["Menu Items"] || [];
   console.log(
     `[padea] caterer "${caterer.fields["Caterer Name"]}" has ${menuIds.length} menu items`,
   );
-
   if (!menuIds.length) {
     cacheSet(key, []);
     return [];
   }
-
   const formula = `OR(${menuIds.map(id => `RECORD_ID()='${id}'`).join(",")})`;
   const items = await atList("Menu Items", {
     filterByFormula: formula,
@@ -221,21 +248,21 @@ async function loadMenuItems(catererId) {
   return items;
 }
 
-async function loadExistingSelection(studentId, sessionId) {
-  const key = `padea_sel_${studentId}_${sessionId}`;
-  const cached = cacheGet(key, "selection");
-  if (cached !== null) return cached;
-  const formula = `AND(FIND('${studentId}', ARRAYJOIN({Student})), FIND('${sessionId}', ARRAYJOIN({Session})))`;
-  const recs = await atList("Meal Selections", {
-    filterByFormula: formula,
-    "fields[]": ["Menu Item", "Selection Date"],
+async function loadDietaryRestrictions() {
+  const key = "padea_diet_restrictions";
+  const cached = cacheGet(key, "diet");
+  if (cached) return cached;
+  const recs = await atList("Dietary Restrictions", {
+    "fields[]": ["Restriction Name", "Supersets"],
   });
-  recs.sort((a, b) => (b.fields["Selection Date"] || "").localeCompare(a.fields["Selection Date"] || ""));
-  const sel = recs[0]
-    ? { recordId: recs[0].id, itemId: (recs[0].fields["Menu Item"] || [])[0] || null }
-    : { recordId: null, itemId: null };
-  cacheSet(key, sel);
-  return sel;
+  const data = recs.map(r => ({
+    id: r.id,
+    name: r.fields["Restriction Name"],
+    supersets: r.fields["Supersets"] || [],
+  }));
+  console.log(`[padea] dietary restrictions loaded: ${data.length}`);
+  cacheSet(key, data);
+  return data;
 }
 
 async function loadExistingFeedback(studentId, sessionId) {
@@ -249,62 +276,115 @@ async function loadExistingFeedback(studentId, sessionId) {
   });
   const fb = recs[0]
     ? {
-      recordId: recs[0].id,
-      rating: recs[0].fields.Rating || 0,
-      comment: recs[0].fields.Comment || "",
-    }
+        recordId: recs[0].id,
+        rating: recs[0].fields.Rating || 0,
+        comment: recs[0].fields.Comment || "",
+      }
     : { recordId: null, rating: 0, comment: "" };
   cacheSet(key, fb);
   return fb;
 }
 
-// ============================================================
-// Dietary compatibility
-// ============================================================
-
-// Friendly label for a positive tag that the student requires but the item
-// doesn't have.
-const MISSING_TAG_LABEL = {
-  "Gluten Free": "Contains gluten",
-  "Dairy Free":  "Contains dairy",
-  "Nut Free":    "May contain nuts",
-  "Vegetarian":  "Not vegetarian",
-  "Halal":       "Not halal",
-};
-
-// Plain-language word for a "No <food>" requirement.
-const NEGATIVE_FOOD = {
-  "No Beef":      "beef",
-  "No Pork":      "pork",
-  "No Seafood":   "seafood",
-  "No Shellfish": "shellfish",
-  "No Fish":      "fish",
-  "No Red Meat":  "red meat",
-};
-
-function checkCompatibility(itemFields, requirements) {
-  const issues = [];
-  if (!requirements || !requirements.length) return { compatible: true, issues };
-
-  const tags = new Set(itemFields["Dietary Tags"] || []);
-  const name = (itemFields["Menu Item Name"] || "").toLowerCase();
-
-  for (const req of requirements) {
-    if (req === "Opted out of Catering") continue;
-    if (POSITIVE_TAGS.has(req) && !tags.has(req)) {
-      issues.push(MISSING_TAG_LABEL[req] || `Not ${req.toLowerCase()}`);
-    }
-    const kws = NEGATIVE_KEYWORDS[req];
-    if (kws && kws.some(k => name.includes(k))) {
-      issues.push(`Contains ${NEGATIVE_FOOD[req] || req.replace(/^No /, "").toLowerCase()}`);
-    }
-  }
-  return { compatible: issues.length === 0, issues };
+async function loadTodayOrder(studentId, sessionId) {
+  // Most-recent Order for this student+session — used to link the Feedback
+  // record back to the actual meal eaten today.
+  const key = `padea_order_${studentId}_${sessionId}`;
+  const cached = cacheGet(key, "order");
+  if (cached !== null) return cached;
+  const formula = `AND(FIND('${studentId}', ARRAYJOIN({Student})), FIND('${sessionId}', ARRAYJOIN({Session})))`;
+  const recs = await atList("Orders", {
+    filterByFormula: formula,
+    "fields[]": ["Menu Item", "Date"],
+  });
+  recs.sort((a, b) => (b.fields.Date || "").localeCompare(a.fields.Date || ""));
+  const itemId = recs[0] ? (recs[0].fields["Menu Item"] || [])[0] || null : null;
+  cacheSet(key, { itemId });
+  return { itemId };
 }
 
-function hasOptedOut(student) {
+// ============================================================
+// Dietary hierarchy
+// ============================================================
+
+function buildHierarchyMaps(restrictions) {
+  const idToName = {};
+  const nameToId = {};
+  for (const r of restrictions) {
+    idToName[r.id] = r.name;
+    nameToId[r.name] = r.id;
+  }
+  // Build child map (parentId → [subset childIds]) from each restriction's
+  // Supersets list (a restriction lists its less-restrictive parents).
+  const children = {};
+  for (const r of restrictions) {
+    for (const parentId of r.supersets) {
+      (children[parentId] ||= []).push(r.id);
+    }
+  }
+  // Transitive subset-closure for each restriction (including itself).
+  function descendants(id, acc = new Set()) {
+    if (acc.has(id)) return acc;
+    acc.add(id);
+    for (const c of children[id] || []) descendants(c, acc);
+    return acc;
+  }
+  const subsetClosure = {};
+  for (const r of restrictions) {
+    subsetClosure[r.id] = descendants(r.id);
+  }
+  return { idToName, nameToId, subsetClosure };
+}
+
+// Returns { compatible, severity, issues } where:
+//   compatible — true if all constraints satisfied by tags
+//   severity   — "ok" | "maybe" | "no"
+//   issues     — array of { name, severity, label } describing each unmet constraint
+function checkCompatibility(item, studentReqIds, maps) {
+  if (!studentReqIds.length) return { compatible: true, severity: "ok", issues: [] };
+
+  const itemTagIds = item.fields["Dietary Tags"] || [];
+  const itemTagIdSet = new Set(itemTagIds);
+  const itemNameLower = (item.fields["Menu Item Name"] || "").toLowerCase();
+
+  const issues = [];
+  for (const reqId of studentReqIds) {
+    const reqName = maps.idToName[reqId];
+    if (!reqName || reqName === "Opted out of Catering") continue;
+
+    const closure = maps.subsetClosure[reqId] || new Set([reqId]);
+    const tagMatch = itemTagIds.some(t => closure.has(t));
+    if (tagMatch) continue; // satisfied by a tag in the subset closure
+
+    // No tag confirms it. Use the name-keyword heuristic to distinguish
+    // definitely-incompatible vs ambiguous-may-contain.
+    const phrase = CONSTRAINT_PHRASE[reqName] || reqName.toLowerCase();
+    const kws = NEGATIVE_KEYWORDS[reqName];
+    if (kws && kws.some(k => itemNameLower.includes(k))) {
+      issues.push({ name: reqName, severity: "no", label: `Contains ${phrase}` });
+    } else {
+      issues.push({ name: reqName, severity: "maybe", label: `May contain ${phrase}` });
+    }
+  }
+
+  if (!issues.length) return { compatible: true, severity: "ok", issues };
+  const severity = issues.some(i => i.severity === "no") ? "no" : "maybe";
+  return { compatible: false, severity, issues };
+}
+
+function hasOptedOut(student, maps) {
   const reqs = student?.fields?.["Dietary Requirements"] || [];
-  return reqs.includes("Opted out of Catering");
+  return reqs.some(id => maps.idToName[id] === "Opted out of Catering");
+}
+
+// ============================================================
+// Wed 8pm cutoff
+// ============================================================
+
+function isPastOrderCutoff(now = new Date()) {
+  const day = now.getDay();  // 0=Sun, ..., 6=Sat
+  const hr = now.getHours();
+  if (day === 3 && hr >= 20) return true;  // Wed >= 8pm
+  return day === 4 || day === 5 || day === 6;  // Thu / Fri / Sat
 }
 
 // ============================================================
@@ -314,32 +394,27 @@ function hasOptedOut(student) {
 const state = {
   sessionId: null,
   studentId: null,
+  session: null,
+  student: null,
+  menuItems: null,
+  menuPromise: null,
+  dietRestrictions: null,
+  dietPromise: null,
+  dietMaps: null,
 
-  session: null,        // raw Airtable record
-  student: null,        // raw Airtable record
-  menuItems: null,      // raw Airtable records
-  menuPromise: null,    // in-flight menu fetch (for instant picker open)
-
-  // Initial (loaded) values
   initialRating: 0,
   initialComment: "",
   initialMealItemId: null,
 
-  // Pending (user-edited) values
   rating: 0,
   comment: "",
   mealItemId: null,
 
-  // Existing record IDs for upsert
   feedbackRecordId: null,
-  selectionRecordId: null,
+  todayMealItemId: null,  // what the student actually ate today, from Orders
 
   view: "loading",
 };
-
-// ============================================================
-// View routing
-// ============================================================
 
 const views = ["picker", "form", "meals", "done"];
 
@@ -351,7 +426,7 @@ function showView(name) {
 }
 
 // ============================================================
-// Init
+// App actions
 // ============================================================
 
 const app = {
@@ -365,7 +440,7 @@ const app = {
       return;
     }
 
-    // 1. Decide the view *before* any network so the first paint is correct.
+    // Decide the view before any network so the first paint is correct.
     const urlStudent = params.get("student");
     const knownStudent = getKnownStudent(state.sessionId);
     const studentId = urlStudent || knownStudent;
@@ -378,7 +453,19 @@ const app = {
       showPickerSkeleton();
     }
 
-    // 2. Load session (cached if fresh).
+    // Show the cutoff footnote immediately based on local time.
+    renderCutoffFootnote();
+
+    // Start Dietary Restrictions fetch in parallel (independent of session).
+    state.dietPromise = loadDietaryRestrictions()
+      .then(rs => {
+        state.dietRestrictions = rs;
+        state.dietMaps = buildHierarchyMaps(rs);
+        return rs;
+      })
+      .catch(err => { console.error("[padea] diet load failed:", err); return []; });
+
+    // Load session.
     let session;
     try {
       session = await loadSession(state.sessionId);
@@ -391,7 +478,7 @@ const app = {
     document.getElementById("session-label").textContent =
       formatSessionLabel(session.fields);
 
-    // 3. As soon as we know the caterer, prefetch the menu.
+    // Prefetch the caterer's menu.
     const catererId = (session.fields.Caterer || [])[0];
     if (catererId) {
       state.menuPromise = loadMenuItems(catererId)
@@ -399,12 +486,10 @@ const app = {
         .catch(err => { console.error(err); return []; });
     }
 
-    // 4. Drive the chosen view.
     if (studentId) await loadFormData(studentId);
-    else await loadPickerData();
+    else           await loadPickerData();
   },
 
-  // -------------- Picker --------------
   async pickStudent(sid) {
     setKnownStudent(state.sessionId, sid);
     state.studentId = sid;
@@ -419,13 +504,12 @@ const app = {
     if (state.session) await loadPickerData();
   },
 
-  // -------------- Rating --------------
   setRating(v) {
     state.rating = v;
     document.querySelectorAll("#stars .star").forEach(s => {
       s.classList.toggle("active", Number(s.dataset.v) <= v);
     });
-    document.getElementById("comment-wrap").classList.toggle("hidden", v >= 4 || v === 0);
+    document.getElementById("comment-wrap").classList.toggle("hidden", v === 0 || v >= 4);
     updateSubmitState();
   },
 
@@ -434,9 +518,8 @@ const app = {
     updateSubmitState();
   },
 
-  // -------------- Meal picker --------------
   openMealPicker() {
-    if (!state.student) return; // dietary reqs not loaded yet — shouldn't be reachable
+    if (!state.student) return;
     renderMealList();
     showView("meals");
   },
@@ -449,20 +532,18 @@ const app = {
     state.mealItemId = itemId;
     updateMealTrigger();
     updateSubmitState();
-    // small delay so the user sees the selection animate
     setTimeout(() => showView("form"), 140);
   },
 
   attemptIncompatibleSelect(itemId) {
     const item = state.menuItems.find(i => i.id === itemId);
-    if (!item) return;
-    const reqs = (state.student?.fields["Dietary Requirements"] || [])
-      .filter(r => r !== "Opted out of Catering");
-    const { issues } = checkCompatibility(item.fields, reqs);
+    if (!item || !state.dietMaps) return;
+    const reqs = state.student.fields["Dietary Requirements"] || [];
+    const { issues } = checkCompatibility(item, reqs, state.dietMaps);
     const name = item.fields["Menu Item Name"] || "this meal";
     openConfirm({
       title: "Are you sure?",
-      body: `"${name}" doesn't match your dietary requirements: ${issues.join(", ")}.`,
+      body: `"${name}" doesn't match your dietary requirements: ${issues.map(i => i.label).join(", ")}.`,
       confirmLabel: "Choose it anyway",
       onConfirm: () => {
         closeConfirm();
@@ -471,12 +552,10 @@ const app = {
     });
   },
 
-  // -------------- Submit --------------
   async submit() {
     const btn = document.getElementById("submit-btn");
     btn.disabled = true;
     btn.textContent = "Saving…";
-
     try {
       await persistChanges();
       showView("done");
@@ -489,16 +568,14 @@ const app = {
     }
   },
 
-  // -------------- Done -> back to form --------------
   reset() {
-    // values are already in state; just go back to the form view.
     refreshFormFromState();
     showView("form");
   },
 };
 
 // ============================================================
-// View skeletons (sync — paint immediately) + data loaders
+// Skeletons + data drivers
 // ============================================================
 
 function showPickerSkeleton() {
@@ -544,7 +621,6 @@ function showFormSkeleton() {
 }
 
 function resetFormState() {
-  // Keep prefetched menuItems / menuPromise — they're per-caterer, not per-student.
   state.student = null;
   state.initialRating = 0;
   state.initialComment = "";
@@ -553,11 +629,10 @@ function resetFormState() {
   state.comment = "";
   state.mealItemId = null;
   state.feedbackRecordId = null;
-  state.selectionRecordId = null;
+  state.todayMealItemId = null;
 }
 
 async function loadFormData(studentId) {
-  // 1. Student record — needed to render name and to know dietary reqs.
   let student;
   try {
     student = await loadStudent(studentId);
@@ -567,30 +642,25 @@ async function loadFormData(studentId) {
     return;
   }
   state.student = student;
-  console.log(`[padea] student loaded: ${student.fields["Student Name"]}`,
-              "diet:", student.fields["Dietary Requirements"] || []);
   document.getElementById("student-name").textContent =
     student.fields["Student Name"] || "—";
 
-  // If the student has opted out of catering, block the form entirely.
-  if (hasOptedOut(student)) {
+  // Read the current preference straight off the student record.
+  state.initialMealItemId = (student.fields["Meal Preference"] || [])[0] || null;
+  state.mealItemId = state.initialMealItemId;
+
+  console.log(`[padea] student loaded: ${student.fields["Student Name"]}`,
+              "diet ids:", student.fields["Dietary Requirements"] || [],
+              "preference:", state.initialMealItemId);
+
+  // Apply opted-out lock if applicable. Needs dietary maps first.
+  await state.dietPromise;
+  if (state.dietMaps && hasOptedOut(student, state.dietMaps)) {
     applyOptedOutLock();
     return;
-  } else {
-    clearOptedOutLock();
   }
 
-  // 2. Existing selection & feedback — both background, don't block UI.
-  loadExistingSelection(studentId, state.sessionId)
-    .then(sel => {
-      state.selectionRecordId = sel.recordId;
-      state.initialMealItemId = sel.itemId;
-      if (state.mealItemId === null) state.mealItemId = sel.itemId;
-      updateMealTrigger();
-      updateSubmitState();
-    })
-    .catch(err => console.error(err));
-
+  // Background: existing feedback for this student+session.
   loadExistingFeedback(studentId, state.sessionId)
     .then(fb => {
       state.feedbackRecordId = fb.recordId;
@@ -611,7 +681,11 @@ async function loadFormData(studentId) {
     })
     .catch(err => console.error(err));
 
-  // 3. When menu arrives (if not already), refresh meal trigger.
+  // Background: today's actual order — for linking Menu Item on Feedback.
+  loadTodayOrder(studentId, state.sessionId)
+    .then(order => { state.todayMealItemId = order.itemId; })
+    .catch(err => console.error(err));
+
   if (state.menuPromise) {
     state.menuPromise.then(() => updateMealTrigger());
   } else {
@@ -671,19 +745,21 @@ function renderMealList() {
   ul.classList.add("hidden");
   empty.classList.add("hidden");
 
-  const reqs = (state.student?.fields["Dietary Requirements"] || [])
-    .filter(r => r !== "Opted out of Catering");
-  sub.textContent = reqs.length
-    ? `Filtered for: ${reqs.join(", ")}`
+  const allReqs = state.student?.fields["Dietary Requirements"] || [];
+  const maps = state.dietMaps;
+  const reqs = maps
+    ? allReqs.filter(id => maps.idToName[id] !== "Opted out of Catering")
+    : [];
+  const reqNames = reqs.map(id => maps?.idToName[id]).filter(Boolean);
+  sub.textContent = reqNames.length
+    ? `Filtered for: ${reqNames.join(", ")}`
     : "All available meals from your caterer.";
 
-  if (!state.menuItems) {
+  // Wait on both menu and dietary maps before rendering meaningfully.
+  if (!state.menuItems || !maps) {
     loading.classList.remove("hidden");
-    if (state.menuPromise) {
-      state.menuPromise.then(() => {
-        if (state.view === "meals") renderMealList();
-      });
-    }
+    Promise.all([state.menuPromise, state.dietPromise].filter(Boolean))
+      .then(() => { if (state.view === "meals") renderMealList(); });
     return;
   }
   loading.classList.add("hidden");
@@ -694,31 +770,43 @@ function renderMealList() {
     return;
   }
 
-  // Split into compatible + incompatible. Incompatible items are still
-  // selectable (with a confirmation step) so we render them grayed at the
-  // bottom of the list.
-  const compatible = [];
-  const incompatible = [];
+  // Bucket items: compatible / possibly-compatible / definitely-incompatible.
+  const compat = [], maybe = [], incompat = [];
   for (const item of state.menuItems) {
-    const { compatible: ok, issues } = checkCompatibility(item.fields, reqs);
-    (ok ? compatible : incompatible).push({ item, issues });
+    const r = checkCompatibility(item, reqs, maps);
+    if (r.severity === "ok") compat.push({ item, result: r });
+    else if (r.severity === "maybe") maybe.push({ item, result: r });
+    else incompat.push({ item, result: r });
   }
 
-  const renderRow = ({ item, issues }) => {
+  const renderRow = ({ item, result }) => {
     const name = item.fields["Menu Item Name"] || "—";
-    const tags = item.fields["Dietary Tags"] || [];
+    const tagIds = item.fields["Dietary Tags"] || [];
+    const tagsHtml = tagIds.map(tid => {
+      const tName = maps.idToName[tid];
+      if (!tName) return "";
+      const short = TAG_SHORT[tName] || tName;
+      return `<span class="tag">${escapeHtml(short)}</span>`;
+    }).join("");
     const selected = item.id === state.mealItemId;
-    const incompat = issues.length > 0;
-    const tagsHtml = tags.map(t => `<span class="tag">${TAG_LABEL[t] || t}</span>`).join("");
-    const reasonHtml = incompat
-      ? `<div class="meal-reason">${escapeHtml(issues.join(" · "))}</div>`
+    const sev = result.severity;
+    const reasonHtml = result.issues.length
+      ? `<div class="meal-reason meal-reason-${sev}">${
+           escapeHtml(result.issues.map(i => i.label).join(" · "))
+         }</div>`
       : "";
-    const onclick = incompat
+    // "no" rows require confirmation; "maybe" rows can be selected directly.
+    const onclick = sev === "no"
       ? `app.attemptIncompatibleSelect('${item.id}')`
       : `app.selectMeal('${item.id}')`;
+    const klass = [
+      "meal-item",
+      selected ? "selected" : "",
+      sev === "no" ? "incompatible" : "",
+      sev === "maybe" ? "maybe" : "",
+    ].filter(Boolean).join(" ");
     return `
-      <li class="meal-item${selected ? " selected" : ""}${incompat ? " incompatible" : ""}"
-          onclick="${onclick}">
+      <li class="${klass}" onclick="${onclick}">
         <div class="meal-radio"></div>
         <div class="meal-content">
           <div class="meal-name">${escapeHtml(name)}</div>
@@ -728,10 +816,14 @@ function renderMealList() {
       </li>`;
   };
 
-  let html = compatible.map(renderRow).join("");
-  if (incompatible.length) {
-    html += `<li class="meal-divider">May not match your preferences</li>`;
-    html += incompatible.map(renderRow).join("");
+  let html = compat.map(renderRow).join("");
+  if (maybe.length) {
+    html += `<li class="meal-divider">Possibly compatible</li>`;
+    html += maybe.map(renderRow).join("");
+  }
+  if (incompat.length) {
+    html += `<li class="meal-divider">Doesn't match your preferences</li>`;
+    html += incompat.map(renderRow).join("");
   }
   ul.classList.remove("hidden");
   ul.innerHTML = html;
@@ -742,14 +834,12 @@ function updateMealTrigger() {
   const label = document.getElementById("meal-trigger-label");
   const nameEl = document.getElementById("meal-trigger-name");
 
-  // Session has no caterer assigned — nothing to choose from.
   if (state.session && !(state.session.fields.Caterer || []).length) {
     label.textContent = "No caterer assigned to this session.";
     nameEl.textContent = "";
     trig.disabled = true;
     return;
   }
-
   if (!state.menuItems) {
     label.textContent = "Loading menu…";
     nameEl.textContent = "";
@@ -757,7 +847,6 @@ function updateMealTrigger() {
     return;
   }
   trig.disabled = false;
-
   if (state.mealItemId) {
     const item = state.menuItems.find(i => i.id === state.mealItemId);
     if (item) {
@@ -774,10 +863,19 @@ function updateSubmitState() {
   const ratingChanged = state.rating > 0 && state.rating !== state.initialRating;
   const commentChanged = state.rating > 0 && state.comment !== state.initialComment;
   const mealChanged = state.mealItemId && state.mealItemId !== state.initialMealItemId;
-
   const btn = document.getElementById("submit-btn");
   btn.disabled = !(ratingChanged || commentChanged || mealChanged);
   btn.textContent = "Submit";
+}
+
+function renderCutoffFootnote() {
+  const note = document.getElementById("cutoff-note");
+  if (!note) return;
+  if (isPastOrderCutoff()) {
+    note.classList.remove("hidden");
+  } else {
+    note.classList.add("hidden");
+  }
 }
 
 // ============================================================
@@ -785,60 +883,44 @@ function updateSubmitState() {
 // ============================================================
 
 async function persistChanges() {
-  const today = new Date().toISOString().slice(0, 10);
-
   const ratingChanged = state.rating > 0 &&
     (state.rating !== state.initialRating || state.comment !== state.initialComment);
   const mealChanged = state.mealItemId && state.mealItemId !== state.initialMealItemId;
 
   const ops = [];
 
-  // Meal Feedback
+  // Meal Feedback (Student, Session, Rating, Comment, Menu Item)
   if (ratingChanged) {
     const fields = {
       "Student": [state.studentId],
       "Session": [state.sessionId],
       "Rating": state.rating,
-      // Always include Comment so clearing it actually clears the field.
       "Comment": state.comment.trim(),
-      // Link feedback to the meal they had (their current selection, if any)
-      ...(state.initialMealItemId ? { "Menu Item": [state.initialMealItemId] } : {}),
+      // Link to what they actually ate today, if known.
+      ...(state.todayMealItemId ? { "Menu Item": [state.todayMealItemId] } : {}),
     };
     if (state.feedbackRecordId) {
       ops.push(atUpdate("Meal Feedback", state.feedbackRecordId, fields));
     } else {
       fields["Feedback ID"] = makeId("FB", state.studentId, state.sessionId);
-      ops.push(
-        atCreate("Meal Feedback", fields).then(rec => {
-          state.feedbackRecordId = rec.id;
-        })
-      );
+      ops.push(atCreate("Meal Feedback", fields).then(rec => {
+        state.feedbackRecordId = rec.id;
+      }));
     }
   }
 
-  // Meal Selection
+  // Meal Preference — patch the Student record directly.
   if (mealChanged) {
-    const fields = {
-      "Student": [state.studentId],
-      "Session": [state.sessionId],
-      "Menu Item": [state.mealItemId],
-      "Selection Date": today,
-    };
-    if (state.selectionRecordId) {
-      ops.push(atUpdate("Meal Selections", state.selectionRecordId, fields));
-    } else {
-      fields["Selection ID"] = makeId("SEL", state.studentId, state.sessionId);
-      ops.push(
-        atCreate("Meal Selections", fields).then(rec => {
-          state.selectionRecordId = rec.id;
-        })
-      );
-    }
+    ops.push(atUpdate("Students", state.studentId, {
+      "Meal Preference": [state.mealItemId],
+    }).then(() => {
+      // Bust the per-student cache so a fresh visit reads the new preference.
+      ls.remove(`padea_student_${state.studentId}`);
+    }));
   }
 
   await Promise.all(ops);
 
-  // Update initial values so a re-submit without further edits is a no-op.
   if (ratingChanged) {
     state.initialRating = state.rating;
     state.initialComment = state.comment;
@@ -847,8 +929,6 @@ async function persistChanges() {
     state.initialMealItemId = state.mealItemId;
   }
 
-  // Bust cached selection/feedback so a future visit sees fresh data.
-  ls.remove(`padea_sel_${state.studentId}_${state.sessionId}`);
   ls.remove(`padea_fb_${state.studentId}_${state.sessionId}`);
 }
 
@@ -860,40 +940,11 @@ function doneMessage() {
 }
 
 // ============================================================
-// Utility
-// ============================================================
-
-function makeId(prefix, studentId, sessionId) {
-  return `${prefix}-${studentId.slice(-6)}-${sessionId.slice(-6)}-${Date.now()}`;
-}
-
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function formatSessionLabel(fields) {
-  const id = fields["Session ID"] || "";
-  // const date = fields["Date"] || "";
-  return id; // [id, date].filter(Boolean).join(" · ");
-}
-
-function showError(msg) {
-  document.getElementById("error-text").textContent = msg;
-  document.getElementById("error-banner").classList.remove("hidden");
-}
-
-// ============================================================
 // Opted-out lock
 // ============================================================
 
 function applyOptedOutLock() {
   document.getElementById("opted-out-banner").classList.remove("hidden");
-  // Disable all interactive form bits.
   document.querySelectorAll("#stars .star").forEach(s => s.disabled = true);
   document.getElementById("comment").disabled = true;
   document.getElementById("meal-trigger").disabled = true;
@@ -906,7 +957,6 @@ function clearOptedOutLock() {
   document.getElementById("opted-out-banner").classList.add("hidden");
   document.querySelectorAll("#stars .star").forEach(s => s.disabled = false);
   document.getElementById("comment").disabled = false;
-  // meal-trigger / submit are managed by updateMealTrigger/updateSubmitState
 }
 
 // ============================================================
@@ -928,9 +978,36 @@ function closeConfirm() {
   confirmCallback = null;
 }
 
-// Wire button handlers via the app object so onclick="" in HTML can reach them.
 window.confirmModalYes = () => { if (confirmCallback) confirmCallback(); };
 window.confirmModalNo  = () => closeConfirm();
+
+// ============================================================
+// Utility
+// ============================================================
+
+function makeId(prefix, studentId, sessionId) {
+  return `${prefix}-${studentId.slice(-6)}-${sessionId.slice(-6)}-${Date.now()}`;
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatSessionLabel(fields) {
+  const id = fields["Session ID"] || "";
+  const date = fields["Date"] || "";
+  return [id, date].filter(Boolean).join(" · ");
+}
+
+function showError(msg) {
+  document.getElementById("error-text").textContent = msg;
+  document.getElementById("error-banner").classList.remove("hidden");
+}
 
 let toastTimer = null;
 function toast(msg) {

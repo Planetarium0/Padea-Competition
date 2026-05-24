@@ -1,8 +1,8 @@
 {
   "/home/daniel/Downloads/Padea/run": {
-    "mtime": 1779594378.6064122,
-    "ast_hash": "009211b7fe4eb04280cb1f6e98b42962",
-    "semantic_hash": ""
+    "mtime": 1779527776.1047156,
+    "ast_hash": "756e083d83052d24ce6cef1dd13d3baa",
+    "semantic_hash": "756e083d83052d24ce6cef1dd13d3baa"
   },
   "/home/daniel/Downloads/Padea/cache/dietary_mappings.json": {
     "mtime": 1779499755.63026,
@@ -10,9 +10,9 @@
     "semantic_hash": "479f0e806a8360fa0f7825fbc81bab24"
   },
   "/home/daniel/Downloads/Padea/migrations/students.py": {
-    "mtime": 1779594207.8866549,
-    "ast_hash": "03d8b560b154e595d9871666cb1fd1c9",
-    "semantic_hash": ""
+    "mtime": 1779528637.1847475,
+    "ast_hash": "de7a5b4b865994a0cdee6afe51709b8c",
+    "semantic_hash": "de7a5b4b865994a0cdee6afe51709b8c"
   },
   "/home/daniel/Downloads/Padea/migrations/exclusions.py": {
     "mtime": 1779499853.5445828,
@@ -40,9 +40,9 @@
     "semantic_hash": "3996b36d3104a2e417bd3d88d9da36a7"
   },
   "/home/daniel/Downloads/Padea/migrations/caterer_menus.py": {
-    "mtime": 1779594258.0939243,
-    "ast_hash": "bae19e38e7aa9d20d2c749b60a6ebd06",
-    "semantic_hash": ""
+    "mtime": 1779499589.8057833,
+    "ast_hash": "a25820cfdb65568182b2377f68bee695",
+    "semantic_hash": "a25820cfdb65568182b2377f68bee695"
   },
   "/home/daniel/Downloads/Padea/.claude/settings.json": {
     "mtime": 1779532381.1989665,
@@ -55,9 +55,9 @@
     "semantic_hash": "b0cd65188db80bea1ad5b09f3f791231"
   },
   "/home/daniel/Downloads/Padea/scripts/schema.py": {
-    "mtime": 1779593874.5883784,
-    "ast_hash": "271450583abe913e94fdd0d44df84743",
-    "semantic_hash": ""
+    "mtime": 1779513488.3395023,
+    "ast_hash": "76bc2a884cc771f90c6ad848b203207c",
+    "semantic_hash": "76bc2a884cc771f90c6ad848b203207c"
   },
   "/home/daniel/Downloads/Padea/scripts/update_schema.py": {
     "mtime": 1779499479.0093052,
@@ -70,9 +70,9 @@
     "semantic_hash": "3b8fa65247ec69571fa6d449886095e7"
   },
   "/home/daniel/Downloads/Padea/scripts/verify_migration.py": {
-    "mtime": 1779595042.5168135,
-    "ast_hash": "101256bd007e7bb771c9858ce57fa58e",
-    "semantic_hash": ""
+    "mtime": 1779500477.2835867,
+    "ast_hash": "8ad4ca9acbe7402262bc4f229c71f2e1",
+    "semantic_hash": "8ad4ca9acbe7402262bc4f229c71f2e1"
   },
   "/home/daniel/Downloads/Padea/scripts/__init__.py": {
     "mtime": 1779499261.4333956,
@@ -145,17 +145,17 @@
     "semantic_hash": "b7c8257ff217d4ef4d6b8f13e73c14a4"
   },
   "/home/daniel/Downloads/Padea/graphify-out/converted/students_b2717fca.md": {
-    "mtime": 1779595208.557874,
+    "mtime": 1779588951.6742034,
     "ast_hash": "6d4eebca461161af444d8a8718f775a0",
     "semantic_hash": "6d4eebca461161af444d8a8718f775a0"
   },
   "/home/daniel/Downloads/Padea/graphify-out/converted/sessions_1350dcdc.md": {
-    "mtime": 1779595208.6424916,
+    "mtime": 1779588951.7616537,
     "ast_hash": "911bfeb60b7c461ae0abf434e516f98e",
     "semantic_hash": "911bfeb60b7c461ae0abf434e516f98e"
   },
   "/home/daniel/Downloads/Padea/graphify-out/converted/caterers_01f88415.md": {
-    "mtime": 1779595208.6458864,
+    "mtime": 1779588951.7654068,
     "ast_hash": "0329d218d428377ee11844dcca4b918a",
     "semantic_hash": "0329d218d428377ee11844dcca4b918a"
   },
@@ -185,18 +185,18 @@
     "semantic_hash": "b0e19b8bb7ce6b3ec183c4389c59fc04"
   },
   "/home/daniel/Downloads/Padea/webapp/app.js": {
-    "mtime": 1779594659.8898811,
-    "ast_hash": "2e34513ebcff612375ba324947730862",
+    "mtime": 1779588720.6875913,
+    "ast_hash": "0cca6971a8e38f8b8f9683a3aac4d75c",
     "semantic_hash": ""
   },
   "/home/daniel/Downloads/Padea/webapp/index.html": {
-    "mtime": 1779594742.0045562,
-    "ast_hash": "36a411591bc231f04a19f80c3433f5be",
+    "mtime": 1779588622.1508262,
+    "ast_hash": "90a4cdc78e88b3608eb7edbc3a53dfdc",
     "semantic_hash": ""
   },
   "/home/daniel/Downloads/Padea/plans/webapp.md": {
-    "mtime": 1779593205.7088847,
-    "ast_hash": "e3986afd28477fc22f64b71bc3e67d95",
+    "mtime": 1779584436.7126718,
+    "ast_hash": "0df15ca4cfc2ba137df614d44795e7df",
     "semantic_hash": ""
   },
   "/home/daniel/Downloads/Padea/plans/old/emailing/implementation_plan.md": {
@@ -219,6 +219,11 @@
     "ast_hash": "3ad3fc123e4a643517bb5e58a16ca9f1",
     "semantic_hash": ""
   },
+  "/home/daniel/Downloads/Padea/plans/webapp_revisions.md": {
+    "mtime": 1779588190.0476797,
+    "ast_hash": "4088edc600d024fea769cc8cf8858fda",
+    "semantic_hash": ""
+  },
   "/home/daniel/Downloads/Padea/output/qrcodes/Moreton_Bay_Boys'_College_-_Tuesday.png": {
     "mtime": 1779585904.9634004,
     "ast_hash": "b0e19b8bb7ce6b3ec183c4389c59fc04",
@@ -227,21 +232,6 @@
   "/home/daniel/Downloads/Padea/output/qrcodes/John_Paul_College_-_Wednesday.png": {
     "mtime": 1779587039.3571506,
     "ast_hash": "3be1ee8c2ac4561c7a95ee5bca0018aa",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Downloads/Padea/migrations/dietary_restrictions.py": {
-    "mtime": 1779594028.3590825,
-    "ast_hash": "6ec0c7bf13957cd9bcbe159363600493",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Downloads/Padea/scripts/dietary_data.py": {
-    "mtime": 1779593944.3427858,
-    "ast_hash": "d35d18fca5a7e82b503b42ba51a4537f",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Downloads/Padea/plans/structure.md": {
-    "mtime": 1779593237.0008595,
-    "ast_hash": "a79cb43d5e8a0002221e4f2d7b7c4234",
     "semantic_hash": ""
   }
 }

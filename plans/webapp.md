@@ -1,3 +1,5 @@
+# 1st Iteration
+
 Could you entirely overhaul the webapp given in the `webapp` directory?
 You can safely disregard the majority of the content under the existing implementation of the webapp - the only thing you can keep is `config.env.js`, which contains the API keys for the Airtable database. You can view the Airtable schema through `scripts/schema.py`.
 If implementing the webapp requires changes to the schema, let me know.
@@ -35,5 +37,33 @@ For example, a vegan student accessing the webapp for the first time might look 
 - The user selects their preferred meal, which takes them back to see the original form, and then hits submit.
 - The user sees some sort of visual cue that the submit went through.
 
-A copy of this prompt is given under `plans/webapp.md`.
+# 2nd Iteration
+
+A few caveats - there's a dietary requirement called "Opted out of Catering" that you need to account for.
+If this is the case you should prevent the user from submitting their review or preferences.
+
+Furthermore, I think it's best to "soft-hide" the meals that don't match dietary requirements.
+Students that are listed as vegan can still see non-vegan meals, but they will be below all compatible meals and grayed out, but still selectable.
+They should also have text below or next to them indicating why they are incompatible (i.e., "May contain Red Meat" or "Contains Shellfish")
+If they attempt to select such an option, there should be a popup confirming that they want to select this option.
+
+I also think the current method for getting the meals is broken. Whatever student I select, it fails to show any meals from the caterer.
+Can you verify the current system actually fetches the caterer? Once you have the caterer, you should easily be able to get to the menu items through the "Menu Items" field.
+If you can't verify it yourself add console logging so I can verify myself.
+
+# 3rd Iteration
+
+I think fully implementing this will require major database architecture changes. I've listed them below:
+- Students Table: Include a field for the meal preference, and remove the `Meal Selection` table from the schema. Since each student has a single preference, this replaces the need for a separate massive "Meal Selection" table, simplifying data retrieval.
+- Orders Table: Its primary purpose is to store historical data (who ate what on which date) for feedback/accountability purposes, as well as acting as the primary source for upcoming selections. 
+- Dietary Restrictions (Lookup) Table: Implement a table recording all the dietary restrictions. It'll also define the hierarchy of needs (e.g., mapping "Vegetarian" as a subset of "No Red Meat"). This allows the application to programmatically determine if a dish meets a student's constraints even if tags are not explicitly shared. It should have three columns, one for getting dietary restriction supersets (e.g., "No Shellfish" as a superset of "Vegeterian") and subsets - of which one is a backlink of the other. Since these relationships will be essentially hard-coded, store them in a python file and make a migration file `migrations/dietary_restrictions.py`.
+- You will need to modify all the dietary requirement fields (in students and in menu items) from being `multipleSelects` to references to the relevant dietary restriction.
+
+These changes to the database will require changes to `scripts/schema.py` and some of the migrations under `migrations/*.py`, and potentially other places as well.
+
+The new webapp workflow involves intelligent filtering. Implement a filter logic that queries the Dietary Restrictions table. If a student has a "No Red Meat" constraint, the frontend must display all items labeled "Vegetarian" or "Pescatarian" based on the established "Is-A" subset relationships. Items with ambiguous ingredients must be displayed with a "May Contain" caution flag.
+
+Furthermore, the preferences are copied, orderd, and recorded in the Orders table every Wednesday at 8:00 PM. If it's past this time, you can add a note (maybe a footnote, it doesn't really matter) that next week's orders have already been placed and that your preference will only affect the week after's meal. 
+
+A copy of this prompt is given in `plans/webapp_revisions.md` under the "3rd Iteration" header
 

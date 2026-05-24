@@ -155,6 +155,15 @@ if parsed_menus is NotImplemented or not parsed_menus:
 caterers_list = s.airtable_get("Caterers")
 caterer_name_to_id = {c_rec["fields"]["Caterer Name"]: c_rec["id"] for c_rec in caterers_list}
 
+# Fetch Dietary Restrictions for name → record-id lookup. The Menu Items
+# 'Dietary Tags' field is now multipleRecordLinks → Dietary Restrictions.
+diet_records = s.airtable_get("Dietary Restrictions")
+diet_name_to_id = {r["fields"]["Restriction Name"]: r["id"] for r in diet_records}
+if not diet_name_to_id:
+    s.log.error("No Dietary Restrictions found in Airtable. Run the dietary "
+                "restrictions migration first.")
+    sys.exit(1)
+
 # Update Caterers with pricing & deliver menu items
 menu_items_records = []
 caterer_updates = []
@@ -178,11 +187,20 @@ for menu in parsed_menus:
 
     # Prepare menu items
     for item in menu["Items"]:
+        tag_ids = []
+        for tag in item["Dietary Tags"]:
+            rec_id = diet_name_to_id.get(tag)
+            if rec_id:
+                tag_ids.append(rec_id)
+            else:
+                s.log.warning(f"Dietary tag '{tag}' on item "
+                              f"'{item['Menu Item Name']}' not in Dietary "
+                              "Restrictions table — link dropped.")
         menu_items_records.append({
             "Menu Item Name": item["Menu Item Name"],
             "Caterer": [caterer_id],
             "Price": item["Price"],
-            "Dietary Tags": item["Dietary Tags"],
+            "Dietary Tags": tag_ids,
             "Notes": item.get("Notes")
         })
 

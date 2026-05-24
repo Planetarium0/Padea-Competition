@@ -162,6 +162,16 @@ sessions_list = s.airtable_get("Sessions")
 schools_list  = s.airtable_get("Schools")
 school_name_by_id = {r["id"]: r["fields"].get("School Name", "") for r in schools_list}
 
+# Fetch Dietary Restrictions for name → record-id lookup. Required because the
+# Students.'Dietary Requirements' field is now a multipleRecordLinks reference
+# rather than multipleSelects.
+diet_records = s.airtable_get("Dietary Restrictions")
+diet_name_to_id = {r["fields"]["Restriction Name"]: r["id"] for r in diet_records}
+if not diet_name_to_id:
+    s.log.error("No Dietary Restrictions found in Airtable. Run the dietary "
+                "restrictions migration first.")
+    sys.exit(1)
+
 # Dictionary to look up sessions by (School Name, Day)
 session_lookup = {}  # (school_name, day) -> list of session_record_ids
 for sess in sessions_list:
@@ -209,6 +219,16 @@ for name in xls.sheet_names:
 
         raw_dietary = str(row["Dietary"]).strip() if pd.notna(row["Dietary"]) else None
         dietary_choices = dietary_mappings.get(raw_dietary, []) if raw_dietary else []
+        # Translate dietary choice names → Dietary Restrictions record IDs.
+        dietary_ids = []
+        for choice in dietary_choices:
+            rec_id = diet_name_to_id.get(choice)
+            if rec_id:
+                dietary_ids.append(rec_id)
+            else:
+                s.log.warning(f"Dietary restriction '{choice}' not in Dietary "
+                              f"Restrictions table — student '{student_name}' "
+                              "will be missing this link.")
 
         def clean_int(val):
             if pd.isna(val):
@@ -227,7 +247,7 @@ for name in xls.sheet_names:
             "Student Name": student_name,
             "Year Level": clean_int(row["Year Level"]),
             "Subjects": clean_str(row["Subjects"]),
-            "Dietary Requirements": dietary_choices,
+            "Dietary Requirements": dietary_ids,
             "Student Email": clean_str(row["Student Email"]),
             "Parent Name": clean_str(row.get("Parent")),
             "Parent Email": clean_str(row.get("Parent Email")),

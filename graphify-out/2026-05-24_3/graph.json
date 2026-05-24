@@ -258,30 +258,12 @@
       "norm_label": "no shellfish"
     },
     {
-      "label": "dietary_restrictions.py",
-      "file_type": "code",
-      "source_file": "migrations/dietary_restrictions.py",
-      "source_location": "L1",
-      "id": "migrations_dietary_restrictions_py",
-      "community": 7,
-      "norm_label": "dietary_restrictions.py"
-    },
-    {
-      "label": "Seed the Dietary Restrictions table from `scripts/dietary_data.py`.  This MUST r",
-      "file_type": "rationale",
-      "source_file": "migrations/dietary_restrictions.py",
-      "source_location": "L1",
-      "id": "migrations_dietary_restrictions_rationale_1",
-      "community": 7,
-      "norm_label": "seed the dietary restrictions table from `scripts/dietary_data.py`.  this must r"
-    },
-    {
       "label": "students.py",
       "file_type": "code",
       "source_file": "migrations/students.py",
       "source_location": "L1",
       "id": "migrations_students_py",
-      "community": 35,
+      "community": 2,
       "norm_label": "students.py"
     },
     {
@@ -290,7 +272,7 @@
       "source_file": "migrations/students.py",
       "source_location": "L27",
       "id": "migrations_students_resolve_school_name",
-      "community": 35,
+      "community": 2,
       "norm_label": "resolve_school_name()"
     },
     {
@@ -306,18 +288,18 @@
       "label": "clean_int()",
       "file_type": "code",
       "source_file": "migrations/students.py",
-      "source_location": "L233",
+      "source_location": "L213",
       "id": "migrations_students_clean_int",
-      "community": 35,
+      "community": 2,
       "norm_label": "clean_int()"
     },
     {
       "label": "clean_str()",
       "file_type": "code",
       "source_file": "migrations/students.py",
-      "source_location": "L241",
+      "source_location": "L221",
       "id": "migrations_students_clean_str",
-      "community": 35,
+      "community": 2,
       "norm_label": "clean_str()"
     },
     {
@@ -465,55 +447,55 @@
       "norm_label": "app.js"
     },
     {
-      "label": "CACHE_TTL",
+      "label": "POSITIVE_TAGS",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L29",
-      "id": "webapp_app_cache_ttl",
-      "community": 27,
-      "norm_label": "cache_ttl"
+      "source_location": "L25",
+      "id": "webapp_app_positive_tags",
+      "community": 6,
+      "norm_label": "positive_tags"
     },
     {
-      "label": "TAG_SHORT",
+      "label": "TAG_LABEL",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L40",
-      "id": "webapp_app_tag_short",
+      "source_location": "L27",
+      "id": "webapp_app_tag_label",
       "community": 6,
-      "norm_label": "tag_short"
+      "norm_label": "tag_label"
     },
     {
       "label": "NEGATIVE_KEYWORDS",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L54",
+      "source_location": "L37",
       "id": "webapp_app_negative_keywords",
       "community": 6,
       "norm_label": "negative_keywords"
     },
     {
-      "label": "CONSTRAINT_PHRASE",
+      "label": "CACHE_TTL",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L71",
-      "id": "webapp_app_constraint_phrase",
+      "source_location": "L46",
+      "id": "webapp_app_cache_ttl",
       "community": 6,
-      "norm_label": "constraint_phrase"
+      "norm_label": "cache_ttl"
     },
     {
       "label": "apiKey()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L93",
+      "source_location": "L59",
       "id": "webapp_app_apikey",
-      "community": 27,
+      "community": 6,
       "norm_label": "apikey()"
     },
     {
       "label": "atFetch()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L97",
+      "source_location": "L63",
       "id": "webapp_app_atfetch",
       "community": 6,
       "norm_label": "atfetch()"
@@ -522,7 +504,7 @@
       "label": "atList()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L110",
+      "source_location": "L79",
       "id": "webapp_app_atlist",
       "community": 6,
       "norm_label": "atlist()"
@@ -531,7 +513,7 @@
       "label": "atGet()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L127",
+      "source_location": "L96",
       "id": "webapp_app_atget",
       "community": 6,
       "norm_label": "atget()"
@@ -540,7 +522,7 @@
       "label": "atCreate()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L131",
+      "source_location": "L100",
       "id": "webapp_app_atcreate",
       "community": 6,
       "norm_label": "atcreate()"
@@ -549,7 +531,7 @@
       "label": "atUpdate()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L139",
+      "source_location": "L108",
       "id": "webapp_app_atupdate",
       "community": 6,
       "norm_label": "atupdate()"
@@ -558,16 +540,16 @@
       "label": "ls",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L150",
+      "source_location": "L119",
       "id": "webapp_app_ls",
-      "community": 27,
+      "community": 6,
       "norm_label": "ls"
     },
     {
       "label": "cacheGet()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L156",
+      "source_location": "L125",
       "id": "webapp_app_cacheget",
       "community": 6,
       "norm_label": "cacheget()"
@@ -576,7 +558,7 @@
       "label": "cacheSet()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L166",
+      "source_location": "L135",
       "id": "webapp_app_cacheset",
       "community": 6,
       "norm_label": "cacheset()"
@@ -585,7 +567,7 @@
       "label": "knownStudentKey()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L170",
+      "source_location": "L139",
       "id": "webapp_app_knownstudentkey",
       "community": 6,
       "norm_label": "knownstudentkey()"
@@ -594,7 +576,7 @@
       "label": "getKnownStudent()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L171",
+      "source_location": "L140",
       "id": "webapp_app_getknownstudent",
       "community": 6,
       "norm_label": "getknownstudent()"
@@ -603,7 +585,7 @@
       "label": "setKnownStudent()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L172",
+      "source_location": "L141",
       "id": "webapp_app_setknownstudent",
       "community": 6,
       "norm_label": "setknownstudent()"
@@ -612,7 +594,7 @@
       "label": "clearKnownStudent()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L173",
+      "source_location": "L142",
       "id": "webapp_app_clearknownstudent",
       "community": 6,
       "norm_label": "clearknownstudent()"
@@ -621,7 +603,7 @@
       "label": "loadSession()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L179",
+      "source_location": "L148",
       "id": "webapp_app_loadsession",
       "community": 6,
       "norm_label": "loadsession()"
@@ -630,7 +612,7 @@
       "label": "loadStudent()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L194",
+      "source_location": "L163",
       "id": "webapp_app_loadstudent",
       "community": 6,
       "norm_label": "loadstudent()"
@@ -639,7 +621,7 @@
       "label": "loadStudentsForSession()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L203",
+      "source_location": "L172",
       "id": "webapp_app_loadstudentsforsession",
       "community": 6,
       "norm_label": "loadstudentsforsession()"
@@ -648,52 +630,52 @@
       "label": "loadMenuItems()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L221",
+      "source_location": "L191",
       "id": "webapp_app_loadmenuitems",
       "community": 6,
       "norm_label": "loadmenuitems()"
     },
     {
-      "label": "loadDietaryRestrictions()",
+      "label": "loadExistingSelection()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L251",
-      "id": "webapp_app_loaddietaryrestrictions",
+      "source_location": "L224",
+      "id": "webapp_app_loadexistingselection",
       "community": 6,
-      "norm_label": "loaddietaryrestrictions()"
+      "norm_label": "loadexistingselection()"
     },
     {
       "label": "loadExistingFeedback()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L268",
+      "source_location": "L241",
       "id": "webapp_app_loadexistingfeedback",
       "community": 6,
       "norm_label": "loadexistingfeedback()"
     },
     {
-      "label": "loadTodayOrder()",
+      "label": "MISSING_TAG_LABEL",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L288",
-      "id": "webapp_app_loadtodayorder",
+      "source_location": "L267",
+      "id": "webapp_app_missing_tag_label",
       "community": 6,
-      "norm_label": "loadtodayorder()"
+      "norm_label": "missing_tag_label"
     },
     {
-      "label": "buildHierarchyMaps()",
+      "label": "NEGATIVE_FOOD",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L309",
-      "id": "webapp_app_buildhierarchymaps",
+      "source_location": "L276",
+      "id": "webapp_app_negative_food",
       "community": 6,
-      "norm_label": "buildhierarchymaps()"
+      "norm_label": "negative_food"
     },
     {
       "label": "checkCompatibility()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L342",
+      "source_location": "L285",
       "id": "webapp_app_checkcompatibility",
       "community": 6,
       "norm_label": "checkcompatibility()"
@@ -702,34 +684,25 @@
       "label": "hasOptedOut()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L374",
+      "source_location": "L305",
       "id": "webapp_app_hasoptedout",
       "community": 6,
       "norm_label": "hasoptedout()"
     },
     {
-      "label": "isPastOrderCutoff()",
-      "file_type": "code",
-      "source_file": "webapp/app.js",
-      "source_location": "L383",
-      "id": "webapp_app_ispastordercutoff",
-      "community": 6,
-      "norm_label": "ispastordercutoff()"
-    },
-    {
       "label": "state",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L394",
+      "source_location": "L314",
       "id": "webapp_app_state",
-      "community": 27,
+      "community": 6,
       "norm_label": "state"
     },
     {
       "label": "views",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L419",
+      "source_location": "L344",
       "id": "webapp_app_views",
       "community": 6,
       "norm_label": "views"
@@ -738,7 +711,7 @@
       "label": "showView()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L421",
+      "source_location": "L346",
       "id": "webapp_app_showview",
       "community": 6,
       "norm_label": "showview()"
@@ -747,16 +720,16 @@
       "label": "app",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L432",
+      "source_location": "L357",
       "id": "webapp_app_app",
-      "community": 27,
+      "community": 6,
       "norm_label": "app"
     },
     {
       "label": "showPickerSkeleton()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L581",
+      "source_location": "L504",
       "id": "webapp_app_showpickerskeleton",
       "community": 6,
       "norm_label": "showpickerskeleton()"
@@ -765,7 +738,7 @@
       "label": "loadPickerData()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L589",
+      "source_location": "L512",
       "id": "webapp_app_loadpickerdata",
       "community": 6,
       "norm_label": "loadpickerdata()"
@@ -774,7 +747,7 @@
       "label": "showFormSkeleton()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L608",
+      "source_location": "L531",
       "id": "webapp_app_showformskeleton",
       "community": 6,
       "norm_label": "showformskeleton()"
@@ -783,7 +756,7 @@
       "label": "resetFormState()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L623",
+      "source_location": "L546",
       "id": "webapp_app_resetformstate",
       "community": 6,
       "norm_label": "resetformstate()"
@@ -792,7 +765,7 @@
       "label": "loadFormData()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L635",
+      "source_location": "L559",
       "id": "webapp_app_loadformdata",
       "community": 6,
       "norm_label": "loadformdata()"
@@ -801,7 +774,7 @@
       "label": "refreshFormFromState()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L696",
+      "source_location": "L622",
       "id": "webapp_app_refreshformfromstate",
       "community": 6,
       "norm_label": "refreshformfromstate()"
@@ -810,7 +783,7 @@
       "label": "renderStudentList()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L715",
+      "source_location": "L641",
       "id": "webapp_app_renderstudentlist",
       "community": 6,
       "norm_label": "renderstudentlist()"
@@ -819,7 +792,7 @@
       "label": "renderMealList()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L739",
+      "source_location": "L665",
       "id": "webapp_app_rendermeallist",
       "community": 6,
       "norm_label": "rendermeallist()"
@@ -828,7 +801,7 @@
       "label": "updateMealTrigger()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L832",
+      "source_location": "L740",
       "id": "webapp_app_updatemealtrigger",
       "community": 6,
       "norm_label": "updatemealtrigger()"
@@ -837,25 +810,16 @@
       "label": "updateSubmitState()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L862",
+      "source_location": "L773",
       "id": "webapp_app_updatesubmitstate",
       "community": 6,
       "norm_label": "updatesubmitstate()"
     },
     {
-      "label": "renderCutoffFootnote()",
-      "file_type": "code",
-      "source_file": "webapp/app.js",
-      "source_location": "L871",
-      "id": "webapp_app_rendercutofffootnote",
-      "community": 6,
-      "norm_label": "rendercutofffootnote()"
-    },
-    {
       "label": "persistChanges()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L885",
+      "source_location": "L787",
       "id": "webapp_app_persistchanges",
       "community": 6,
       "norm_label": "persistchanges()"
@@ -864,52 +828,16 @@
       "label": "doneMessage()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L935",
+      "source_location": "L855",
       "id": "webapp_app_donemessage",
       "community": 6,
       "norm_label": "donemessage()"
     },
     {
-      "label": "applyOptedOutLock()",
-      "file_type": "code",
-      "source_file": "webapp/app.js",
-      "source_location": "L946",
-      "id": "webapp_app_applyoptedoutlock",
-      "community": 6,
-      "norm_label": "applyoptedoutlock()"
-    },
-    {
-      "label": "clearOptedOutLock()",
-      "file_type": "code",
-      "source_file": "webapp/app.js",
-      "source_location": "L956",
-      "id": "webapp_app_clearoptedoutlock",
-      "community": 6,
-      "norm_label": "clearoptedoutlock()"
-    },
-    {
-      "label": "openConfirm()",
-      "file_type": "code",
-      "source_file": "webapp/app.js",
-      "source_location": "L968",
-      "id": "webapp_app_openconfirm",
-      "community": 6,
-      "norm_label": "openconfirm()"
-    },
-    {
-      "label": "closeConfirm()",
-      "file_type": "code",
-      "source_file": "webapp/app.js",
-      "source_location": "L976",
-      "id": "webapp_app_closeconfirm",
-      "community": 6,
-      "norm_label": "closeconfirm()"
-    },
-    {
       "label": "makeId()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L988",
+      "source_location": "L866",
       "id": "webapp_app_makeid",
       "community": 6,
       "norm_label": "makeid()"
@@ -918,7 +846,7 @@
       "label": "escapeHtml()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L992",
+      "source_location": "L870",
       "id": "webapp_app_escapehtml",
       "community": 6,
       "norm_label": "escapehtml()"
@@ -927,7 +855,7 @@
       "label": "formatSessionLabel()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L1001",
+      "source_location": "L879",
       "id": "webapp_app_formatsessionlabel",
       "community": 6,
       "norm_label": "formatsessionlabel()"
@@ -936,16 +864,52 @@
       "label": "showError()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L1007",
+      "source_location": "L885",
       "id": "webapp_app_showerror",
       "community": 6,
       "norm_label": "showerror()"
     },
     {
+      "label": "applyOptedOutLock()",
+      "file_type": "code",
+      "source_file": "webapp/app.js",
+      "source_location": "L894",
+      "id": "webapp_app_applyoptedoutlock",
+      "community": 6,
+      "norm_label": "applyoptedoutlock()"
+    },
+    {
+      "label": "clearOptedOutLock()",
+      "file_type": "code",
+      "source_file": "webapp/app.js",
+      "source_location": "L905",
+      "id": "webapp_app_clearoptedoutlock",
+      "community": 6,
+      "norm_label": "clearoptedoutlock()"
+    },
+    {
+      "label": "openConfirm()",
+      "file_type": "code",
+      "source_file": "webapp/app.js",
+      "source_location": "L918",
+      "id": "webapp_app_openconfirm",
+      "community": 6,
+      "norm_label": "openconfirm()"
+    },
+    {
+      "label": "closeConfirm()",
+      "file_type": "code",
+      "source_file": "webapp/app.js",
+      "source_location": "L926",
+      "id": "webapp_app_closeconfirm",
+      "community": 6,
+      "norm_label": "closeconfirm()"
+    },
+    {
       "label": "toast()",
       "file_type": "code",
       "source_file": "webapp/app.js",
-      "source_location": "L1013",
+      "source_location": "L936",
       "id": "webapp_app_toast",
       "community": 6,
       "norm_label": "toast()"
@@ -1356,42 +1320,6 @@
       "norm_label": "write weekly orders and order line items to airtable."
     },
     {
-      "label": "dietary_data.py",
-      "file_type": "code",
-      "source_file": "scripts/dietary_data.py",
-      "source_location": "L1",
-      "id": "scripts_dietary_data_py",
-      "community": 7,
-      "norm_label": "dietary_data.py"
-    },
-    {
-      "label": "all_restriction_names()",
-      "file_type": "code",
-      "source_file": "scripts/dietary_data.py",
-      "source_location": "L49",
-      "id": "scripts_dietary_data_all_restriction_names",
-      "community": 7,
-      "norm_label": "all_restriction_names()"
-    },
-    {
-      "label": "Hard-coded dietary-restriction hierarchy.  Each restriction lists its *direct* S",
-      "file_type": "rationale",
-      "source_file": "scripts/dietary_data.py",
-      "source_location": "L1",
-      "id": "scripts_dietary_data_rationale_1",
-      "community": 7,
-      "norm_label": "hard-coded dietary-restriction hierarchy.  each restriction lists its *direct* s"
-    },
-    {
-      "label": "Flat list of all restriction names, including those only referenced     as super",
-      "file_type": "rationale",
-      "source_file": "scripts/dietary_data.py",
-      "source_location": "L50",
-      "id": "scripts_dietary_data_rationale_50",
-      "community": 7,
-      "norm_label": "flat list of all restriction names, including those only referenced     as super"
-    },
-    {
       "label": "verify_migration.py",
       "file_type": "code",
       "source_file": "scripts/verify_migration.py",
@@ -1734,40 +1662,13 @@
       "norm_label": "webapp.md"
     },
     {
-      "label": "1st Iteration",
+      "label": "webapp_revisions.md",
       "file_type": "document",
-      "source_file": "plans/webapp.md",
+      "source_file": "plans/webapp_revisions.md",
       "source_location": "L1",
-      "id": "plans_webapp_1st_iteration",
-      "community": 34,
-      "norm_label": "1st iteration"
-    },
-    {
-      "label": "2nd Iteration",
-      "file_type": "document",
-      "source_file": "plans/webapp.md",
-      "source_location": "L40",
-      "id": "plans_webapp_2nd_iteration",
-      "community": 34,
-      "norm_label": "2nd iteration"
-    },
-    {
-      "label": "3rd Iteration",
-      "file_type": "document",
-      "source_file": "plans/webapp.md",
-      "source_location": "L54",
-      "id": "plans_webapp_3rd_iteration",
-      "community": 34,
-      "norm_label": "3rd iteration"
-    },
-    {
-      "label": "structure.md",
-      "file_type": "document",
-      "source_file": "plans/structure.md",
-      "source_location": "L1",
-      "id": "plans_structure_md",
-      "community": 36,
-      "norm_label": "structure.md"
+      "id": "plans_webapp_revisions_md",
+      "community": 0,
+      "norm_label": "webapp_revisions.md"
     },
     {
       "label": "implementation_plan.md",
@@ -2877,60 +2778,6 @@
       "norm_label": "source nodes"
     },
     {
-      "label": "POSITIVE_TAGS",
-      "file_type": "code",
-      "source_file": "webapp/app.js",
-      "source_location": "L25",
-      "community": 6,
-      "norm_label": "positive_tags",
-      "id": "webapp_app_positive_tags"
-    },
-    {
-      "label": "TAG_LABEL",
-      "file_type": "code",
-      "source_file": "webapp/app.js",
-      "source_location": "L27",
-      "community": 6,
-      "norm_label": "tag_label",
-      "id": "webapp_app_tag_label"
-    },
-    {
-      "label": "loadExistingSelection()",
-      "file_type": "code",
-      "source_file": "webapp/app.js",
-      "source_location": "L224",
-      "community": 6,
-      "norm_label": "loadexistingselection()",
-      "id": "webapp_app_loadexistingselection"
-    },
-    {
-      "label": "MISSING_TAG_LABEL",
-      "file_type": "code",
-      "source_file": "webapp/app.js",
-      "source_location": "L267",
-      "community": 6,
-      "norm_label": "missing_tag_label",
-      "id": "webapp_app_missing_tag_label"
-    },
-    {
-      "label": "NEGATIVE_FOOD",
-      "file_type": "code",
-      "source_file": "webapp/app.js",
-      "source_location": "L276",
-      "community": 6,
-      "norm_label": "negative_food",
-      "id": "webapp_app_negative_food"
-    },
-    {
-      "label": "webapp_revisions.md",
-      "file_type": "document",
-      "source_file": "plans/webapp_revisions.md",
-      "source_location": "L1",
-      "community": 0,
-      "norm_label": "webapp_revisions.md",
-      "id": "plans_webapp_revisions_md"
-    },
-    {
       "label": "isCompatible()",
       "file_type": "code",
       "source_file": "webapp/app.js",
@@ -2944,7 +2791,7 @@
       "file_type": "code",
       "source_file": "output/webapp/app.js",
       "source_location": "L1",
-      "community": 27,
+      "community": 6,
       "norm_label": "app.js",
       "id": "output_webapp_app_js"
     },
@@ -2953,7 +2800,7 @@
       "file_type": "code",
       "source_file": "output/webapp/app.js",
       "source_location": "L16",
-      "community": 27,
+      "community": 6,
       "norm_label": "tag_meta",
       "id": "webapp_app_tag_meta"
     },
@@ -2962,7 +2809,7 @@
       "file_type": "code",
       "source_file": "output/webapp/app.js",
       "source_location": "L24",
-      "community": 27,
+      "community": 6,
       "norm_label": "negative_map",
       "id": "webapp_app_negative_map"
     },
@@ -2971,7 +2818,7 @@
       "file_type": "code",
       "source_file": "output/webapp/app.js",
       "source_location": "L33",
-      "community": 27,
+      "community": 6,
       "norm_label": "dietary_options",
       "id": "webapp_app_dietary_options"
     },
@@ -2980,7 +2827,7 @@
       "file_type": "code",
       "source_file": "output/webapp/app.js",
       "source_location": "L64",
-      "community": 27,
+      "community": 6,
       "norm_label": "atpost()",
       "id": "webapp_app_atpost"
     },
@@ -2989,7 +2836,7 @@
       "file_type": "code",
       "source_file": "output/webapp/app.js",
       "source_location": "L74",
-      "community": 27,
+      "community": 6,
       "norm_label": "atgetrecord()",
       "id": "webapp_app_atgetrecord"
     },
@@ -2998,7 +2845,7 @@
       "file_type": "code",
       "source_file": "output/webapp/app.js",
       "source_location": "L82",
-      "community": 27,
+      "community": 6,
       "norm_label": "atpatch()",
       "id": "webapp_app_atpatch"
     },
@@ -3007,7 +2854,7 @@
       "file_type": "code",
       "source_file": "output/webapp/app.js",
       "source_location": "L96",
-      "community": 27,
+      "community": 1,
       "norm_label": "isitemcompatible()",
       "id": "webapp_app_isitemcompatible"
     },
@@ -3016,7 +2863,7 @@
       "file_type": "code",
       "source_file": "output/webapp/app.js",
       "source_location": "L142",
-      "community": 27,
+      "community": 6,
       "norm_label": "getdietaryfilter()",
       "id": "webapp_app_getdietaryfilter"
     },
@@ -3025,7 +2872,7 @@
       "file_type": "code",
       "source_file": "output/webapp/app.js",
       "source_location": "L143",
-      "community": 27,
+      "community": 6,
       "norm_label": "setdietaryfilter()",
       "id": "webapp_app_setdietaryfilter"
     },
@@ -3034,7 +2881,7 @@
       "file_type": "code",
       "source_file": "output/webapp/app.js",
       "source_location": "L145",
-      "community": 27,
+      "community": 6,
       "norm_label": "getsavedrating()",
       "id": "webapp_app_getsavedrating"
     },
@@ -3052,7 +2899,7 @@
       "file_type": "code",
       "source_file": "output/webapp/app.js",
       "source_location": "L338",
-      "community": 27,
+      "community": 6,
       "norm_label": "renderdietaryfilter()",
       "id": "webapp_app_renderdietaryfilter"
     },
@@ -3061,7 +2908,7 @@
       "file_type": "code",
       "source_file": "output/webapp/app.js",
       "source_location": "L345",
-      "community": 27,
+      "community": 6,
       "norm_label": "rendermenulist()",
       "id": "webapp_app_rendermenulist"
     },
@@ -3070,7 +2917,7 @@
       "file_type": "code",
       "source_file": "output/webapp/app.js",
       "source_location": "L403",
-      "community": 27,
+      "community": 6,
       "norm_label": "showmealserror()",
       "id": "webapp_app_showmealserror"
     },
@@ -3079,7 +2926,7 @@
       "file_type": "code",
       "source_file": "output/webapp/app.js",
       "source_location": "L410",
-      "community": 27,
+      "community": 6,
       "norm_label": "showsavedmsg()",
       "id": "webapp_app_showsavedmsg"
     },
@@ -3248,7 +3095,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 27,
+      "community": 6,
       "norm_label": "app.selectmeal() \u2014 student meal selection handler",
       "id": "webapp_app_selectmeal"
     },
@@ -3261,7 +3108,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 27,
+      "community": 6,
       "norm_label": "app.submitrating() \u2014 meal rating submission handler",
       "id": "webapp_app_submitrating"
     },
@@ -3287,7 +3134,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 27,
+      "community": 1,
       "norm_label": "dietary compatibility filter (positive + negative requirements)",
       "id": "concept_dietary_compatibility"
     },
@@ -4423,27 +4270,6 @@
       "target": "cache_dietary_mappings_no_shellfish"
     },
     {
-      "relation": "rationale_for",
-      "confidence": "EXTRACTED",
-      "source_file": "migrations/dietary_restrictions.py",
-      "source_location": "L1",
-      "weight": 1.0,
-      "source": "migrations_dietary_restrictions_rationale_1",
-      "target": "migrations_dietary_restrictions_py",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "imports",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "migrations/dietary_restrictions.py",
-      "source_location": "L13",
-      "weight": 1.0,
-      "source": "migrations_dietary_restrictions_py",
-      "target": "scripts_dietary_data_all_restriction_names",
-      "confidence_score": 1.0
-    },
-    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "migrations/students.py",
@@ -4668,21 +4494,21 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "webapp/app.js",
-      "source_location": "L46",
+      "source_location": "L25",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "webapp_app_js",
-      "target": "webapp_app_cache_ttl"
+      "target": "webapp_app_positive_tags"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "webapp/app.js",
-      "source_location": "L40",
+      "source_location": "L27",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "webapp_app_js",
-      "target": "webapp_app_tag_short",
-      "confidence_score": 1.0
+      "target": "webapp_app_tag_label"
     },
     {
       "relation": "contains",
@@ -4698,11 +4524,11 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "webapp/app.js",
-      "source_location": "L71",
+      "source_location": "L46",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "webapp_app_js",
-      "target": "webapp_app_constraint_phrase",
-      "confidence_score": 1.0
+      "target": "webapp_app_cache_ttl"
     },
     {
       "relation": "contains",
@@ -4878,11 +4704,11 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "webapp/app.js",
-      "source_location": "L251",
+      "source_location": "L197",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "webapp_app_js",
-      "target": "webapp_app_loaddietaryrestrictions",
-      "confidence_score": 1.0
+      "target": "webapp_app_loadexistingselection"
     },
     {
       "relation": "contains",
@@ -4898,20 +4724,20 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "webapp/app.js",
-      "source_location": "L288",
+      "source_location": "L267",
       "weight": 1.0,
       "source": "webapp_app_js",
-      "target": "webapp_app_loadtodayorder",
+      "target": "webapp_app_missing_tag_label",
       "confidence_score": 1.0
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "webapp/app.js",
-      "source_location": "L309",
+      "source_location": "L276",
       "weight": 1.0,
       "source": "webapp_app_js",
-      "target": "webapp_app_buildhierarchymaps",
+      "target": "webapp_app_negative_food",
       "confidence_score": 1.0
     },
     {
@@ -4920,9 +4746,9 @@
       "source_file": "webapp/app.js",
       "source_location": "L285",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "webapp_app_js",
-      "target": "webapp_app_checkcompatibility"
+      "target": "webapp_app_checkcompatibility",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -4930,18 +4756,8 @@
       "source_file": "webapp/app.js",
       "source_location": "L305",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "webapp_app_js",
-      "target": "webapp_app_hasoptedout"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "webapp/app.js",
-      "source_location": "L383",
-      "weight": 1.0,
-      "source": "webapp_app_js",
-      "target": "webapp_app_ispastordercutoff",
+      "target": "webapp_app_hasoptedout",
       "confidence_score": 1.0
     },
     {
@@ -5088,16 +4904,6 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "webapp/app.js",
-      "source_location": "L871",
-      "weight": 1.0,
-      "source": "webapp_app_js",
-      "target": "webapp_app_rendercutofffootnote",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "webapp/app.js",
       "source_location": "L681",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -5113,46 +4919,6 @@
       "confidence_score": 1.0,
       "source": "webapp_app_js",
       "target": "webapp_app_donemessage"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "webapp/app.js",
-      "source_location": "L894",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "webapp_app_js",
-      "target": "webapp_app_applyoptedoutlock"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "webapp/app.js",
-      "source_location": "L905",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "webapp_app_js",
-      "target": "webapp_app_clearoptedoutlock"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "webapp/app.js",
-      "source_location": "L918",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "webapp_app_js",
-      "target": "webapp_app_openconfirm"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "webapp/app.js",
-      "source_location": "L926",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "webapp_app_js",
-      "target": "webapp_app_closeconfirm"
     },
     {
       "relation": "contains",
@@ -5198,61 +4964,51 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "webapp/app.js",
+      "source_location": "L894",
+      "weight": 1.0,
+      "source": "webapp_app_js",
+      "target": "webapp_app_applyoptedoutlock",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "webapp/app.js",
+      "source_location": "L905",
+      "weight": 1.0,
+      "source": "webapp_app_js",
+      "target": "webapp_app_clearoptedoutlock",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "webapp/app.js",
+      "source_location": "L918",
+      "weight": 1.0,
+      "source": "webapp_app_js",
+      "target": "webapp_app_openconfirm",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "webapp/app.js",
+      "source_location": "L926",
+      "weight": 1.0,
+      "source": "webapp_app_js",
+      "target": "webapp_app_closeconfirm",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "webapp/app.js",
       "source_location": "L785",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "webapp_app_js",
       "target": "webapp_app_toast"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "webapp/app.js",
-      "source_location": "L25",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "webapp_app_js",
-      "target": "webapp_app_positive_tags"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "webapp/app.js",
-      "source_location": "L27",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "webapp_app_js",
-      "target": "webapp_app_tag_label"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "webapp/app.js",
-      "source_location": "L197",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "webapp_app_js",
-      "target": "webapp_app_loadexistingselection"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "webapp/app.js",
-      "source_location": "L267",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "webapp_app_js",
-      "target": "webapp_app_missing_tag_label"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "webapp/app.js",
-      "source_location": "L276",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "webapp_app_js",
-      "target": "webapp_app_negative_food"
     },
     {
       "relation": "contains",
@@ -5430,11 +5186,11 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "webapp/app.js",
-      "source_location": "L255",
+      "source_location": "L202",
       "weight": 1.0,
-      "source": "webapp_app_loaddietaryrestrictions",
-      "target": "webapp_app_atlist",
-      "confidence_score": 1.0
+      "confidence_score": 1.0,
+      "source": "webapp_app_loadexistingselection",
+      "target": "webapp_app_atlist"
     },
     {
       "relation": "calls",
@@ -5445,28 +5201,6 @@
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "webapp_app_loadexistingfeedback",
-      "target": "webapp_app_atlist"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "webapp/app.js",
-      "source_location": "L295",
-      "weight": 1.0,
-      "source": "webapp_app_loadtodayorder",
-      "target": "webapp_app_atlist",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "webapp/app.js",
-      "source_location": "L202",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "webapp_app_loadexistingselection",
       "target": "webapp_app_atlist"
     },
     {
@@ -5498,9 +5232,9 @@
       "source_file": "webapp/app.js",
       "source_location": "L203",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "webapp_app_loadmenuitems",
-      "target": "webapp_app_atget"
+      "target": "webapp_app_atget",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -5583,11 +5317,11 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "webapp/app.js",
-      "source_location": "L253",
+      "source_location": "L199",
       "weight": 1.0,
-      "source": "webapp_app_loaddietaryrestrictions",
-      "target": "webapp_app_cacheget",
-      "confidence_score": 1.0
+      "confidence_score": 1.0,
+      "source": "webapp_app_loadexistingselection",
+      "target": "webapp_app_cacheget"
     },
     {
       "relation": "calls",
@@ -5598,28 +5332,6 @@
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "webapp_app_loadexistingfeedback",
-      "target": "webapp_app_cacheget"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "webapp/app.js",
-      "source_location": "L292",
-      "weight": 1.0,
-      "source": "webapp_app_loadtodayorder",
-      "target": "webapp_app_cacheget",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "webapp/app.js",
-      "source_location": "L199",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "webapp_app_loadexistingselection",
       "target": "webapp_app_cacheget"
     },
     {
@@ -5692,11 +5404,11 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "webapp/app.js",
-      "source_location": "L264",
+      "source_location": "L210",
       "weight": 1.0,
-      "source": "webapp_app_loaddietaryrestrictions",
-      "target": "webapp_app_cacheset",
-      "confidence_score": 1.0
+      "confidence_score": 1.0,
+      "source": "webapp_app_loadexistingselection",
+      "target": "webapp_app_cacheset"
     },
     {
       "relation": "calls",
@@ -5707,28 +5419,6 @@
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "webapp_app_loadexistingfeedback",
-      "target": "webapp_app_cacheset"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "webapp/app.js",
-      "source_location": "L301",
-      "weight": 1.0,
-      "source": "webapp_app_loadtodayorder",
-      "target": "webapp_app_cacheset",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "webapp/app.js",
-      "source_location": "L210",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "webapp_app_loadexistingselection",
       "target": "webapp_app_cacheset"
     },
     {
@@ -5812,6 +5502,17 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "webapp/app.js",
+      "source_location": "L496",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "webapp_app_loadformdata",
+      "target": "webapp_app_loadexistingselection"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "webapp/app.js",
       "source_location": "L506",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -5823,22 +5524,11 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "webapp/app.js",
-      "source_location": "L685",
-      "weight": 1.0,
-      "source": "webapp_app_loadformdata",
-      "target": "webapp_app_loadtodayorder",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "webapp/app.js",
       "source_location": "L703",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "webapp_app_rendermeallist",
-      "target": "webapp_app_checkcompatibility"
+      "target": "webapp_app_checkcompatibility",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -5847,19 +5537,8 @@
       "source_file": "webapp/app.js",
       "source_location": "L576",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "webapp_app_loadformdata",
-      "target": "webapp_app_hasoptedout"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "webapp/app.js",
-      "source_location": "L874",
-      "weight": 1.0,
-      "source": "webapp_app_rendercutofffootnote",
-      "target": "webapp_app_ispastordercutoff",
+      "target": "webapp_app_hasoptedout",
       "confidence_score": 1.0
     },
     {
@@ -5984,9 +5663,9 @@
       "source_file": "webapp/app.js",
       "source_location": "L534",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "webapp_app_showformskeleton",
-      "target": "webapp_app_clearoptedoutlock"
+      "target": "webapp_app_clearoptedoutlock",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -6006,9 +5685,20 @@
       "source_file": "webapp/app.js",
       "source_location": "L577",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "webapp_app_loadformdata",
-      "target": "webapp_app_applyoptedoutlock"
+      "target": "webapp_app_applyoptedoutlock",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "webapp/app.js",
+      "source_location": "L580",
+      "weight": 1.0,
+      "source": "webapp_app_loadformdata",
+      "target": "webapp_app_clearoptedoutlock",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -6020,28 +5710,6 @@
       "confidence_score": 1.0,
       "source": "webapp_app_loadformdata",
       "target": "webapp_app_updatemealtrigger"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "webapp/app.js",
-      "source_location": "L496",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "webapp_app_loadformdata",
-      "target": "webapp_app_loadexistingselection"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "webapp/app.js",
-      "source_location": "L580",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "webapp_app_loadformdata",
-      "target": "webapp_app_clearoptedoutlock"
     },
     {
       "relation": "calls",
@@ -6835,36 +6503,6 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "scripts/dietary_data.py",
-      "source_location": "L49",
-      "weight": 1.0,
-      "source": "scripts_dietary_data_py",
-      "target": "scripts_dietary_data_all_restriction_names",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "rationale_for",
-      "confidence": "EXTRACTED",
-      "source_file": "scripts/dietary_data.py",
-      "source_location": "L1",
-      "weight": 1.0,
-      "source": "scripts_dietary_data_rationale_1",
-      "target": "scripts_dietary_data_py",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "rationale_for",
-      "confidence": "EXTRACTED",
-      "source_file": "scripts/dietary_data.py",
-      "source_location": "L50",
-      "weight": 1.0,
-      "source": "scripts_dietary_data_rationale_50",
-      "target": "scripts_dietary_data_all_restriction_names",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
       "source_file": "scripts/verify_migration.py",
       "source_location": "L9",
       "weight": 1.0,
@@ -7539,36 +7177,6 @@
       "confidence_score": 1.0,
       "source": "plans_purpose_md",
       "target": "plans_purpose_summary"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "plans/webapp.md",
-      "source_location": "L1",
-      "weight": 1.0,
-      "source": "plans_webapp_md",
-      "target": "plans_webapp_1st_iteration",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "plans/webapp.md",
-      "source_location": "L40",
-      "weight": 1.0,
-      "source": "plans_webapp_md",
-      "target": "plans_webapp_2nd_iteration",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "plans/webapp.md",
-      "source_location": "L54",
-      "weight": 1.0,
-      "source": "plans_webapp_md",
-      "target": "plans_webapp_3rd_iteration",
-      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -9846,5 +9454,5 @@
       "source_file": "plans/implementation_plan_revised.md"
     }
   ],
-  "built_at_commit": "c0129f6b8c1baae85a512a20f686e85ace408535"
+  "built_at_commit": "725d8442e1d51a882534a2edbdf2917b1e2e0a18"
 }

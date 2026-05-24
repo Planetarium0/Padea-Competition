@@ -14,12 +14,13 @@ def verify_migration():
         "On-Site Managers",
         "Caterers",
         "Menu Items",
+        "Dietary Restrictions",
         "Students",
         "Sessions",
         "Absences",
         "Exclusions",
         "Meal Feedback",
-        "Meal Selections"
+        "Orders",
     ]
 
     counts = {}

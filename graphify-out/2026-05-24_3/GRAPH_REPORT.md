@@ -1,16 +1,16 @@
 # Graph Report - Padea  (2026-05-24)
 
 ## Corpus Check
-- 37 files · ~36,197 words
+- 35 files · ~34,692 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 422 nodes · 543 edges · 37 communities (30 shown, 7 thin omitted)
+- 405 nodes · 520 edges · 34 communities (27 shown, 7 thin omitted)
 - Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 41 edges (avg confidence: 0.9)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `c0129f6b`
+- Built from commit: `725d8442`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -21,7 +21,6 @@
 - [[_COMMUNITY_Business Logic & System Overview|Business Logic & System Overview]]
 - [[_COMMUNITY_Caterer Directory|Caterer Directory]]
 - [[_COMMUNITY_Design Decisions & Rationale|Design Decisions & Rationale]]
-- [[_COMMUNITY_Community 7|Community 7]]
 - [[_COMMUNITY_Order Email Dispatch|Order Email Dispatch]]
 - [[_COMMUNITY_Schema Architecture|Schema Architecture]]
 - [[_COMMUNITY_Absence Records|Absence Records]]
@@ -42,29 +41,28 @@
 - [[_COMMUNITY_Community 31|Community 31]]
 - [[_COMMUNITY_Community 32|Community 32]]
 - [[_COMMUNITY_Community 33|Community 33]]
-- [[_COMMUNITY_Community 34|Community 34]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `generate_orders()` - 15 edges
 2. `airtable_get()` - 14 edges
-3. `cacheGet()` - 11 edges
-4. `cacheSet()` - 11 edges
-5. `airtable_post()` - 11 edges
-6. `support.py — Shared Support Module (imported as s)` - 11 edges
-7. `loadFormData()` - 10 edges
-8. `atFetch()` - 9 edges
+3. `airtable_post()` - 11 edges
+4. `support.py — Shared Support Module (imported as s)` - 11 edges
+5. `atFetch()` - 9 edges
+6. `cacheGet()` - 9 edges
+7. `cacheSet()` - 9 edges
+8. `loadFormData()` - 9 edges
 9. `Step-by-Step Migration` - 9 edges
-10. `atList()` - 8 edges
+10. `process_orders()` - 8 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `atFetch()` --semantically_similar_to--> `airtable_get()`  [INFERRED] [semantically similar]
   webapp/app.js → scripts/support.py
-- `is_item_compatible()` --semantically_similar_to--> `isItemCompatible()`  [INFERRED] [semantically similar]
-  scripts/generate_orders.py → output/webapp/app.js
 - `atPost()` --semantically_similar_to--> `airtable_post()`  [INFERRED] [semantically similar]
   output/webapp/app.js → scripts/support.py
 - `QR Code → Session-Scoped Webapp URL Pattern` --conceptually_related_to--> `app`  [INFERRED]
   scripts/generate_qr.py → webapp/app.js
+- `is_item_compatible()` --semantically_similar_to--> `isItemCompatible()`  [INFERRED] [semantically similar]
+  scripts/generate_orders.py → output/webapp/app.js
 - `Upsert Pattern for Meal Selections (overwrite on re-scan)` --implements--> `Student Meal Web App SPA (index.html)`  [INFERRED]
   plans/implementation_plan.md → output/webapp/index.html
 
@@ -76,14 +74,14 @@
 - **Caterer Data Flow: PDF → Cache → Airtable** — resources_caterer_menus_pdf, cache_caterer_menus_lakehouse, converted_caterers_lakehouse [EXTRACTED 0.95]
 - **Order Validation: Dietary + Min Qty + Fallback Logic** — plans_impl_plan_dietary_filtering, plans_impl_plan_min_qty_enforcement, plans_impl_revised_fallback_logic [INFERRED 0.85]
 
-## Communities (37 total, 7 thin omitted)
+## Communities (34 total, 7 thin omitted)
 
 ### Community 1 - "Meal Resolution & Order Generation"
-Cohesion: 0.10
-Nodes (29): 3-Step Meal Resolution: Explicit Selection → Previous Week → AI Assigned, ai_assign_meal(), build_lookups(), determine_round(), enforce_min_qty(), find_previous_selection(), generate_orders(), get_next_week_monday() (+21 more)
+Cohesion: 0.09
+Nodes (31): Dietary Compatibility Filter (Positive + Negative Requirements), 3-Step Meal Resolution: Explicit Selection → Previous Week → AI Assigned, ai_assign_meal(), build_lookups(), determine_round(), enforce_min_qty(), find_previous_selection(), generate_orders() (+23 more)
 
 ### Community 2 - "Data Migration Pipeline"
-Cohesion: 0.09
+Cohesion: 0.08
 Nodes (39): dietary_mappings.json — Dietary String Translation Cache, LLM-with-Heuristic-Fallback Pattern, Clear-Parse-Link-Post Migration Pattern, Two-Pass Schema Creation (Resolves Circular Links), absences.py — Absences Migration, caterer_contacts.py — Caterer Contacts Migration, clean_school_names(), parse_contacts_heuristic() (+31 more)
 
 ### Community 3 - "Dietary Requirements Data"
@@ -99,12 +97,8 @@ Cohesion: 0.13
 Nodes (18): Guzman y Gomez Contact: Big Chicken + Medium Giraffe, Kenko Sushi House Contact: Big Mom (contact + chef), Lakehouse VP Contact: Carmen Gabrielle, Terrific Noodles Contact: Dylan + James Chern, Guzman y Gomez Menu, Kenko Sushi House Menu, Lakehouse Victoria Point Menu, Terrific Noodles Menu (+10 more)
 
 ### Community 6 - "Design Decisions & Rationale"
-Cohesion: 0.07
-Nodes (48): applyOptedOutLock(), atCreate(), atFetch(), atGet(), atList(), atUpdate(), cacheGet(), cacheSet() (+40 more)
-
-### Community 7 - "Community 7"
-Cohesion: 0.33
-Nodes (4): Seed the Dietary Restrictions table from `scripts/dietary_data.py`.  This MUST r, all_restriction_names(), Hard-coded dietary-restriction hierarchy.  Each restriction lists its *direct* S, Flat list of all restriction names, including those only referenced     as super
+Cohesion: 0.06
+Nodes (57): apiKey(), app, applyOptedOutLock(), atCreate(), atFetch(), atGet(), atGetRecord(), atList() (+49 more)
 
 ### Community 8 - "Order Email Dispatch"
 Cohesion: 0.06
@@ -147,8 +141,8 @@ Cohesion: 0.17
 Nodes (11): Sheet: CHAC - Monday, Sheet: CHAC - Wednesday, Sheet: ISHS - Monday, Sheet: ISHS - Thursday, Sheet: ISHS - Tuesday, Sheet: JPC - Tuesday, Sheet: JPC - Wednesday, Sheet: LC - Monday (+3 more)
 
 ### Community 27 - "Community 27"
-Cohesion: 0.09
-Nodes (22): Dietary Compatibility Filter (Positive + Negative Requirements), QR Code → Session-Scoped Webapp URL Pattern, generate_qr(), main(), make_session_url(), generate_qr.py — Generate QR code PNGs for each session's web app URL.  Each QR, apiKey(), app (+14 more)
+Cohesion: 0.47
+Nodes (5): QR Code → Session-Scoped Webapp URL Pattern, generate_qr(), main(), make_session_url(), generate_qr.py — Generate QR code PNGs for each session's web app URL.  Each QR
 
 ### Community 28 - "Community 28"
 Cohesion: 0.33
@@ -158,12 +152,8 @@ Nodes (5): Phase 1: Schema + Order Engine, Phase 2: Student Web App, Phase 3: Em
 Cohesion: 0.50
 Nodes (3): Answer, Q: Why does airtable_get() connect Data Migration Pipeline to Order Email Dispatch, Meal Resolution & Order Generation, Student Webapp & QR System?, Source Nodes
 
-### Community 34 - "Community 34"
-Cohesion: 0.50
-Nodes (3): 1st Iteration, 2nd Iteration, 3rd Iteration
-
 ## Knowledge Gaps
-- **147 isolated node(s):** `Halal`, `Opted out of Catering`, `No Beef, No Pork`, `Gluten Free`, `No Pork, No Shellfish` (+142 more)
+- **142 isolated node(s):** `Halal`, `Opted out of Catering`, `No Beef, No Pork`, `Gluten Free`, `No Pork, No Shellfish` (+137 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **7 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -172,15 +162,15 @@ _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `airtable_get()` connect `Data Migration Pipeline` to `Meal Resolution & Order Generation`, `Community 27`, `Design Decisions & Rationale`?**
   _High betweenness centrality (0.061) - this node is a cross-community bridge._
-- **Why does `atFetch()` connect `Design Decisions & Rationale` to `Data Migration Pipeline`, `Community 27`?**
-  _High betweenness centrality (0.055) - this node is a cross-community bridge._
+- **Why does `atFetch()` connect `Design Decisions & Rationale` to `Data Migration Pipeline`?**
+  _High betweenness centrality (0.054) - this node is a cross-community bridge._
 - **Why does `generate_orders()` connect `Meal Resolution & Order Generation` to `Data Migration Pipeline`?**
-  _High betweenness centrality (0.021) - this node is a cross-community bridge._
+  _High betweenness centrality (0.022) - this node is a cross-community bridge._
 - **What connects `Halal`, `Opted out of Catering`, `No Beef, No Pork` to the rest of the system?**
-  _181 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _173 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Meal Resolution & Order Generation` be split into smaller, more focused modules?**
-  _Cohesion score 0.09655172413793103 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.0907258064516129 - nodes in this community are weakly interconnected._
 - **Should `Data Migration Pipeline` be split into smaller, more focused modules?**
-  _Cohesion score 0.08603145235892692 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07607843137254902 - nodes in this community are weakly interconnected._
 - **Should `Dietary Requirements Data` be split into smaller, more focused modules?**
   _Cohesion score 0.10526315789473684 - nodes in this community are weakly interconnected._
