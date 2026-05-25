@@ -25,9 +25,21 @@ def _parse_exclusions_heuristic(text, canonical_schools):
         matched_school = _match_school(blk)
 
         date_iso  = None
-        day_match = re.search(r"(\d+)(?:st|nd|rd|th)?\s+of\s+May", blk, re.IGNORECASE)
-        if day_match:
-            date_iso = f"2026-05-{int(day_match.group(1)):02d}"
+        _MONTHS = {
+            "january": 1, "february": 2, "march": 3, "april": 4,
+            "may": 5, "june": 6, "july": 7, "august": 8,
+            "september": 9, "october": 10, "november": 11, "december": 12,
+        }
+        date_match = re.search(
+            r"(\d+)(?:st|nd|rd|th)?\s+of\s+([A-Za-z]+)(?:\s+(\d{4}))?",
+            blk, re.IGNORECASE
+        )
+        if date_match:
+            day   = int(date_match.group(1))
+            month = _MONTHS.get(date_match.group(2).lower())
+            year  = int(date_match.group(3)) if date_match.group(3) else 2026
+            if month:
+                date_iso = f"{year}-{month:02d}-{day:02d}"
 
         years = ["All"]
         if "all year levels" not in blk.lower():

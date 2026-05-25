@@ -45,7 +45,8 @@ def _parse_menus_heuristic(text):
                 continue
             tag_map = {"GF": "Gluten Free", "DF": "Dairy Free", "NF": "Nut Free", "VO": "Vegetarian"}
             dietary = [tag_map[t] for t in tags if t in tag_map]
-            if "pork" not in item_name.lower():
+            _PORK_WORDS = ("pork", "bacon", "ham", "prosciutto", "pancetta", "lard", "salami", "chorizo")
+            if not any(w in item_name.lower() for w in _PORK_WORDS):
                 dietary.append("Halal")
             items.append({"Menu Item Name": item_name, "Dietary Tags": list(set(dietary)), "Notes": None})
 

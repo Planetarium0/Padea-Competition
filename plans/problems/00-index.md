@@ -6,19 +6,19 @@ assessment — operator should triage.
 
 | # | Problem | Severity |
 |---|---|---|
-| 01 | Dietary hierarchy ignored by `register_orders.py` | High |
-| 02 | `STANDARD_DIETARY_CHOICES` ≠ full taxonomy | High |
-| 03 | `verify_migration.py` checks stale `Meal Feedback` table | High |
-| 04 | `./run script verify_migration` doesn't work | Medium |
-| 05 | Inconsistent imports in migration scripts | Medium |
+| 01 | ~~Dietary hierarchy ignored by `register_orders.py`~~ | ~~High~~ |
+| 02 | ~~`STANDARD_DIETARY_CHOICES` ≠ full taxonomy~~ | ~~High~~ |
+| 03 | ~~`verify_migration.py` checks stale `Meal Feedback` table~~ | ~~High~~ |
+| 04 | ~~`./run script verify_migration` doesn't work~~ | ~~Medium~~ |
+| 05 | ~~Inconsistent imports in migration scripts~~ | ~~Medium~~ |
 | 06 | ~~Schools list duplicated across three files~~ | ~~Medium~~ |
-| 07 | Compatibility logic duplicated webapp ↔ register_orders | Medium |
-| 08 | Halal-by-default tag rule is brittle | Medium |
-| 09 | Exclusion heuristic hard-codes May 2026 | Medium |
+| 07 | ~~Compatibility logic duplicated webapp ↔ register_orders~~ | ~~Medium~~ |
+| 08 | ~~Halal-by-default tag rule is brittle~~ | ~~Medium~~ |
+| 09 | ~~Exclusion heuristic hard-codes May 2026~~ | ~~Medium~~ |
 | 10 | `exclusions.py` always calls LLM (`if key or True:`) | Medium |
 | 11 | API key exposed in webapp bundle | High |
 | 12 | "Sent" Weekly Order status is misleading | Low |
-| 13 | `send_orders.py` `Send Date` is wrong | Low |
+| 13 | ~~`send_orders.py` `Send Date` is wrong~~ | ~~Low~~ |
 | 14 | Region denormalised on Sessions and Caterers | Low |
 | 15 | No mid-term enrolment / incremental migration path | Medium |
 | 16 | Last-week-fallback never implemented | Low |

@@ -296,7 +296,7 @@ def process_orders(preview_only=False):
 
         if not preview_only:
             email_id  = f"EMAIL-{week_start}-{wo_record['id'][:8]}"
-            send_date = week_start  # Thursday send → Monday week start; adjust if needed
+            send_date = None  # set by Airtable automation
             schedule_email(
                 to_email=contact_email,
                 cc_email=chef_email,
