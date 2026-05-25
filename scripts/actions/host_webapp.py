@@ -16,7 +16,7 @@ import socket
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
-WEBAPP_DIR = Path(__file__).resolve().parents[2] / "webapp"
+WEBAPP_DIR = Path("webapp")
 DEFAULT_PORT = 8000
 
 

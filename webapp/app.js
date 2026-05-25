@@ -265,6 +265,7 @@ async function loadDietaryRestrictions() {
 }
 
 async function loadExistingFeedback(studentId, sessionId, catererId) {
+  console.log("Loading Existing Feedback");
   const key = `padea_fb_${studentId}_${sessionId}_${catererId || ""}`;
   const cached = cacheGet(key, "feedback");
   if (cached !== null) return cached;
@@ -395,6 +396,7 @@ const state = {
   mealItemId: null,
 
   feedbackRecordId: null,
+  feedbackPromise: null,
 
   view: "loading",
 };
@@ -618,6 +620,7 @@ function resetFormState() {
   state.comment = "";
   state.mealItemId = null;
   state.feedbackRecordId = null;
+  state.feedbackPromise = null;
 }
 
 async function loadFormData(studentId) {
@@ -648,9 +651,11 @@ async function loadFormData(studentId) {
     return;
   }
 
-  // Background: existing feedback for this student+session+caterer.
+  // Load existing feedback in the background. persistChanges awaits this
+  // promise before deciding create vs update, preventing duplicate records
+  // if the user submits before this resolves.
   const catererId = (state.session?.fields?.Caterer || [])[0];
-  loadExistingFeedback(studentId, state.sessionId, catererId)
+  state.feedbackPromise = loadExistingFeedback(studentId, state.sessionId, catererId)
     .then(fb => {
       state.feedbackRecordId = fb.recordId;
       state.initialRating = fb.rating;
@@ -875,6 +880,9 @@ async function persistChanges() {
 
   // Caterer Feedback (Student, Session, Caterer, Rating, Comment)
   if (ratingChanged) {
+    // Wait for the background lookup to resolve so we never create a duplicate
+    // when the user submits faster than Airtable responds.
+    if (state.feedbackPromise) await state.feedbackPromise;
     const catererId = (state.session?.fields?.Caterer || [])[0];
     const fields = {
       "Student": [state.studentId],

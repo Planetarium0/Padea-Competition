@@ -286,5 +286,33 @@ TABLES_SCHEMA = {
             {"name": "Date", "type": "date", "options": {"dateFormat": {"name": "iso"}}},
             {"name": "Quantity", "type": "number", "options": {"precision": 0}}
         ]
+    },
+    "Scheduled Emails": {
+        # One record per outbound email queued by send_orders.py.
+        # Airtable automations watch Status='Queued' to trigger actual sending.
+        "primary": {"name": "Email ID", "type": "singleLineText"},
+        "fields": [
+            {"name": "To", "type": "email"},
+            {"name": "CC", "type": "email"},
+            {"name": "Subject", "type": "singleLineText"},
+            {"name": "Body", "type": "multilineText"},
+            {
+                "name": "Status",
+                "type": "singleSelect",
+                "options": {
+                    "choices": [
+                        {"name": "Queued"},
+                        {"name": "Sent"},
+                        {"name": "Failed"}
+                    ]
+                }
+            },
+            {
+                "name": "Weekly Order",
+                "type": "multipleRecordLinks",
+                "link_target": "Weekly Orders"
+            },
+            {"name": "Send Date", "type": "date", "options": {"dateFormat": {"name": "iso"}}}
+        ]
     }
 }

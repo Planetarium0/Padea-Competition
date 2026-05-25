@@ -1,45 +1,62 @@
 """
-send_orders.py — Format and send (log) caterer order emails for next week.
+send_orders.py — Format and queue caterer order emails for next week.
 
-Reads all Weekly Orders with Status='Draft', aggregates the per-student Orders
-records linked to each into per-session item counts, formats a caterer email,
-and logs it to output/emails/ via send_email().
-
-Does NOT actually send email — send_email() is a stub that writes to disk.
+Reads all Weekly Orders with Status='Draft', aggregates the per-session Orders
+records linked to each into per-item counts, formats a caterer email, and
+creates a record in the 'Scheduled Emails' Airtable table with Status='Queued'.
+Airtable automations watch that table to trigger actual sending.
 
 Usage:
   python scripts/send_orders.py [--preview]
 """
 
-import sys
 import argparse
-from datetime import datetime
-from pathlib import Path
+from datetime import datetime, timedelta
 from collections import defaultdict
 import support as s
 
-OUTPUT_DIR = Path.cwd() / "output" / "emails"
+
+# ---------------------------------------------------------------------------
+# Time helpers
+# ---------------------------------------------------------------------------
+
+def subtract_minutes(time_str, minutes=10):
+    """Parse a time string, subtract minutes, return a formatted string.
+
+    Handles common formats like '6:30 PM', '18:30', '6:30pm'.
+    Returns the original string unchanged if parsing fails.
+    """
+    if not time_str or time_str == "?":
+        return time_str
+    for fmt in ("%I:%M %p", "%H:%M", "%I:%M%p"):
+        try:
+            t = datetime.strptime(time_str.strip().upper(), fmt.upper())
+            t -= timedelta(minutes=minutes)
+            return t.strftime("%-I:%M %p")
+        except ValueError:
+            continue
+    return time_str
 
 
 # ---------------------------------------------------------------------------
-# Fake send_email — logs to output/emails/ instead of actually sending
+# Schedule email — writes to Airtable 'Scheduled Emails' table
 # ---------------------------------------------------------------------------
 
-def send_email(to_email, cc_email, subject, body, filename_hint="email"):
-    """Stub: write the email to output/emails/ rather than sending it."""
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-    safe_name  = filename_hint.replace(" ", "_").replace("—", "-").replace("/", "-")
-    email_path = OUTPUT_DIR / f"{safe_name}.txt"
-
-    header_lines = [f"To: {to_email}"]
+def schedule_email(to_email, cc_email, subject, body, weekly_order_id, send_date, email_id):
+    """Create a Queued record in the Scheduled Emails table."""
+    fields = {
+        "Email ID": email_id,
+        "To": to_email,
+        "Subject": subject,
+        "Body": body,
+        "Status": "Queued",
+        "Weekly Order": [weekly_order_id],
+        "Send Date": send_date,
+    }
     if cc_email:
-        header_lines.append(f"CC: {cc_email}")
-    header_lines.append(f"Subject: {subject}")
-    header_lines.append("")
-
-    email_path.write_text("\n".join(header_lines) + body, encoding="utf-8")
-    s.log.info(f"[FAKE SEND] Email logged to: {email_path}")
+        fields["CC"] = cc_email
+    s.airtable_post("Scheduled Emails", [{"fields": fields}])
+    s.log.info(f"[QUEUED] Email record created: {email_id}")
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +91,6 @@ def load_order_details(weekly_order_record):
     # record IDs, so we can't use it to search for wo_id directly.
     week_start = wo_fields.get("Week Start", "")
     if week_start:
-        from datetime import datetime, timedelta
         monday = datetime.strptime(week_start, "%Y-%m-%d").date()
         friday = (monday + timedelta(days=4)).isoformat()
         all_orders = s.airtable_get(
@@ -147,16 +163,18 @@ def load_order_details(weekly_order_record):
 
 
 # ---------------------------------------------------------------------------
-# Email formatting
+# Email formatting — Markdown (Airtable-supported subset, no tables)
 # ---------------------------------------------------------------------------
 
+
 def format_email_body(wo_fields, caterer_fields, line_items):
-    """Return the email body (without To/CC/Subject headers)."""
+    """Return a Markdown email body using only Airtable-supported formatting."""
     week_start  = wo_fields.get("Week Start", "?")
     total_meals = wo_fields.get("Total Meals", 0)
 
     caterer_name  = caterer_fields.get("Caterer Name", "?")
     contact_name  = caterer_fields.get("Contact Name", "there") or "there"
+    first_name    = contact_name.split()[0]
     delivery_fee  = caterer_fields.get("Delivery Fee", 0) or 0
     fee_structure = caterer_fields.get("Delivery Fee Structure", "Per trip")
 
@@ -165,18 +183,13 @@ def format_email_body(wo_fields, caterer_fields, line_items):
     except (ValueError, TypeError):
         week_display = week_start
 
-    # Group line items by session
     by_session = defaultdict(list)
     for li in line_items:
         by_session[li["session"].get("Session ID", "unknown")].append(li)
 
-    lines = []
-    lines.append(f"Hi {contact_name.split()[0]},")
-    lines.append("")
-    lines.append(f"Here is the meal order for {caterer_name} for the week of {week_display}:")
-    lines.append("")
-
     num_deliveries = 0
+    blocks = []
+
     for sess_key in sorted(by_session):
         items = by_session[sess_key]
         sess  = items[0]["session"]
@@ -184,41 +197,34 @@ def format_email_body(wo_fields, caterer_fields, line_items):
         day            = sess.get("Day", "?")
         school_name    = sess.get("_school_name", "?")
         dinner_time    = sess.get("Dinner Time", "?")
-        building       = sess.get("Building", "?")
-        manager_name   = sess.get("_manager_name")
-        manager_mobile = sess.get("_manager_mobile")
+        building       = sess.get("Building", "")
+        manager_name   = sess.get("_manager_name", "")
+        manager_mobile = sess.get("_manager_mobile", "")
 
-        lines.append(f"┌{'─'*58}┐")
-        lines.append(f"│ {day.upper():56s} │")
-        lines.append(f"│ {school_name:56s} │")
+        deliver_by = subtract_minutes(dinner_time)
 
-        delivery_info = f"Deliver by: {dinner_time}"
+        block = [f"## {day} — {school_name}"]
+        block.append(f"**Deliver by:** {deliver_by}")
         if building:
-            delivery_info += f" | Building: {building}"
-        lines.append(f"│ {delivery_info:56s} │")
-
+            block.append(f"**Building:** {building}")
         if manager_name:
-            mgr_str = f"On-site manager: {manager_name}"
+            mgr = manager_name
             if manager_mobile:
-                mgr_str += f" ({manager_mobile})"
-            lines.append(f"│ {mgr_str:56s} │")
+                mgr += f" ({manager_mobile})"
+            block.append(f"**On-site manager:** {mgr}")
 
-        lines.append(f"│{'':58s}│")
-
+        block.append("")
         session_total = 0
         for li in sorted(items, key=lambda x: -x["quantity"]):
             item_name = li["menu_item"].get("Menu Item Name", "?")
             qty       = li["quantity"]
-            item_line = f"  {item_name:42s} ×{qty}"
-            lines.append(f"│{item_line:58s}│")
             session_total += qty
+            block.append(f"- {item_name} ×{qty}")
 
-        lines.append(f"│{'':58s}│")
-        lines.append(f"│  {'─'*54}  │")
-        subtotal_line = f"  {'Subtotal':42s} ×{session_total}"
-        lines.append(f"│{subtotal_line:58s}│")
-        lines.append(f"└{'─'*58}┘")
-        lines.append("")
+        block.append("")
+        block.append(f"**Subtotal: {session_total} meals**")
+
+        blocks.append("\n".join(block))
         num_deliveries += 1
 
     if fee_structure == "Per school per trip":
@@ -228,13 +234,18 @@ def format_email_body(wo_fields, caterer_fields, line_items):
         total_delivery = delivery_fee
         fee_note = f"${delivery_fee:.2f} per trip"
 
-    lines.append(f"GRAND TOTAL: {total_meals} meals")
-    lines.append(f"Delivery fee: ${total_delivery:.2f} ({fee_note})")
-    lines.append("")
-    lines.append("Thanks,")
-    lines.append("Padea")
+    sections = "\n\n".join(blocks)
 
-    return "\n".join(lines)
+    return (
+        f"Hi {first_name},\n\n"
+        f"Here is the meal order for **{caterer_name}** for the week of **{week_display}**:\n\n"
+        f"{sections}\n\n"
+        f"---\n\n"
+        f"**Grand total: {total_meals} meals**\n"
+        f"**Delivery fee:** ${total_delivery:.2f} ({fee_note})\n\n"
+        f"Thanks,\n"
+        f"Padea"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -273,24 +284,26 @@ def process_orders(preview_only=False):
         subject  = f"Padea Meal Order — Week of {week_display}"
         body     = format_email_body(wo_fields, caterer_fields, line_items)
 
-        # Print to stdout
         print(f"\n{'='*62}")
-        to_line = f"To: {contact_email}"
+        print(f"To:      {contact_email}")
         if chef_email:
-            to_line += f"  CC: {chef_email}"
-        print(to_line)
+            print(f"CC:      {chef_email}")
         print(f"Subject: {subject}")
         print()
         print(body)
         print("=" * 62)
 
         if not preview_only:
-            send_email(
+            email_id  = f"EMAIL-{week_start}-{wo_record['id'][:8]}"
+            send_date = week_start  # Thursday send → Monday week start; adjust if needed
+            schedule_email(
                 to_email=contact_email,
                 cc_email=chef_email,
                 subject=subject,
                 body=body,
-                filename_hint=wo_id_label,
+                weekly_order_id=wo_record["id"],
+                send_date=send_date,
+                email_id=email_id,
             )
             try:
                 s.get_table("Weekly Orders").update(wo_record["id"], {"Status": "Sent"})
