@@ -14,6 +14,8 @@ Students often tell us the selected meals don’t match their taste preferences.
 
 This project is aimed at fixing this bottleneck - solving the problem from order to delivery.
 
+The current state of the project is stored in `plans/current/00-overview.md`.
+
 ## Commands
 
 ```bash
