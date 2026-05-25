@@ -2,7 +2,7 @@
 generate_qr.py — Generate QR code PNGs for each session's web app URL.
 
 Each QR code encodes:
-  file:///path/to/output/webapp/index.html?session=<airtable_record_id>
+  file:///path/to/output/webapp/meals.html?session=<airtable_record_id>
 
 Or, if --base-url is supplied:
   <base-url>?session=<airtable_record_id>
@@ -29,12 +29,12 @@ except ImportError:
     STYLED = False
 
 OUTPUT_DIR = Path.cwd() / "output" / "qrcodes"
-WEBAPP_PATH = Path.cwd() / "webapp" / "index.html"
+WEBAPP_PATH = Path.cwd() / "webapp" / "meals.html"
 
 
 def make_session_url(session_id, base_url=None, origin=None):
     if origin:
-        return f"{origin.rstrip('/')}/index.html?session={session_id}"
+        return f"{origin.rstrip('/')}/meals.html?session={session_id}"
     if base_url:
         return f"{base_url.rstrip('/')}?session={session_id}"
     # Local file URL
@@ -101,8 +101,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate session QR codes")
     parser.add_argument(
         "--origin",
-        help="URL origin of the hosted webapp (e.g. http://192.168.1.5:8000); appends /index.html automatically",
-        default=None,
+        help="URL origin of the hosted webapp (e.g. http://192.168.1.5:8000); appends /meals.html automatically",
+        default=os.environ.get("URL_ORIGIN", None),
     )
     parser.add_argument(
         "--base-url",

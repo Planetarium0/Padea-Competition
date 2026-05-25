@@ -23,6 +23,8 @@ Usage:
   $0 orders generate [--dry-run]
   $0 orders preview
   $0 orders send
+  $0 evaluate [--dry-run]
+  $0 switch <proposal_record_id> [--dry-run]
   $0 host [--port PORT]
   $0 qr [--origin URL_ORIGIN] [--base-url URL] [--session ID]
 
@@ -105,6 +107,25 @@ if [[ "$COMMAND" == "orders" ]]; then
             exit 1
             ;;
     esac
+    exit 0
+fi
+
+# --- Caterer evaluation ---
+if [[ "$COMMAND" == "evaluate" ]]; then
+    echo "Evaluating caterer ratings..."
+    python scripts/actions/evaluate_caterers.py "${@:2}"
+    exit 0
+fi
+
+# --- Caterer switch execution ---
+if [[ "$COMMAND" == "switch" ]]; then
+    PROPOSAL_ID="${2:-}"
+    if [[ -z "$PROPOSAL_ID" ]]; then
+        echo "[ERROR] Usage: $0 switch <proposal_record_id> [--dry-run]"
+        exit 1
+    fi
+    echo "Executing caterer switch for proposal $PROPOSAL_ID..."
+    python scripts/actions/execute_caterer_switch.py "$PROPOSAL_ID" "${@:3}"
     exit 0
 fi
 

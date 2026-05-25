@@ -389,6 +389,37 @@ def clear_existing_orders(week_dates, dry_run=False):
 
 
 # ---------------------------------------------------------------------------
+# Caterer switch helpers
+# ---------------------------------------------------------------------------
+
+def flip_incoming_caterers(dry_run=False):
+    """Commit any pending caterer switches before this week's order is built.
+
+    If a session has Incoming Caterer set (placed there by
+    execute_caterer_switch.py when the coordinator approved a switch),
+    flip Caterer = Incoming Caterer and clear Incoming Caterer so the rest
+    of this run sees the new caterer as the active one.
+    """
+    sessions = s.airtable_get("Sessions")
+    to_flip = [r for r in sessions if r["fields"].get("Incoming Caterer")]
+    if not to_flip:
+        return
+
+    s.log.info(f"Committing {len(to_flip)} pending caterer switch(es)...")
+    if dry_run:
+        for r in to_flip:
+            incoming = (r["fields"]["Incoming Caterer"] or [None])[0]
+            s.log.info(f"  [DRY RUN] Would flip session {r['id']}: Caterer → {incoming}")
+        return
+
+    sessions_tbl = s.get_table("Sessions")
+    for r in to_flip:
+        incoming = r["fields"]["Incoming Caterer"]
+        sessions_tbl.update(r["id"], {"Caterer": incoming, "Incoming Caterer": []})
+        s.log.info(f"  Flipped session {r['id']} to caterer {incoming[0]}")
+
+
+# ---------------------------------------------------------------------------
 # Main pipeline
 # ---------------------------------------------------------------------------
 
@@ -398,6 +429,8 @@ def register_orders(dry_run=False):
     week_label   = get_week_label(next_monday)
 
     s.log.info(f"=== Registering orders for {week_label} (week of {next_monday}) ===")
+
+    flip_incoming_caterers(dry_run=dry_run)
 
     data = load_all_data()
     lk   = build_lookups(data)

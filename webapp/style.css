@@ -633,6 +633,23 @@ textarea:focus {
 }
 
 /* ============================================================
+   Transition banner (caterer switch)
+   ============================================================ */
+.transition-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #FFF7E8;
+  border: 1px solid #F2DDB1;
+  color: #8A4F08;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+/* ============================================================
    Confirm modal
    ============================================================ */
 .modal {

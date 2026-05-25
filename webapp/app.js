@@ -170,9 +170,25 @@ async function loadSession(sessionId) {
   console.log(`[padea] fetching session ${sessionId}…`);
   const rec = await atGet("Sessions", sessionId);
   console.log(`[padea] session loaded: ${rec.fields["Session ID"]}`,
-    "caterer:", rec.fields.Caterer, "students:", (rec.fields.Students || []).length);
+    "caterer:", rec.fields.Caterer,
+    "incoming:", rec.fields["Incoming Caterer"] || [],
+    "students:", (rec.fields.Students || []).length);
   cacheSet(key, rec);
   return rec;
+}
+
+// During a caterer-switch transition, Sessions.Incoming Caterer is set and the
+// webapp should show the incoming caterer's menu for preferences. Ratings still
+// belong to Sessions.Caterer (who cooked today's meal).
+function menuCatererId(session) {
+  if (!session) return null;
+  const incoming = (session.fields["Incoming Caterer"] || [])[0];
+  const current = (session.fields.Caterer || [])[0];
+  return incoming || current || null;
+}
+
+function isInTransition(session) {
+  return !!(session && (session.fields["Incoming Caterer"] || []).length);
 }
 
 async function loadStudent(studentId) {
@@ -464,8 +480,9 @@ const app = {
     document.getElementById("session-label").textContent =
       formatSessionLabel(session.fields);
 
-    // Prefetch the caterer's menu.
-    const catererId = (session.fields.Caterer || [])[0];
+    // Prefetch the menu — during a caterer switch transition, this is the
+    // incoming caterer's menu; otherwise the current caterer's.
+    const catererId = menuCatererId(session);
     if (catererId) {
       state.menuPromise = loadMenuItems(catererId)
         .then(items => { state.menuItems = items; return items; })
@@ -601,6 +618,7 @@ function showFormSkeleton() {
   showView("form");
   resetFormState();
   clearOptedOutLock();
+  document.getElementById("transition-banner").classList.add("hidden");
   document.getElementById("student-name").textContent = "…";
   document.querySelectorAll("#stars .star").forEach(s => s.classList.remove("active"));
   document.getElementById("comment-wrap").classList.add("hidden");
@@ -637,9 +655,15 @@ async function loadFormData(studentId) {
   document.getElementById("student-name").textContent =
     student.fields["Student Name"] || "—";
 
-  // Read the current preference straight off the student record.
-  state.initialMealItemId = (student.fields["Meal Preference"] || [])[0] || null;
+  // During a caterer-switch transition the student's preference was cleared by
+  // execute_caterer_switch.py — treat the form as unselected regardless of any
+  // stale cached value so the trigger shows "Tap to choose a meal".
+  const transition = isInTransition(state.session);
+  state.initialMealItemId = transition
+    ? null
+    : ((student.fields["Meal Preference"] || [])[0] || null);
   state.mealItemId = state.initialMealItemId;
+  document.getElementById("transition-banner").classList.toggle("hidden", !transition);
 
   console.log(`[padea] student loaded: ${student.fields["Student Name"]}`,
     "diet ids:", student.fields["Dietary Requirements"] || [],
@@ -824,7 +848,7 @@ function updateMealTrigger() {
   const label = document.getElementById("meal-trigger-label");
   const nameEl = document.getElementById("meal-trigger-name");
 
-  if (state.session && !(state.session.fields.Caterer || []).length) {
+  if (state.session && !menuCatererId(state.session)) {
     label.textContent = "No caterer assigned to this session.";
     nameEl.textContent = "";
     trig.disabled = true;
@@ -884,12 +908,15 @@ async function persistChanges() {
     // Wait for the background lookup to resolve so we never create a duplicate
     // when the user submits faster than Airtable responds.
     if (state.feedbackPromise) await state.feedbackPromise;
+    // Always attribute the rating to whoever cooked today's meal — that is
+    // session.Caterer, not Incoming Caterer.
     const catererId = (state.session?.fields?.Caterer || [])[0];
     const fields = {
       "Student": [state.studentId],
       "Session": [state.sessionId],
       "Rating": state.rating,
       "Comment": state.comment.trim(),
+      "Session Date": new Date().toISOString().slice(0, 10),
       ...(catererId ? { "Caterer": [catererId] } : {}),
     };
     if (state.feedbackRecordId) {
@@ -939,6 +966,7 @@ function doneMessage() {
 
 function applyOptedOutLock() {
   document.getElementById("opted-out-banner").classList.remove("hidden");
+  document.getElementById("transition-banner").classList.add("hidden");
   document.querySelectorAll("#stars .star").forEach(s => s.disabled = true);
   document.getElementById("comment").disabled = true;
   document.getElementById("meal-trigger").disabled = true;

@@ -1,5 +1,6 @@
 import sys
 import re
+from datetime import datetime
 from pathlib import Path
 import support as s
 
@@ -60,14 +61,15 @@ def run():
             s.log.warning(f"Student '{s_name}' absent at {abs_data['school_name']} but not found in Students table. Skipping.")
             continue
 
-        session_id  = f"{abs_data['school_name']} - {abs_data['date']}"
+        day_name    = datetime.strptime(abs_data["date"], "%Y-%m-%d").strftime("%A")
+        session_id  = f"{abs_data['school_name']} - {day_name}"
         sess_rec_id = session_id_to_rec_id.get(session_id)
         if not sess_rec_id:
-            s.log.warning(f"Session '{session_id}' not found for absence of '{s_name}'. Skipping.")
+            s.log.warning(f"No session '{session_id}' for absence of '{s_name}'. Skipping.")
             continue
 
         records.append({
-            "Absence ID": f"{s_name} - {session_id}",
+            "Absence ID": f"{s_name} - {abs_data['school_name']} - {abs_data['date']}",
             "Student":    [s_id],
             "Session":    [sess_rec_id],
             "Date":       abs_data["date"],

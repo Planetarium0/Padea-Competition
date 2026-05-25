@@ -1,0 +1,1 @@
+A review should be unique with respect to the student and caterer - if a student has already made a review against a particular caterer, it should overwrite the other review.

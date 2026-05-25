@@ -5,12 +5,40 @@ from dotenv import load_dotenv
 from pyairtable import Api
 from .prompt_user import prompt_user
 
-# Initialize dotenv
+# Initialize dotenv first so LOG_LEVEL can be read from .env
 load_dotenv()
 
-# Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+# ---------------------------------------------------------------------------
+# Custom VERBOSE level — sits below DEBUG (10) at level 5.
+# Enabled only when LOG_LEVEL=verbose; invisible at info/warning/error.
+# ---------------------------------------------------------------------------
+VERBOSE = 5
+logging.addLevelName(VERBOSE, "VERBOSE")
+
+def _verbose(self, message, *args, **kwargs):
+    if self.isEnabledFor(VERBOSE):
+        self._log(VERBOSE, message, args, **kwargs)
+
+logging.Logger.verbose = _verbose
+
+# ---------------------------------------------------------------------------
+# Resolve level from LOG_LEVEL env var.
+# Accepted values (case-insensitive): verbose, info, warning, error
+# ---------------------------------------------------------------------------
+_LOG_LEVEL_MAP = {
+    "verbose": VERBOSE,
+    "info":    logging.INFO,
+    "warning": logging.WARNING,
+    "error":   logging.ERROR,
+}
+_log_level = _LOG_LEVEL_MAP.get(
+    os.environ.get("LOG_LEVEL", "info").lower(),
+    logging.INFO,
+)
+
+logging.basicConfig(level=_log_level, format='%(asctime)s [%(levelname)s] %(message)s')
 log = logging.getLogger("PadeaMigration")
+log.setLevel(_log_level)
 
 # Initialize Airtable
 AIRTABLE_API_KEY = os.environ.get("AIRTABLE_API_KEY")

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#A51C30">
+    <title>Caterer Switch — Padea</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .status-badge {
+            display: inline-block;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            padding: 4px 10px;
+            border-radius: 20px;
+            white-space: nowrap;
+        }
+        .status-Pending  { background: #FFF7E8; color: #8A4F08; }
+        .status-Approved { background: #E8F5EF; color: #1B6B3A; }
+        .status-Rejected { background: var(--primary-tint); color: var(--primary-dark); }
+        .status-Executed { background: var(--muted-bg); color: var(--text-muted); }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 10px 16px;
+            align-items: baseline;
+        }
+        .detail-label {
+            font-size: 13px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+        .detail-value { font-weight: 500; }
+        .detail-divider {
+            grid-column: 1 / -1;
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 2px 0;
+        }
+
+        .btn-approve {
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-md);
+            padding: 16px;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            min-height: 52px;
+            transition: background-color 80ms, transform 80ms;
+            font-family: inherit;
+        }
+        .btn-approve:active { background: var(--primary-dark); transform: scale(0.98); }
+
+        .btn-reject-soft {
+            background: var(--muted-bg);
+            color: var(--text);
+            border: none;
+            border-radius: var(--radius-md);
+            padding: 16px;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            min-height: 52px;
+            transition: background-color 80ms;
+            font-family: inherit;
+        }
+        .btn-reject-soft:active { background: var(--border-strong); }
+
+        .btn-danger {
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-md);
+            padding: 16px;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            min-height: 52px;
+            transition: background-color 80ms;
+            font-family: inherit;
+        }
+        .btn-danger:active { background: var(--primary-dark); }
+
+        .actions-col { display: flex; flex-direction: column; gap: 10px; }
+
+        .progress-list {
+            list-style: none;
+            padding: 0; margin: 0;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        .progress-item {
+            display: flex; align-items: center; gap: 10px;
+            font-size: 14px; color: var(--text-muted);
+        }
+        .progress-item.pi-done    { color: var(--text); }
+        .progress-item .pi-icon   { width: 20px; flex-shrink: 0; text-align: center; }
+        .pi-done    .pi-icon { color: #1B6B3A; font-weight: 700; }
+        .pi-working .pi-icon .spinner { width: 16px; height: 16px; margin: 0; }
+        .pi-pending .pi-icon { color: var(--border-strong); font-size: 20px; line-height: 1; }
+
+        .result-wrap {
+            display: flex; flex-direction: column; align-items: center;
+            text-align: center; padding: 40px 20px; gap: 8px;
+        }
+        .result-icon {
+            width: 72px; height: 72px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 36px; font-weight: 700; margin-bottom: 8px;
+            animation: pop 280ms cubic-bezier(0.3, 1.4, 0.5, 1);
+        }
+        .icon-success  { background: var(--primary); color: #fff; }
+        .icon-rejected { background: var(--muted-bg); color: var(--text-muted); }
+
+        .readonly-notice {
+            background: var(--muted-bg);
+            border-radius: var(--radius-md);
+            padding: 14px 16px;
+            font-size: 14px;
+            color: var(--text-muted);
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+
+        <header class="topbar">
+            <div class="brand">Padea</div>
+        </header>
+
+        <main id="main">
+
+            <!-- ============================================================
+                 Loading
+                 ============================================================ -->
+            <section id="view-loading" class="view">
+                <div class="loading-row" style="padding: 56px 16px;">
+                    <div class="spinner"></div>
+                    <span>Loading proposal…</span>
+                </div>
+            </section>
+
+            <!-- ============================================================
+                 Proposal detail
+                 ============================================================ -->
+            <section id="view-proposal" class="view hidden">
+
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                    <h1 class="view-title" style="margin:8px 0 0;">Caterer Switch</h1>
+                    <span id="status-badge" class="status-badge status-Pending">Pending</span>
+                </div>
+
+                <div class="card">
+                    <div class="detail-grid">
+                        <span class="detail-label">School</span>
+                        <span class="detail-value" id="d-school">—</span>
+
+                        <hr class="detail-divider">
+
+                        <span class="detail-label">Current caterer</span>
+                        <span class="detail-value" id="d-outgoing">—</span>
+                        <span class="detail-label">Replacement</span>
+                        <span class="detail-value" id="d-incoming">—</span>
+
+                        <hr class="detail-divider">
+
+                        <span class="detail-label">Rolling avg</span>
+                        <span class="detail-value" id="d-rating">—</span>
+                        <span class="detail-label">Sessions sampled</span>
+                        <span class="detail-value" id="d-sessions">—</span>
+                        <span class="detail-label">Unique raters</span>
+                        <span class="detail-value" id="d-raters">—</span>
+
+                        <hr class="detail-divider">
+
+                        <span class="detail-label">Effective week</span>
+                        <span class="detail-value" id="d-week">—</span>
+                    </div>
+
+                    <div id="notes-row" class="hidden"
+                        style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
+                        <span class="detail-label">Notes</span>
+                        <p id="d-notes" style="margin:4px 0 0; font-size:14px;"></p>
+                    </div>
+                </div>
+
+                <!-- Action buttons — only shown when Status=Pending -->
+                <div id="pending-actions" class="actions-col hidden">
+                    <button class="btn-approve" onclick="page.approve()">Approve Switch</button>
+                    <button class="btn-reject-soft" onclick="page.showRejectForm()">Reject</button>
+                </div>
+
+                <!-- Read-only notice — shown for any other status -->
+                <div id="readonly-notice" class="readonly-notice hidden"></div>
+
+            </section>
+
+            <!-- ============================================================
+                 Reject reason form
+                 ============================================================ -->
+            <section id="view-reject" class="view hidden">
+                <h1 class="view-title">Reject proposal</h1>
+                <p class="view-sub">Add an optional reason — you won't be reminded about this caterer again this term.</p>
+
+                <div class="card">
+                    <label class="field-label" for="reject-reason">Reason <span class="muted">(optional)</span></label>
+                    <textarea id="reject-reason" rows="3"
+                        placeholder="e.g. planning to switch next term, will speak to caterer first…"></textarea>
+                </div>
+
+                <div class="actions-col">
+                    <button class="btn-danger" onclick="page.confirmReject()">Confirm Rejection</button>
+                    <button class="btn-reject-soft" onclick="page.cancelReject()">Cancel</button>
+                </div>
+            </section>
+
+            <!-- ============================================================
+                 Working — step-by-step progress
+                 ============================================================ -->
+            <section id="view-working" class="view hidden">
+                <h1 class="view-title">Applying switch…</h1>
+                <p class="view-sub">This will take a few seconds.</p>
+
+                <div class="card">
+                    <ul class="progress-list" id="progress-list"></ul>
+                </div>
+            </section>
+
+            <!-- ============================================================
+                 Done
+                 ============================================================ -->
+            <section id="view-done" class="view hidden">
+                <div class="result-wrap">
+                    <div class="result-icon" id="result-icon"></div>
+                    <h1 class="view-title" id="result-title"></h1>
+                    <p class="view-sub" id="result-msg"></p>
+                </div>
+            </section>
+
+            <!-- ============================================================
+                 Error
+                 ============================================================ -->
+            <section id="view-error" class="view hidden">
+                <div class="card"
+                    style="border-color:var(--primary-tint-strong); background:var(--primary-tint);">
+                    <h2 class="card-title" style="color:var(--primary-dark);">Something went wrong</h2>
+                    <p id="error-msg"
+                        style="color:var(--primary-dark); font-size:14px; margin:0; white-space:pre-wrap;"></p>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="config.env.js"></script>
+    <script src="switch-proposal.js"></script>
+</body>
+
+</html>

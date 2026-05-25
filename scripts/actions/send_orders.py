@@ -43,19 +43,27 @@ def subtract_minutes(time_str, minutes=10):
 # Schedule email — writes to Airtable 'Scheduled Emails' table
 # ---------------------------------------------------------------------------
 
-def schedule_email(to_email, cc_email, subject, body, weekly_order_id, send_date, email_id):
-    """Create a Queued record in the Scheduled Emails table."""
+def schedule_email(to_email, cc_email, subject, body, email_id, immediate=False,
+                   weekly_order_id=None, caterer_switch_proposal_id=None):
+    """Create a Queued record in the Scheduled Emails table.
+
+    Exactly one of weekly_order_id or caterer_switch_proposal_id should be
+    provided so the email is traceable back to its source record.
+    """
     fields = {
         "Email ID": email_id,
         "To": to_email,
         "Subject": subject,
         "Body": body,
-        "Status": "Queued",
-        "Weekly Order": [weekly_order_id],
-        "Send Date": send_date,
+        "Status": "Send Immediately" if immediate else "Queued",
+        "Send Date": None, # set when actually sent by automation
     }
     if cc_email:
         fields["CC"] = cc_email
+    if weekly_order_id:
+        fields["Weekly Order"] = [weekly_order_id]
+    if caterer_switch_proposal_id:
+        fields["Caterer Switch Proposal"] = [caterer_switch_proposal_id]
     s.airtable_post("Scheduled Emails", [{"fields": fields}])
     s.log.info(f"[QUEUED] Email record created: {email_id}")
 
@@ -297,15 +305,13 @@ def process_orders(preview_only=False):
 
         if not preview_only:
             email_id  = f"EMAIL-{week_start}-{wo_record['id'][:8]}"
-            send_date = None  # set by Airtable automation
             schedule_email(
                 to_email=contact_email,
                 cc_email=chef_email,
                 subject=subject,
                 body=body,
-                weekly_order_id=wo_record["id"],
-                send_date=send_date,
                 email_id=email_id,
+                weekly_order_id=wo_record["id"],
             )
         else:
             s.log.info(f"[PREVIEW] Would send to {contact_email}")
