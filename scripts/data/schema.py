@@ -211,7 +211,22 @@ TABLES_SCHEMA = {
                 "link_target": "Schools"
             },
             {"name": "Date", "type": "date", "options": {"dateFormat": {"name": "iso"}}},
-            {"name": "Affected Year Levels", "type": "singleLineText"},
+            {
+                "name": "Affected Year Levels",
+                "type": "multipleSelects",
+                "options": {
+                    "choices": [
+                        {"name": "All"},
+                        {"name": "12"},
+                        {"name": "11"},
+                        {"name": "10"},
+                        {"name": "9"},
+                        {"name": "8"},
+                        {"name": "7"},
+                        {"name": "6"}
+                    ]
+                }
+            },
             {"name": "Reason", "type": "singleLineText"}
         ]
     },

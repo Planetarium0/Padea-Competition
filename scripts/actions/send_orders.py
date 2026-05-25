@@ -284,14 +284,15 @@ def process_orders(preview_only=False):
         subject  = f"Padea Meal Order — Week of {week_display}"
         body     = format_email_body(wo_fields, caterer_fields, line_items)
 
-        print(f"\n{'='*62}")
-        print(f"To:      {contact_email}")
-        if chef_email:
-            print(f"CC:      {chef_email}")
-        print(f"Subject: {subject}")
-        print()
-        print(body)
-        print("=" * 62)
+        # Don't preview email
+        # print(f"\n{'='*62}")
+        # print(f"To:      {contact_email}")
+        # if chef_email:
+        #     print(f"CC:      {chef_email}")
+        # print(f"Subject: {subject}")
+        # print()
+        # print(body)
+        # print("=" * 62)
 
         if not preview_only:
             email_id  = f"EMAIL-{week_start}-{wo_record['id'][:8]}"

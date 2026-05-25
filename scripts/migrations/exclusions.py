@@ -64,15 +64,16 @@ def parse_exclusions_heuristic(text):
             date_iso = f"2026-05-{day:02d}"
 
         # Detect affected year levels
-        years = "All"
+        years = ["All"]
         if "all year levels" in blk.lower():
-            years = "All"
+            years = ["All"]
         else:
             year_match = re.search(r"years?\s+([\d\s,and]+)", blk, re.IGNORECASE)
             if year_match:
-                # Clean up years list
-                years_raw = year_match.group(1).replace("and", ",").strip()
-                years = ", ".join([y.strip() for y in years_raw.split(",") if y.strip()])
+                years_raw = year_match.group(1).replace("and", ",")
+                years = [y.strip() for y in years_raw.split(",") if y.strip().isdigit()]
+                if not years:
+                    years = ["All"]
 
         # Detect reason: text between "due to" and end of sentence / new sentence
         reason = "Cancelled"
@@ -93,14 +94,14 @@ def parse_exclusions_heuristic(text):
 parsed_exclusions = NotImplemented
 key = os.environ.get("CLAUDE_CODE_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
 
-if key:
+if key or True:
     s.log.info("Using Claude LLM for batched exclusions parsing...")
     prompt = f"""You are a data extraction assistant.
 Extract the cancelled school sessions from the following text.
 Return a JSON array of objects, where each object represents one exclusion and has exactly these keys:
 - "School" (string, the exact school name, e.g. "Indooroopilly State High School")
 - "Date" (string, date in ISO YYYY-MM-DD format, e.g. "2026-05-04")
-- "Affected Year Levels" (string, e.g. "All" or "12, 10")
+- "Affected Year Levels" (array of strings, each one of "All", "12", "11", "10", "9", "8", "7", "6", e.g. ["All"] or ["12", "10"])
 - "Reason" (string, reason for cancellation, e.g. "Open Day")
 
 Use these standard school names:
@@ -148,11 +149,15 @@ for data in parsed_exclusions:
 
     exclusion_id = f"{school_name} - {data['Date']}"
 
+    years = data["Affected Year Levels"]
+    if isinstance(years, str):
+        years = [y.strip() for y in years.replace("and", ",").split(",") if y.strip()]
+
     records.append({
         "Exclusion ID": exclusion_id,
         "School": [school_id],
         "Date": data["Date"],
-        "Affected Year Levels": data["Affected Year Levels"],
+        "Affected Year Levels": years,
         "Reason": data["Reason"]
     })
 

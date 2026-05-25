@@ -1,17 +1,6 @@
 #!/usr/bin/bash
 # ------------------------------------------------------------
 # run – simple command‑line shortcut for Padea operations
-#
-# Usage examples:
-#   $ ./run help                      # show usage
-#   $ ./run migrate absences          # migrate only absences
-#   $ ./run migrate                   # migrate all resources
-#   $ ./run schema update             # sync Airtable schema
-#   $ ./run orders                    # generate then send orders
-#   $ ./run orders generate           # compile next week's orders
-#   $ ./run orders generate --dry-run # preview without writing
-#   $ ./run orders preview            # show formatted emails
-#   $ ./run orders send               # log emails (doesn't actually send)
 # ------------------------------------------------------------
 
 # Directory containing migration scripts (relative to repository root)

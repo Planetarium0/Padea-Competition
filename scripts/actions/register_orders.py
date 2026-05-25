@@ -176,23 +176,30 @@ def is_item_compatible(item_fields, student_dietary_names, dietary_name_by_id):
 # Exclusion checking
 # ---------------------------------------------------------------------------
 
-def is_student_excluded(student_fields, session_fields, lk):
+def is_student_excluded(student_fields, session_fields, session_date, lk):
+    """Check if a student is excluded from this session on this specific date.
+
+    session_date is the actual date the session occurs next week (sessions
+    recur weekly and are matched by Day, not by the Date field on the record).
+    """
     sess_school = (session_fields.get("School") or [None])[0]
-    sess_date   = session_fields.get("Date")
-    if not sess_school or not sess_date:
+    if not sess_school or not session_date:
         return False
+
+    sess_date_str = session_date.isoformat()
 
     for exc in lk["exclusions"]:
         ef = exc["fields"]
         if (ef.get("School") or [None])[0] != sess_school:
             continue
-        if ef.get("Date") != sess_date:
+        if ef.get("Date") != sess_date_str:
             continue
-        affected = ef.get("Affected Year Levels", "")
-        if "all" in affected.lower():
+        affected = ef.get("Affected Year Levels") or []
+        affected_lower = {a.lower() for a in affected}
+        if not affected or "all" in affected_lower:
             return True
         yr = student_fields.get("Year Level")
-        if yr and str(int(yr)) in affected:
+        if yr is not None and str(int(yr)) in affected:
             return True
     return False
 
@@ -461,18 +468,33 @@ def register_orders(dry_run=False):
         s.log.warning("No sessions found for next week.")
         return
 
-    # Pre-scan: count enrolled students and explicit preferences per caterer.
-    # Used to pick fallback assignment mode and to cap variety to min-qty limits.
+    # Pre-scan: count *eligible* students (not absent / excluded / opted out)
+    # and explicit preferences per caterer. Used to pick fallback assignment
+    # mode and to cap variety so items aren't spread too thin.
     explicit_pref_counts:   defaultdict = defaultdict(int)
     caterer_student_counts: defaultdict = defaultdict(int)
     for sess_rec in next_week_sessions:
-        cid = (sess_rec["fields"].get("Caterer") or [None])[0]
+        sess_id      = sess_rec["id"]
+        sess_fields  = sess_rec["fields"]
+        cid = (sess_fields.get("Caterer") or [None])[0]
         if not cid:
             continue
+        session_date = week_dates.get(sess_fields.get("Day"))
         menu_ids = {item["id"] for item in lk["menu_items_by_caterer"].get(cid, [])}
-        for stu in lk["students_by_session"].get(sess_rec["id"], []):
+        for stu in lk["students_by_session"].get(sess_id, []):
+            stu_id     = stu["id"]
+            stu_fields = stu["fields"]
+            if (stu_id, sess_id) in lk["absent_pairs"]:
+                continue
+            if is_student_excluded(stu_fields, sess_fields, session_date, lk):
+                continue
+            dietary_names = resolve_dietary_names(
+                stu_fields.get("Dietary Requirements"), lk["dietary_name_by_id"]
+            )
+            if "Opted out of Catering" in dietary_names:
+                continue
             caterer_student_counts[cid] += 1
-            pref_ids = stu["fields"].get("Meal Preference") or []
+            pref_ids = stu_fields.get("Meal Preference") or []
             if pref_ids and pref_ids[0] in menu_ids:
                 explicit_pref_counts[cid] += 1
 
@@ -498,10 +520,11 @@ def register_orders(dry_run=False):
     stats = {"assigned": 0, "absent": 0, "excluded": 0, "opted_out": 0, "no_meal": 0}
 
     for sess_rec in next_week_sessions:
-        sess_id     = sess_rec["id"]
-        sess_fields = sess_rec["fields"]
-        sess_label  = sess_fields.get("Session ID", sess_id)
-        day         = sess_fields.get("Day", "?")
+        sess_id      = sess_rec["id"]
+        sess_fields  = sess_rec["fields"]
+        sess_label   = sess_fields.get("Session ID", sess_id)
+        day          = sess_fields.get("Day", "?")
+        session_date = week_dates.get(day)
 
         caterer_links = sess_fields.get("Caterer") or []
         if not caterer_links:
@@ -527,7 +550,7 @@ def register_orders(dry_run=False):
                 stats["absent"] += 1
                 continue
 
-            if is_student_excluded(stu_fields, sess_fields, lk):
+            if is_student_excluded(stu_fields, sess_fields, session_date, lk):
                 stats["excluded"] += 1
                 continue
 

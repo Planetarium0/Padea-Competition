@@ -11,7 +11,6 @@ The on-site manager may collect feedback and share it with us. The on-site manag
 session location (building and room).
 Each Thursday, our program coordinator emails each caterer an order for the following week’s meals, picking a few items off the caterer’s menu and making an educated guess at the best meals and quantities of each meal.
 Students often tell us the selected meals don’t match their taste preferences. Food quality also tends to decline over time with each caterer. Ordering meals is tedious for the program coordinator – and will become a bottleneck for the business.
-The planned fix for this bottleneck is for students to be able to record feedback on their meals (1-5 star rating) and also choose the meals for next week.
 
 This project is aimed at fixing this bottleneck - solving the problem from order to delivery.
 
