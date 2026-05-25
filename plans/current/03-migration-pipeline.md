@@ -14,8 +14,8 @@ Airtable base. Every migration script:
 
 | File | Format | Migrates into |
 |---|---|---|
-| `resources/caterers.xlsx` | Excel | Schools (seeded), Caterers |
-| `resources/sessions.xlsx` | Excel | On-Site Managers, Sessions |
+| `resources/sessions.xlsx` | Excel | Schools, On-Site Managers, Sessions |
+| `resources/caterers.xlsx` | Excel | Caterers |
 | `resources/students.xlsx` | Excel (multi-sheet) | Students |
 | `resources/caterer-contacts.pdf` → `cache/caterer-contacts.txt` | PDF text | Caterers (contact fields) |
 | `resources/caterer-menus.pdf` → `cache/caterer-menus.txt` | PDF text | Caterers (pricing) + Menu Items |
@@ -27,27 +27,22 @@ PDFs are pre-extracted to plain text by `scripts/actions/cache_pdf.py`
 
 ## Migration order (load-bearing)
 
-`./run migrate` runs every script in `scripts/migrations/`. The order is
-alphabetical, but with `dietary_restrictions.py` forcibly bumped to first
-(see the `./run` script). This satisfies all dependencies:
+`./run migrate` delegates to `scripts/migrations/migrate.py`, which calls each
+script's `run()` function in explicit dependency order:
 
 ```
-dietary_restrictions       # static hierarchy; needed by students + menus
-caterers                   # also seeds Schools
-caterer_contacts           # patches Caterers
-caterer_menus              # needs Caterers + Dietary Restrictions
-sessions                   # also creates On-Site Managers; needs Schools + Caterers
-students                   # needs Sessions + Dietary Restrictions
-absences                   # needs Students + Sessions
-exclusions                 # needs Schools
+dietary_restrictions       # (no deps) — full restriction hierarchy
+schools                    # (no deps) — seeded from sessions.xlsx
+caterers                   # (no deps)
+caterer_contacts           # ← caterers, schools
+caterer_menus              # ← caterers, dietary_restrictions
+sessions                   # ← schools, caterers; also seeds On-Site Managers
+students                   # ← sessions, schools, dietary_restrictions
+absences                   # ← students, sessions
+exclusions                 # ← schools
 ```
 
-## Schools are not their own migration
-
-`Schools` is a static seeded list of six names + regions embedded inside
-`migrations/caterers.py` (the `SCHOOLS_DATA` dict). Same list is duplicated as
-`SCHOOLS_DATA` in `students.py` and `SCHOOLS_LIST` in `exclusions.py`.
-(See `plans/problems/`.)
+Individual scripts can still be run standalone for targeted reruns.
 
 ## LLM-extracted fields
 
@@ -57,23 +52,10 @@ Three migrations call `s.ask_llm()` with a JSON-mode prompt:
 - `caterer_menus.py` — extracts menu items, prices, dietary codes.
 - `exclusions.py` — extracts date + school + affected year levels + reason
   from free-text paragraphs.
-- `students.py` — translates raw dietary strings to standardised tag arrays
-  (cached in `cache/dietary_mappings.json` so reruns skip the call).
 
-Each has a regex/keyword fallback for the no-key case. The Kenko Sushi House
-"Big Mom (main point of contact and chef)" case is handled correctly by the
-LLM but the heuristic fallback leaves `Contact Name` blank.
-
-## Dietary mappings cache
-
-`cache/dietary_mappings.json` maps every raw spreadsheet dietary string ever
-seen (e.g. `"No Beef, No Pork"`) to a list of standard restriction names.
-This is *append-only* across runs: missing entries are added by LLM (or
-heuristic), existing entries are reused. Edit by hand to override.
-
-The full taxonomy is in `data/dietary_data.py` —
-`STANDARD_DIETARY_CHOICES` in `migrations/students.py` is a **subset** of
-that, missing `Vegan`, `Kosher`, `Pescatarian`, `No Lamb`. (See problems.)
+Each has a regex/keyword fallback for the no-key case. `students.py` uses a
+comma-split + case-insensitive exact-match heuristic; unrecognised parts are
+logged as errors (no LLM call).
 
 ## Verification
 

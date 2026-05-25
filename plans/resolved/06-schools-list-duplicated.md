@@ -20,9 +20,14 @@ Same applies to `caterer_contacts.py → SCHOOL_MAP`, which has a similar
 keyword-to-canonical-name lookup with extra aliases (`"Moreton Bay Boys
 College"` without apostrophe, etc.).
 
-### Fix
+### Resolution
 
-Move the canonical list (and region mapping) into
-`data/schools_data.py` or similar. Have every migration import
-it. For the keyword aliases, a single shared `resolve_school(raw_str)`
-helper avoids further drift.
+Removed all hardcoded lists. `schools.py` (new) seeds the Schools table by
+reading unique school names and regions directly from `resources/sessions.xlsx`.
+All other migrations (`students.py`, `exclusions.py`, `caterer_contacts.py`)
+now fetch canonical school names from the already-migrated Schools table via
+`s.airtable_get("Schools")`. Fuzzy matching (apostrophe-strip + bidirectional
+substring) is done locally in each script's `_resolve_school` helper.
+
+Every migration script was also wrapped in a `run()` function and a
+`migrate.py` orchestrator was created to call them in explicit dependency order.

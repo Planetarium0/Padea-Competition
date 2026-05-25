@@ -11,7 +11,7 @@ assessment — operator should triage.
 | 03 | `verify_migration.py` checks stale `Meal Feedback` table | High |
 | 04 | `./run script verify_migration` doesn't work | Medium |
 | 05 | Inconsistent imports in migration scripts | Medium |
-| 06 | Schools list duplicated across three files | Medium |
+| 06 | ~~Schools list duplicated across three files~~ | ~~Medium~~ |
 | 07 | Compatibility logic duplicated webapp ↔ register_orders | Medium |
 | 08 | Halal-by-default tag rule is brittle | Medium |
 | 09 | Exclusion heuristic hard-codes May 2026 | Medium |

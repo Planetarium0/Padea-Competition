@@ -27,15 +27,16 @@ Usage:
   $0 qr [--origin URL_ORIGIN] [--base-url URL] [--session ID]
 
 resource can be one of:
-  diet, caterers, contacts, menus, sessions, students, absences, exclusions, all
+  diet, schools, caterers, contacts, menus, sessions, students, absences, exclusions, all
 
-If no resource is supplied, all migrations are run.
+If no resource is supplied, all migrations are run in dependency order.
 EOF
 }
 
 # Resolve short resource names to script filenames
 declare -A RES_MAP=(
     [diet]="dietary_restrictions.py"
+    [schools]="schools.py"
     [caterers]="caterers.py"
     [contacts]="caterer_contacts.py"
     [menus]="caterer_menus.py"
@@ -147,19 +148,8 @@ run_one() {
 # ------------------------------------------------------------
 # Main execution
 if [[ "$RESOURCE" == "all" ]]; then
-    echo "Migrating all resources"
-    # Dietary Restrictions must run first — students.py and caterer_menus.py
-    # both depend on it for name → record-id lookups.
-    diet_script="$MIGRATION_DIR/dietary_restrictions.py"
-    if [[ -f "$diet_script" ]]; then
-        run_one "$diet_script"
-    fi
-    for script in "$MIGRATION_DIR"/*.py; do
-        base="$(basename "$script")"
-        [[ "$base" == "__init__.py" ]] && continue
-        [[ "$base" == "dietary_restrictions.py" ]] && continue
-        run_one "$script"
-    done
+    echo "Migrating all resources (dependency order)..."
+    python "$MIGRATION_DIR/migrate.py"
 else
     script_file="${RES_MAP[$RESOURCE]}"
     if [[ -z "$script_file" ]]; then

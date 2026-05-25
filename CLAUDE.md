@@ -22,7 +22,7 @@ The current state of the project is stored in `plans/current/00-overview.md`.
 # Migrate all resources
 ./run migrate
 
-# Migrate a single resource (caterers, contacts, menus, sessions, students, absences, exclusions)
+# Migrate a single resource (schools, diet, caterers, contacts, menus, sessions, students, absences, exclusions)
 ./run migrate caterers
 
 # Initialize / sync Airtable schema (idempotent — run before first migration)
@@ -77,14 +77,21 @@ Each `migrations/*.py` script follows the same pattern:
 
 ### Migration order matters
 
-Dependencies flow in this order — run `caterers` before `contacts`/`menus`, `sessions` before `students`/`absences`/`exclusions`:
+Each migration exposes a `run()` function. `migrate.py` calls them in dependency order:
 
 ```
-caterers → caterer_contacts → caterer_menus
-sessions → students → absences → exclusions
+dietary_restrictions        # (no deps)
+schools                     # (no deps — seeded from sessions.xlsx)
+caterers                    # (no deps)
+caterer_contacts            # ← caterers, schools
+caterer_menus               # ← caterers, dietary_restrictions
+sessions                    # ← schools, caterers
+students                    # ← sessions, schools, dietary_restrictions
+absences                    # ← students, sessions
+exclusions                  # ← schools
 ```
 
-`./run migrate` runs all scripts via glob (`migrations/*.py`) — alphabetical order currently satisfies these dependencies.
+`./run migrate` delegates to `scripts/migrations/migrate.py`. Individual scripts can still be run standalone (`python migrations/caterers.py`) for targeted reruns.
 
 ### LLM fallback behaviour
 
