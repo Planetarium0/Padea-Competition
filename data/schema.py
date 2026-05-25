@@ -1,4 +1,6 @@
-TABLES_SCHEMA = {
+from typing import Any
+
+TABLES_SCHEMA: dict[str, dict[str, Any]] = {
     "Schools": {
         "primary": {"name": "School Name", "type": "singleLineText"},
         "fields": [

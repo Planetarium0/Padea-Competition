@@ -1,128 +1,102 @@
-import os
-import json
+"""
+Shared support module — logger, LLM helper, and re-exports of the typed
+:class:`Database` / :class:`Table` / :class:`Record` API.
+
+Importing ``support as s`` gives migration / action scripts everything they
+need: ``s.log`` for logging, ``s.ask_llm`` for LLM extraction, and the
+top-level types for callers that want to type-annotate function signatures.
+"""
+
+from __future__ import annotations
+
 import logging
+import os
+from typing import Any
+
 from dotenv import load_dotenv
-from pyairtable import Api
+
+from .database import Database, Record, Table  # noqa: F401 — re-exported
 from .prompt_user import prompt_user
 
-# Initialize dotenv first so LOG_LEVEL can be read from .env
+# Initialise dotenv first so LOG_LEVEL can be read from .env.
 load_dotenv()
+
 
 # ---------------------------------------------------------------------------
 # Custom VERBOSE level — sits below DEBUG (10) at level 5.
 # Enabled only when LOG_LEVEL=verbose; invisible at info/warning/error.
 # ---------------------------------------------------------------------------
-VERBOSE = 5
+
+VERBOSE: int = 5
 logging.addLevelName(VERBOSE, "VERBOSE")
 
-def _verbose(self, message, *args, **kwargs):
+
+def _verbose(self: logging.Logger, message: str, *args: Any, **kwargs: Any) -> None:
     if self.isEnabledFor(VERBOSE):
         self._log(VERBOSE, message, args, **kwargs)
 
-logging.Logger.verbose = _verbose
+
+logging.Logger.verbose = _verbose  # type: ignore[attr-defined]
+
 
 # ---------------------------------------------------------------------------
 # Resolve level from LOG_LEVEL env var.
 # Accepted values (case-insensitive): verbose, info, warning, error
 # ---------------------------------------------------------------------------
-_LOG_LEVEL_MAP = {
+
+_LOG_LEVEL_MAP: dict[str, int] = {
     "verbose": VERBOSE,
     "info":    logging.INFO,
     "warning": logging.WARNING,
     "error":   logging.ERROR,
 }
-_log_level = _LOG_LEVEL_MAP.get(
+_log_level: int = _LOG_LEVEL_MAP.get(
     os.environ.get("LOG_LEVEL", "info").lower(),
     logging.INFO,
 )
 
-logging.basicConfig(level=_log_level, format='%(asctime)s [%(levelname)s] %(message)s')
-log = logging.getLogger("PadeaMigration")
+logging.basicConfig(
+    level=_log_level,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+log: logging.Logger = logging.getLogger("PadeaMigration")
 log.setLevel(_log_level)
 
-# Initialize Airtable
-AIRTABLE_API_KEY = os.environ.get("AIRTABLE_API_KEY")
-AIRTABLE_ID = os.environ.get("AIRTABLE_ID")
 
-if not AIRTABLE_API_KEY or not AIRTABLE_ID:
-    log.error("Missing Airtable configuration in .env!")
+# ---------------------------------------------------------------------------
+# LLM helper
+# ---------------------------------------------------------------------------
 
-api = Api(AIRTABLE_API_KEY) if AIRTABLE_API_KEY else None
-base = api.base(AIRTABLE_ID) if api and AIRTABLE_ID else None
+def ask_llm(prompt: str) -> str | None:
+    """Send a prompt to Claude (Anthropic SDK) or fall back to a Tk prompt.
 
-def get_table(name):
-    if not base:
-        raise ValueError("Airtable Base is not initialized. Check your .env file.")
-    return base.table(name)
-
-def airtable_get(table_name, filter_formula=None):
-    try:
-        table = get_table(table_name)
-        if filter_formula:
-            return table.all(formula=filter_formula)
-        return table.all()
-    except Exception as e:
-        log.error(f"Error fetching from Airtable table {table_name}: {e}")
-        return []
-
-def airtable_post(table_name, records):
+    Returns the model's text response, or ``None`` if both routes fail.
     """
-    Posts records to Airtable.
-    records can be a list of dicts:
-      - either: [{"fields": {...}}]
-      - or: [{...}] (flat list of fields)
-    """
-    if not records:
-        return []
-    
-    formatted_records = []
-    for r in records:
-        if isinstance(r, dict) and "fields" in r:
-            formatted_records.append(r["fields"])
-        else:
-            formatted_records.append(r)
-            
-    table = get_table(table_name)
-    inserted_records = []
-    # Batch in 10s
-    for i in range(0, len(formatted_records), 10):
-        batch = formatted_records[i:i+10]
-        try:
-            res = table.batch_create(batch)
-            inserted_records.extend(res)
-        except Exception as e:
-            log.error(f"Error posting batch to table {table_name}: {e}")
-            raise e
-    return inserted_records
-
-def clear_table(table_name):
-    table = get_table(table_name)
-    try:
-        records = table.all()
-        if not records:
-            return
-        record_ids = [r["id"] for r in records]
-        log.info(f"Clearing {len(record_ids)} records from {table_name}")
-        for i in range(0, len(record_ids), 10):
-            table.batch_delete(record_ids[i:i+10])
-    except Exception as e:
-        log.warning(f"Failed to clear table {table_name}: {e}")
-
-def ask_llm(prompt):
     key = os.environ.get("CLAUDE_CODE_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
     if not key:
         log.warning("No Claude or Anthropic API key found. LLM queries will try prompt the user.")
-        answer = prompt_user(prompt)
-        return answer
+        return prompt_user(prompt)
     try:
         from anthropic import Anthropic
+
         client = Anthropic(api_key=key)
         response = client.messages.create(
             model="claude-3-5-sonnet-latest",
             max_tokens=4000,
-            messages=[{"role": "user", "content": prompt}]
+            messages=[{"role": "user", "content": prompt}],
         )
-        return response.content[0].text
+        block = response.content[0]
+        return getattr(block, "text", None)
     except Exception as e:
         log.error(f"Error calling Anthropic API: {e}")
-        return NotImplemented
+        return None
+
+
+__all__ = [
+    "Database",
+    "Record",
+    "Table",
+    "ask_llm",
+    "log",
+    "VERBOSE",
+]

@@ -1,28 +1,30 @@
-import sys
+from __future__ import annotations
+
 import re
+import sys
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-import support as s
+
+from support import AbsenceFields, Database, log
 
 
-def run():
-    s.log.info("Migrating absences.pdf → Airtable")
-    s.clear_table("Absences")
+@dataclass(frozen=True)
+class _ParsedAbsence:
+    school_name: str
+    date: str  # ISO yyyy-mm-dd
+    student_name: str
 
-    txt_path = Path.cwd() / "cache" / "absences.txt"
-    if not txt_path.is_file():
-        s.log.error(f"Extracted absences text not found at {txt_path}. Run PDF extraction first.")
-        sys.exit(1)
 
-    raw_text = txt_path.read_text(encoding="utf-8")
+def _parse_date(date_str: str) -> str:
+    parts = date_str.split("/")
+    if len(parts) == 3:
+        return f"{parts[2]}-{parts[1]}-{parts[0]}"
+    return date_str
 
-    def parse_date(date_str):
-        parts = date_str.split("/")
-        if len(parts) == 3:
-            return f"{parts[2]}-{parts[1]}-{parts[0]}"
-        return date_str
 
-    parsed_absences = []
+def _parse_absences(raw_text: str) -> list[_ParsedAbsence]:
+    parsed: list[_ParsedAbsence] = []
     for blk in re.split(r"\n\s*\n", raw_text.strip()):
         lines = [l.strip() for l in blk.splitlines() if l.strip()]
         if not lines:
@@ -30,56 +32,77 @@ def run():
 
         match = re.match(r"^([^-]+)-\s*([\d/]+)\s*Absences", lines[0])
         if not match:
-            s.log.warning(f"Could not parse absence header line: '{lines[0]}'")
+            log.warning(f"Could not parse absence header line: '{lines[0]}'")
             continue
 
-        school_name  = match.group(1).strip()
-        session_date = parse_date(match.group(2).strip())
+        school_name = match.group(1).strip()
+        session_date = _parse_date(match.group(2).strip())
 
         for student_name in lines[1:]:
             if student_name.lower() == "nan" or not student_name:
                 continue
-            parsed_absences.append({
-                "school_name":  school_name,
-                "date":         session_date,
-                "student_name": student_name,
-            })
+            parsed.append(_ParsedAbsence(
+                school_name=school_name,
+                date=session_date,
+                student_name=student_name,
+            ))
+    return parsed
 
-    s.log.info(f"Parsed {len(parsed_absences)} student absences from PDF.")
 
-    students_list      = s.airtable_get("Students")
-    student_name_to_id = {rec["fields"]["Student Name"]: rec["id"] for rec in students_list}
+def run(db: Database | None = None) -> None:
+    db = db or Database.from_env()
+    log.info("Migrating absences.pdf → Airtable")
+    db.Absences.clear()
 
-    sessions_list          = s.airtable_get("Sessions")
-    session_id_to_rec_id   = {rec["fields"]["Session ID"]: rec["id"] for rec in sessions_list}
+    txt_path = Path.cwd() / "cache" / "absences.txt"
+    if not txt_path.is_file():
+        log.error(f"Extracted absences text not found at {txt_path}. Run PDF extraction first.")
+        sys.exit(1)
 
-    records = []
+    raw_text = txt_path.read_text(encoding="utf-8")
+    parsed_absences = _parse_absences(raw_text)
+    log.info(f"Parsed {len(parsed_absences)} student absences from PDF.")
+
+    student_name_to_id = {
+        r.fields["Student Name"]: r.id
+        for r in db.Students.all()
+        if "Student Name" in r.fields
+    }
+    session_id_to_rec_id = {
+        r.fields["Session ID"]: r.id
+        for r in db.Sessions.all()
+        if "Session ID" in r.fields
+    }
+
+    records: list[AbsenceFields] = []
     for abs_data in parsed_absences:
-        s_name = abs_data["student_name"]
-        s_id   = student_name_to_id.get(s_name)
-        if not s_id:
-            s.log.warning(f"Student '{s_name}' absent at {abs_data['school_name']} but not found in Students table. Skipping.")
+        student_id = student_name_to_id.get(abs_data.student_name)
+        if not student_id:
+            log.warning(
+                f"Student '{abs_data.student_name}' absent at {abs_data.school_name} "
+                f"but not found in Students table. Skipping."
+            )
             continue
 
-        day_name    = datetime.strptime(abs_data["date"], "%Y-%m-%d").strftime("%A")
-        session_id  = f"{abs_data['school_name']} - {day_name}"
+        day_name = datetime.strptime(abs_data.date, "%Y-%m-%d").strftime("%A")
+        session_id = f"{abs_data.school_name} - {day_name}"
         sess_rec_id = session_id_to_rec_id.get(session_id)
         if not sess_rec_id:
-            s.log.warning(f"No session '{session_id}' for absence of '{s_name}'. Skipping.")
+            log.warning(f"No session '{session_id}' for absence of '{abs_data.student_name}'. Skipping.")
             continue
 
         records.append({
-            "Absence ID": f"{s_name} - {abs_data['school_name']} - {abs_data['date']}",
-            "Student":    [s_id],
+            "Absence ID": f"{abs_data.student_name} - {abs_data.school_name} - {abs_data.date}",
+            "Student":    [student_id],
             "Session":    [sess_rec_id],
-            "Date":       abs_data["date"],
+            "Date":       abs_data.date,
             "Reason":     "Absent",
         })
 
     if records:
-        s.log.info(f"Migrating {len(records)} Absences records...")
-        s.airtable_post("Absences", records)
-    s.log.info("Absences migration completed successfully.")
+        log.info(f"Migrating {len(records)} Absences records...")
+        db.Absences.create(records)
+    log.info("Absences migration completed successfully.")
 
 
 if __name__ == "__main__":

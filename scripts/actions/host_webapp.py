@@ -18,19 +18,20 @@ After starting, generate matching QR codes with:
     ./run qr --origin http://<printed-ip>:<port>
 """
 
+from __future__ import annotations
+
 import argparse
-import os
 import socket
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-WEBAPP_DIR   = PROJECT_ROOT / "webapp"
-DATA_DIR     = PROJECT_ROOT / "data"
+WEBAPP_DIR = PROJECT_ROOT / "webapp"
+DATA_DIR = PROJECT_ROOT / "data"
 DEFAULT_PORT = 8000
 
 
-def local_ip():
+def local_ip() -> str:
     """Best-guess LAN IP by connecting a UDP socket (never actually sends)."""
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -45,7 +46,7 @@ def local_ip():
 class PadeaHandler(SimpleHTTPRequestHandler):
     """Maps URL prefixes to two whitelisted directories on disk."""
 
-    def translate_path(self, path):
+    def translate_path(self, path: str) -> str:
         # Strip query string + normalise (parent does this, but we want the
         # path relative to *our* roots, not cwd).
         path = path.split("?", 1)[0].split("#", 1)[0]
@@ -60,8 +61,8 @@ class PadeaHandler(SimpleHTTPRequestHandler):
         return str(WEBAPP_DIR.joinpath(*parts))
 
 
-def main(port=DEFAULT_PORT):
-    ip     = local_ip()
+def main(port: int = DEFAULT_PORT) -> None:
+    ip = local_ip()
     origin = f"http://{ip}:{port}"
 
     print(f"Webapp:   {WEBAPP_DIR}")

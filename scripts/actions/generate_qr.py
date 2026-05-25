@@ -13,11 +13,13 @@ Usage:
   python scripts/generate_qr.py [--base-url URL] [--session SESSION_ID]
 """
 
-import os
-import sys
+from __future__ import annotations
+
 import argparse
+import os
 from pathlib import Path
-import support as s
+
+from support import Database, log
 
 try:
     import qrcode
@@ -32,7 +34,11 @@ OUTPUT_DIR = Path.cwd() / "output" / "qrcodes"
 WEBAPP_PATH = Path.cwd() / "webapp" / "meals.html"
 
 
-def make_session_url(session_id, base_url=None, origin=None):
+def make_session_url(
+    session_id: str,
+    base_url: str | None = None,
+    origin: str | None = None,
+) -> str:
     if origin:
         return f"{origin.rstrip('/')}/meals.html?session={session_id}"
     if base_url:
@@ -42,7 +48,7 @@ def make_session_url(session_id, base_url=None, origin=None):
     return f"file://{abs_path}?session={session_id}"
 
 
-def generate_qr(url, output_path):
+def generate_qr(url: str, output_path: Path) -> None:
     qr = qrcode.QRCode(
         version=None,
         error_correction=qrcode.constants.ERROR_CORRECT_M,
@@ -61,40 +67,47 @@ def generate_qr(url, output_path):
         img = qr.make_image(fill_color="black", back_color="white")
 
     img.save(output_path)
-    s.log.info(f"  QR saved: {output_path}")
+    log.info(f"  QR saved: {output_path}")
 
 
-def main(base_url=None, origin=None, filter_session=None):
-    sessions = s.airtable_get("Sessions")
+def main(
+    base_url: str | None = None,
+    origin: str | None = None,
+    filter_session: str | None = None,
+    db: Database | None = None,
+) -> None:
+    db = db or Database.from_env()
+    sessions = db.Sessions.all()
 
     if not sessions:
-        s.log.warning("No sessions found in Airtable.")
+        log.warning("No sessions found in Airtable.")
         return
 
     if filter_session:
-        sessions = [sess for sess in sessions if sess["id"] == filter_session
-                    or sess["fields"].get("Session ID") == filter_session]
+        sessions = [
+            sess for sess in sessions
+            if sess.id == filter_session or sess.fields.get("Session ID") == filter_session
+        ]
         if not sessions:
-            s.log.error(f"Session '{filter_session}' not found.")
+            log.error(f"Session '{filter_session}' not found.")
             return
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    s.log.info(f"Generating QR codes for {len(sessions)} session(s) → {OUTPUT_DIR}")
+    log.info(f"Generating QR codes for {len(sessions)} session(s) → {OUTPUT_DIR}")
 
     for sess in sessions:
-        sess_id = sess["id"]
-        sess_label = sess["fields"].get("Session ID", sess_id)
+        sess_label = sess.fields.get("Session ID", sess.id)
 
-        url = make_session_url(sess_id, base_url=base_url, origin=origin)
+        url = make_session_url(sess.id, base_url=base_url, origin=origin)
         safe_name = sess_label.replace(" ", "_").replace("/", "-")
         out_path = OUTPUT_DIR / f"{safe_name}.png"
 
-        s.log.info(f"Session: {sess_label}")
-        s.log.info(f"  URL: {url}")
+        log.info(f"Session: {sess_label}")
+        log.info(f"  URL: {url}")
         generate_qr(url, out_path)
 
-    s.log.info(f"\nDone. {len(sessions)} QR code(s) written to {OUTPUT_DIR}")
+    log.info(f"\nDone. {len(sessions)} QR code(s) written to {OUTPUT_DIR}")
 
 
 if __name__ == "__main__":

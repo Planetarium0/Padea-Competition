@@ -1,2 +1,55 @@
-# Package initialization for scripts
-from .support import *
+"""Package initialization for the support module."""
+
+from .database import Database, Record, Table
+from .records import (
+    AbsenceFields,
+    CatererFeedbackFields,
+    CatererFields,
+    CatererSwitchProposalFields,
+    DayName,
+    DeliveryFeeStructure,
+    DietaryRestrictionFields,
+    EmailStatus,
+    ExclusionFields,
+    MenuItemFields,
+    OnSiteManagerFields,
+    OrderFields,
+    ProposalStatus,
+    Region,
+    ScheduledEmailFields,
+    SchoolFields,
+    SessionFields,
+    StudentFields,
+    WeeklyOrderFields,
+    YearLevel,
+)
+from .support import VERBOSE, ask_llm, log
+
+__all__ = [
+    "AbsenceFields",
+    "CatererFeedbackFields",
+    "CatererFields",
+    "CatererSwitchProposalFields",
+    "Database",
+    "DayName",
+    "DeliveryFeeStructure",
+    "DietaryRestrictionFields",
+    "EmailStatus",
+    "ExclusionFields",
+    "MenuItemFields",
+    "OnSiteManagerFields",
+    "OrderFields",
+    "ProposalStatus",
+    "Record",
+    "Region",
+    "ScheduledEmailFields",
+    "SchoolFields",
+    "SessionFields",
+    "StudentFields",
+    "Table",
+    "VERBOSE",
+    "WeeklyOrderFields",
+    "YearLevel",
+    "ask_llm",
+    "log",
+]

@@ -1,9 +1,10 @@
 import tkinter as tk
 
-def prompt_user(question: str) -> str:
-    result = {"answer": None}
 
-    def submit():
+def prompt_user(question: str) -> str:
+    result: dict[str, str | None] = {"answer": None}
+
+    def submit() -> None:
         result["answer"] = answer_box.get("1.0", tk.END).strip()
         root.destroy()
 
@@ -26,4 +27,4 @@ def prompt_user(question: str) -> str:
 
     root.mainloop()
 
-    return result["answer"]
+    return result["answer"] or ""

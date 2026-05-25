@@ -11,24 +11,60 @@ Usage:
   python scripts/send_orders.py [--preview]
 """
 
+from __future__ import annotations
+
 import argparse
-from datetime import datetime, timedelta
 from collections import defaultdict
-import support as s
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+
+from support import (
+    CatererFields,
+    Database,
+    MenuItemFields,
+    OnSiteManagerFields,
+    Record,
+    SchoolFields,
+    SessionFields,
+    WeeklyOrderFields,
+    log,
+)
+
+
+# ---------------------------------------------------------------------------
+# Per-line data carried into the email template
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class SessionContext:
+    """Session fields enriched with the school + on-site manager details
+    needed by the email template."""
+
+    fields:          SessionFields
+    school_name:     str
+    manager_name:    str | None
+    manager_mobile: str | None
+
+
+@dataclass(frozen=True)
+class LineItem:
+    quantity:  int
+    session:   SessionContext
+    menu_item: MenuItemFields
 
 
 # ---------------------------------------------------------------------------
 # Time helpers
 # ---------------------------------------------------------------------------
 
-def subtract_minutes(time_str, minutes=10):
+def subtract_minutes(time_str: str | None, minutes: int = 10) -> str:
     """Parse a time string, subtract minutes, return a formatted string.
 
     Handles common formats like '6:30 PM', '18:30', '6:30pm'.
     Returns the original string unchanged if parsing fails.
     """
     if not time_str or time_str == "?":
-        return time_str
+        return time_str or "?"
     for fmt in ("%I:%M %p", "%H:%M", "%I:%M%p"):
         try:
             t = datetime.strptime(time_str.strip().upper(), fmt.upper())
@@ -43,20 +79,29 @@ def subtract_minutes(time_str, minutes=10):
 # Schedule email — writes to Airtable 'Scheduled Emails' table
 # ---------------------------------------------------------------------------
 
-def schedule_email(to_email, cc_email, subject, body, email_id, immediate=False,
-                   weekly_order_id=None, caterer_switch_proposal_id=None):
+def schedule_email(
+    db:                          Database,
+    to_email:                    str,
+    cc_email:                    str | None,
+    subject:                     str,
+    body:                        str,
+    email_id:                    str,
+    immediate:                   bool = False,
+    weekly_order_id:             str | None = None,
+    caterer_switch_proposal_id:  str | None = None,
+) -> None:
     """Create a Queued record in the Scheduled Emails table.
 
-    Exactly one of weekly_order_id or caterer_switch_proposal_id should be
-    provided so the email is traceable back to its source record.
+    Exactly one of ``weekly_order_id`` or ``caterer_switch_proposal_id`` should
+    be provided so the email is traceable back to its source record.
     """
-    fields = {
-        "Email ID": email_id,
-        "To": to_email,
-        "Subject": subject,
-        "Body": body,
-        "Status": "Send Immediately" if immediate else "Queued",
-        "Send Date": None, # set when actually sent by automation
+    fields: dict[str, object] = {
+        "Email ID":  email_id,
+        "To":        to_email,
+        "Subject":   subject,
+        "Body":      body,
+        "Status":    "Send Immediately" if immediate else "Queued",
+        "Send Date": None,  # set when actually sent by automation
     }
     if cc_email:
         fields["CC"] = cc_email
@@ -64,36 +109,34 @@ def schedule_email(to_email, cc_email, subject, body, email_id, immediate=False,
         fields["Weekly Order"] = [weekly_order_id]
     if caterer_switch_proposal_id:
         fields["Caterer Switch Proposal"] = [caterer_switch_proposal_id]
-    s.airtable_post("Scheduled Emails", [{"fields": fields}])
-    s.log.info(f"[QUEUED] Email record created: {email_id}")
+    db.ScheduledEmails.create([fields])
+    log.info(f"[QUEUED] Email record created: {email_id}")
 
 
 # ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
 
-def load_pending_orders():
-    orders = s.airtable_get("Weekly Orders", filter_formula="{Week Start} >= TODAY()")
-    s.log.info(f"Found {len(orders)} Weekly Orders")
+def load_pending_orders(db: Database) -> list[Record[WeeklyOrderFields]]:
+    orders = db.WeeklyOrders.all(formula="{Week Start} >= TODAY()")
+    log.info(f"Found {len(orders)} Weekly Orders")
     return orders
 
 
-def load_order_details(weekly_order_record):
-    """
-    Aggregate individual Orders records for a Weekly Order into line items.
-
-    Returns (caterer_fields, line_items) where each line item is:
-      {"quantity": int, "session": session_fields_dict, "menu_item": item_fields_dict}
-    The session dict has extra keys "_school_name", "_manager_name", "_manager_mobile".
-    """
-    wo_id     = weekly_order_record["id"]
-    wo_fields = weekly_order_record["fields"]
+def load_order_details(
+    db:                    Database,
+    weekly_order_record:   Record[WeeklyOrderFields],
+) -> tuple[CatererFields, list[LineItem]]:
+    """Aggregate individual Orders records for a Weekly Order into line items."""
+    wo_id     = weekly_order_record.id
+    wo_fields = weekly_order_record.fields
 
     caterer_id     = (wo_fields.get("Caterer") or [None])[0]
-    caterer_fields = {}
+    caterer_fields: CatererFields = {}
     if caterer_id:
-        rec = s.get_table("Caterers").get(caterer_id)
-        caterer_fields = rec["fields"] if rec else {}
+        rec = db.Caterers.get(caterer_id)
+        if rec:
+            caterer_fields = rec.fields
 
     # Fetch Orders for this week by date range, then filter by record ID
     # client-side. ARRAYJOIN({Weekly Order}) returns primary-field values, not
@@ -102,71 +145,76 @@ def load_order_details(weekly_order_record):
     if week_start:
         monday = datetime.strptime(week_start, "%Y-%m-%d").date()
         friday = (monday + timedelta(days=4)).isoformat()
-        all_orders = s.airtable_get(
-            "Orders",
-            filter_formula=f"AND({{Date}} >= '{week_start}', {{Date}} <= '{friday}')"
+        all_orders = db.Orders.all(
+            formula=f"AND({{Date}} >= '{week_start}', {{Date}} <= '{friday}')",
         )
     else:
-        all_orders = s.airtable_get("Orders")
+        all_orders = db.Orders.all()
     individual_orders = [
         o for o in all_orders
-        if wo_id in (o["fields"].get("Weekly Order") or [])
+        if wo_id in (o.fields.get("Weekly Order") or [])
     ]
-    s.log.info(f"  Found {len(individual_orders)} individual order records")
+    log.info(f"  Found {len(individual_orders)} individual order records")
 
     # Aggregate: session_id → item_id → count
-    session_item_counts = defaultdict(lambda: defaultdict(int))
-    all_session_ids = set()
-    all_item_ids    = set()
+    session_item_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    all_session_ids: set[str] = set()
+    all_item_ids: set[str] = set()
 
     for order in individual_orders:
-        sess_id  = (order["fields"].get("Session")   or [None])[0]
-        item_id  = (order["fields"].get("Menu Item") or [None])[0]
-        quantity = order["fields"].get("Quantity", 1)
+        sess_id  = (order.fields.get("Session")   or [None])[0]
+        item_id  = (order.fields.get("Menu Item") or [None])[0]
+        quantity = order.fields.get("Quantity", 1)
         if sess_id and item_id:
             session_item_counts[sess_id][item_id] += quantity
             all_session_ids.add(sess_id)
             all_item_ids.add(item_id)
 
-    sessions_tbl  = s.get_table("Sessions")
-    items_tbl     = s.get_table("Menu Items")
-    schools_tbl   = s.get_table("Schools")
-    managers_tbl  = s.get_table("On-Site Managers")
-
-    session_map = {}
+    session_map: dict[str, SessionContext] = {}
     for sid in all_session_ids:
-        rec = sessions_tbl.get(sid)
+        rec = db.Sessions.get(sid)
         if not rec:
             continue
-        sf = rec["fields"]
+        sf = rec.fields
+        school_name = "?"
+        manager_name: str | None = None
+        manager_mobile: str | None = None
+
         school_links = sf.get("School") or []
         if school_links:
-            s_rec = schools_tbl.get(school_links[0])
+            s_rec: Record[SchoolFields] | None = db.Schools.get(school_links[0])
             if s_rec:
-                sf["_school_name"] = s_rec["fields"].get("School Name", "?")
+                school_name = s_rec.fields.get("School Name", "?")
         mgr_links = sf.get("On-Site Manager") or []
         if mgr_links:
-            m_rec = managers_tbl.get(mgr_links[0])
+            m_rec: Record[OnSiteManagerFields] | None = db.OnSiteManagers.get(mgr_links[0])
             if m_rec:
-                sf["_manager_name"]   = m_rec["fields"].get("Manager Name", "?")
-                sf["_manager_mobile"] = m_rec["fields"].get("Mobile", "?")
-        session_map[sid] = sf
+                manager_name   = m_rec.fields.get("Manager Name")
+                manager_mobile = m_rec.fields.get("Mobile")
 
-    item_map = {}
+        session_map[sid] = SessionContext(
+            fields=sf,
+            school_name=school_name,
+            manager_name=manager_name,
+            manager_mobile=manager_mobile,
+        )
+
+    item_map: dict[str, MenuItemFields] = {}
     for mid in all_item_ids:
-        rec = items_tbl.get(mid)
+        rec = db.MenuItems.get(mid)
         if rec:
-            item_map[mid] = rec["fields"]
+            item_map[mid] = rec.fields
 
-    line_items = [
-        {
-            "quantity":  count,
-            "session":   session_map.get(sess_id, {}),
-            "menu_item": item_map.get(item_id, {}),
-        }
-        for sess_id, item_counts in session_item_counts.items()
-        for item_id, count in item_counts.items()
-    ]
+    line_items: list[LineItem] = []
+    for sess_id, item_counts in session_item_counts.items():
+        sess_ctx = session_map.get(sess_id)
+        if sess_ctx is None:
+            continue
+        for item_id, count in item_counts.items():
+            menu = item_map.get(item_id)
+            if menu is None:
+                continue
+            line_items.append(LineItem(quantity=count, session=sess_ctx, menu_item=menu))
 
     return caterer_fields, line_items
 
@@ -175,8 +223,11 @@ def load_order_details(weekly_order_record):
 # Email formatting — Markdown (Airtable-supported subset, no tables)
 # ---------------------------------------------------------------------------
 
-
-def format_email_body(wo_fields, caterer_fields, line_items):
+def format_email_body(
+    wo_fields:      WeeklyOrderFields,
+    caterer_fields: CatererFields,
+    line_items:     list[LineItem],
+) -> str:
     """Return a Markdown email body using only Airtable-supported formatting."""
     week_start  = wo_fields.get("Week Start", "?")
     total_meals = wo_fields.get("Total Meals", 0)
@@ -192,23 +243,23 @@ def format_email_body(wo_fields, caterer_fields, line_items):
     except (ValueError, TypeError):
         week_display = week_start
 
-    by_session = defaultdict(list)
+    by_session: dict[str, list[LineItem]] = defaultdict(list)
     for li in line_items:
-        by_session[li["session"].get("Session ID", "unknown")].append(li)
+        by_session[li.session.fields.get("Session ID", "unknown")].append(li)
 
     num_deliveries = 0
-    blocks = []
+    blocks: list[str] = []
 
     for sess_key in sorted(by_session):
         items = by_session[sess_key]
-        sess  = items[0]["session"]
+        sess  = items[0].session
 
-        day            = sess.get("Day", "?")
-        school_name    = sess.get("_school_name", "?")
-        dinner_time    = sess.get("Dinner Time", "?")
-        building       = sess.get("Building", "")
-        manager_name   = sess.get("_manager_name", "")
-        manager_mobile = sess.get("_manager_mobile", "")
+        day            = sess.fields.get("Day", "?")
+        school_name    = sess.school_name
+        dinner_time    = sess.fields.get("Dinner Time", "?")
+        building       = sess.fields.get("Building", "")
+        manager_name   = sess.manager_name or ""
+        manager_mobile = sess.manager_mobile or ""
 
         deliver_by = subtract_minutes(dinner_time)
 
@@ -224,11 +275,10 @@ def format_email_body(wo_fields, caterer_fields, line_items):
 
         block.append("")
         session_total = 0
-        for li in sorted(items, key=lambda x: -x["quantity"]):
-            item_name = li["menu_item"].get("Menu Item Name", "?")
-            qty       = li["quantity"]
-            session_total += qty
-            block.append(f"- {item_name} ×{qty}")
+        for li in sorted(items, key=lambda x: -x.quantity):
+            item_name = li.menu_item.get("Menu Item Name", "?")
+            session_total += li.quantity
+            block.append(f"- {item_name} ×{li.quantity}")
 
         block.append("")
         block.append(f"**Subtotal: {session_total} meals**")
@@ -261,21 +311,22 @@ def format_email_body(wo_fields, caterer_fields, line_items):
 # Main pipeline
 # ---------------------------------------------------------------------------
 
-def process_orders(preview_only=False):
-    pending_orders = load_pending_orders()
+def process_orders(db: Database | None = None, preview_only: bool = False) -> None:
+    db = db or Database.from_env()
+    pending_orders = load_pending_orders(db)
     if not pending_orders:
-        s.log.info("No pending orders to process.")
+        log.info("No pending orders to process.")
         return
 
     for wo_record in pending_orders:
-        wo_fields    = wo_record["fields"]
-        wo_id_label  = wo_fields.get("Order ID", wo_record["id"])
-        s.log.info(f"\nProcessing: {wo_id_label}")
+        wo_fields   = wo_record.fields
+        wo_id_label = wo_fields.get("Order ID", wo_record.id)
+        log.info(f"\nProcessing: {wo_id_label}")
 
-        caterer_fields, line_items = load_order_details(wo_record)
+        caterer_fields, line_items = load_order_details(db, wo_record)
 
         if not line_items:
-            s.log.warning(f"No order records found for '{wo_id_label}' — skipping.")
+            log.warning(f"No order records found for '{wo_id_label}' — skipping.")
             continue
 
         week_start = wo_fields.get("Week Start", "?")
@@ -290,31 +341,22 @@ def process_orders(preview_only=False):
             if caterer_fields.get("Chef Wants CC")
             else None
         )
-        subject  = f"Padea Meal Order — Week of {week_display}"
-        body     = format_email_body(wo_fields, caterer_fields, line_items)
-
-        # Don't preview email
-        # print(f"\n{'='*62}")
-        # print(f"To:      {contact_email}")
-        # if chef_email:
-        #     print(f"CC:      {chef_email}")
-        # print(f"Subject: {subject}")
-        # print()
-        # print(body)
-        # print("=" * 62)
+        subject = f"Padea Meal Order — Week of {week_display}"
+        body    = format_email_body(wo_fields, caterer_fields, line_items)
 
         if not preview_only:
-            email_id  = f"EMAIL-{week_start}-{wo_record['id'][:8]}"
+            email_id = f"EMAIL-{week_start}-{wo_record.id[:8]}"
             schedule_email(
+                db,
                 to_email=contact_email,
                 cc_email=chef_email,
                 subject=subject,
                 body=body,
                 email_id=email_id,
-                weekly_order_id=wo_record["id"],
+                weekly_order_id=wo_record.id,
             )
         else:
-            s.log.info(f"[PREVIEW] Would send to {contact_email}")
+            log.info(f"[PREVIEW] Would send to {contact_email}")
 
 
 # ---------------------------------------------------------------------------
@@ -323,7 +365,9 @@ def process_orders(preview_only=False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Send caterer order emails")
-    parser.add_argument("--preview", action="store_true",
-                        help="Preview emails without sending or marking as Sent")
+    parser.add_argument(
+        "--preview", action="store_true",
+        help="Preview emails without sending or marking as Sent",
+    )
     args = parser.parse_args()
     process_orders(preview_only=args.preview)

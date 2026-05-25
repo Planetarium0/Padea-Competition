@@ -10,73 +10,67 @@ Usage:
   python scripts/tests/order_constraints.py
 """
 
+from __future__ import annotations
+
 from collections import defaultdict
-import support as s
+from dataclasses import dataclass
+from datetime import date
 
 from actions.register_orders import (
+    OrderingData,
+    OrderingIndex,
+    _find_min_qty,
     get_next_week_dates,
     is_student_excluded,
-    _find_min_qty,
 )
-from support.compatibility import build_hierarchy, has_opted_out
+from support import (
+    Database,
+    OrderFields,
+    Record,
+    SessionFields,
+    WeeklyOrderFields,
+    log,
+)
+from support.compatibility import has_opted_out
 
 
 # ---------------------------------------------------------------------------
-# Data loading
+# Snapshot bundle — extends the runtime OrderingData with the Weekly Orders
+# and Orders tables we're checking.
 # ---------------------------------------------------------------------------
 
-def load_data():
-    return {
-        "sessions":             s.airtable_get("Sessions"),
-        "students":             s.airtable_get("Students"),
-        "caterers":             s.airtable_get("Caterers"),
-        "menu_items":           s.airtable_get("Menu Items"),
-        "dietary_restrictions": s.airtable_get("Dietary Restrictions"),
-        "absences":             s.airtable_get("Absences"),
-        "exclusions":           s.airtable_get("Exclusions"),
-        "weekly_orders":        s.airtable_get("Weekly Orders"),
-        "orders":               s.airtable_get("Orders"),
-    }
+@dataclass(frozen=True)
+class ConstraintsData:
+    base:          OrderingData
+    weekly_orders: list[Record[WeeklyOrderFields]]
+    orders:        list[Record[OrderFields]]
 
-
-def build_lookups(data):
-    lk = {}
-    lk["session_by_id"]   = {r["id"]: r["fields"] for r in data["sessions"]}
-    lk["student_by_id"]   = {r["id"]: r["fields"] for r in data["students"]}
-    lk["caterer_by_id"]   = {r["id"]: r["fields"] for r in data["caterers"]}
-    lk["menu_item_by_id"] = {r["id"]: r["fields"] for r in data["menu_items"]}
-    lk["dietary_hierarchy"] = build_hierarchy(data["dietary_restrictions"])
-    lk["students_by_session"] = defaultdict(list)
-    for stu in data["students"]:
-        for sid in (stu["fields"].get("Sessions") or []):
-            lk["students_by_session"][sid].append({"id": stu["id"], "fields": stu["fields"]})
-    lk["absent_pairs"] = set()
-    for ab in data["absences"]:
-        stu = (ab["fields"].get("Student") or [None])[0]
-        ses = (ab["fields"].get("Session") or [None])[0]
-        if stu and ses:
-            lk["absent_pairs"].add((stu, ses))
-    lk["exclusions"] = data["exclusions"]
-    return lk
+    @classmethod
+    def load(cls, db: Database) -> "ConstraintsData":
+        return cls(
+            base=          OrderingData.load(db),
+            weekly_orders= db.WeeklyOrders.all(),
+            orders=        db.Orders.all(),
+        )
 
 
 # ---------------------------------------------------------------------------
 # Eligibility
 # ---------------------------------------------------------------------------
 
-def expected_eating_count(sess_rec, session_date, lk):
+def expected_eating_count(
+    sess_rec:     Record[SessionFields],
+    session_date: date,
+    index:        OrderingIndex,
+) -> int:
     """Count enrolled students at this session who are not absent, excluded, or opted out."""
-    sess_id     = sess_rec["id"]
-    sess_fields = sess_rec["fields"]
     count = 0
-    for stu in lk["students_by_session"].get(sess_id, []):
-        stu_id     = stu["id"]
-        stu_fields = stu["fields"]
-        if (stu_id, sess_id) in lk["absent_pairs"]:
+    for stu in index.students_by_session.get(sess_rec.id, []):
+        if (stu.id, sess_rec.id) in index.absent_pairs:
             continue
-        if is_student_excluded(stu_fields, sess_fields, session_date, lk):
+        if is_student_excluded(stu.fields, sess_rec.fields, session_date, index):
             continue
-        if has_opted_out(stu_fields.get("Dietary Requirements"), lk["dietary_hierarchy"]):
+        if has_opted_out(stu.fields.get("Dietary Requirements"), index.dietary_hierarchy):
             continue
         count += 1
     return count
@@ -86,55 +80,59 @@ def expected_eating_count(sess_rec, session_date, lk):
 # Check 1: Min-qty per caterer
 # ---------------------------------------------------------------------------
 
-def check_min_qty(data, lk, week_dates):
-    s.log.info("\n--- Min-Qty Enforcement ---")
+def check_min_qty(
+    data:       ConstraintsData,
+    index:      OrderingIndex,
+    week_dates: dict[str, date],
+) -> int:
+    log.info("\n--- Min-Qty Enforcement ---")
     next_monday = week_dates["Monday"].isoformat()
     week_date_strs = {d.isoformat() for d in week_dates.values()}
 
     # wo_id → item_id → total quantity (next week only)
-    orders_by_wo = defaultdict(lambda: defaultdict(int))
-    for order in data["orders"]:
-        if order["fields"].get("Date") not in week_date_strs:
+    orders_by_wo: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for order in data.orders:
+        if order.fields.get("Date") not in week_date_strs:
             continue
-        item_id  = (order["fields"].get("Menu Item") or [None])[0]
-        quantity = order["fields"].get("Quantity", 0)
+        item_id  = (order.fields.get("Menu Item") or [None])[0]
+        quantity = order.fields.get("Quantity", 0)
         if not item_id:
             continue
-        for wo_id in (order["fields"].get("Weekly Order") or []):
+        for wo_id in (order.fields.get("Weekly Order") or []):
             orders_by_wo[wo_id][item_id] += quantity
 
-    errors = 0
+    errors  = 0
     checked = 0
-    for wo in data["weekly_orders"]:
-        if wo["fields"].get("Week Start") != next_monday:
+    for wo in data.weekly_orders:
+        if wo.fields.get("Week Start") != next_monday:
             continue
-        wo_label   = wo["fields"].get("Order ID", wo["id"])
-        caterer_id = (wo["fields"].get("Caterer") or [None])[0]
-        caterer_fields = lk["caterer_by_id"].get(caterer_id, {})
+        wo_label   = wo.fields.get("Order ID", wo.id)
+        caterer_id = (wo.fields.get("Caterer") or [None])[0]
+        caterer_fields = index.caterer_by_id.get(caterer_id, {}) if caterer_id else {}
 
-        item_totals = orders_by_wo.get(wo["id"], {})
+        item_totals = orders_by_wo.get(wo.id, {})
         num_items   = len(item_totals)
         min_qty     = _find_min_qty(caterer_fields, num_items)
 
         if min_qty is None:
-            s.log.info(f"  '{wo_label}': {num_items} item(s) — no min-qty constraint applies.")
+            log.info(f"  '{wo_label}': {num_items} item(s) — no min-qty constraint applies.")
             checked += 1
             continue
 
         violating = [(iid, cnt) for iid, cnt in item_totals.items() if cnt < min_qty]
         if not violating:
-            s.log.info(f"✓ '{wo_label}': {num_items} items, all ≥ {min_qty} per item.")
+            log.info(f"✓ '{wo_label}': {num_items} items, all ≥ {min_qty} per item.")
             checked += 1
         else:
             for iid, cnt in violating:
-                item_name = lk["menu_item_by_id"].get(iid, {}).get("Menu Item Name", "?")
-                s.log.error(
+                item_name = index.menu_item_by_id.get(iid, {}).get("Menu Item Name", "?")
+                log.error(
                     f"✗ '{wo_label}': '{item_name}' has {cnt} (needs ≥ {min_qty} "
                     f"with {num_items} distinct items)."
                 )
                 errors += 1
 
-    s.log.info(f"Checked {checked} Weekly Order(s); {errors} min-qty violation(s).")
+    log.info(f"Checked {checked} Weekly Order(s); {errors} min-qty violation(s).")
     return errors
 
 
@@ -142,43 +140,46 @@ def check_min_qty(data, lk, week_dates):
 # Check 2: Session totals match eating-student counts
 # ---------------------------------------------------------------------------
 
-def check_session_totals(data, lk, week_dates):
-    s.log.info("\n--- Session Order Totals ---")
+def check_session_totals(
+    data:       ConstraintsData,
+    index:      OrderingIndex,
+    week_dates: dict[str, date],
+) -> int:
+    log.info("\n--- Session Order Totals ---")
     week_date_strs = {d.isoformat() for d in week_dates.values()}
 
-    orders_by_session = defaultdict(int)
-    for order in data["orders"]:
-        if order["fields"].get("Date") not in week_date_strs:
+    orders_by_session: dict[str, int] = defaultdict(int)
+    for order in data.orders:
+        if order.fields.get("Date") not in week_date_strs:
             continue
-        sess_id  = (order["fields"].get("Session") or [None])[0]
-        quantity = order["fields"].get("Quantity", 0)
+        sess_id  = (order.fields.get("Session") or [None])[0]
+        quantity = order.fields.get("Quantity", 0)
         if sess_id:
             orders_by_session[sess_id] += quantity
 
-    errors = 0
+    errors  = 0
     checked = 0
-    for sess in data["sessions"]:
-        day = sess["fields"].get("Day")
+    for sess in data.base.sessions:
+        day = sess.fields.get("Day")
         if day not in week_dates:
             continue
-        sess_id      = sess["id"]
         session_date = week_dates[day]
-        sess_label   = sess["fields"].get("Session ID", sess_id)
+        sess_label   = sess.fields.get("Session ID", sess.id)
 
-        expected = expected_eating_count(sess, session_date, lk)
-        actual   = orders_by_session.get(sess_id, 0)
+        expected = expected_eating_count(sess, session_date, index)
+        actual   = orders_by_session.get(sess.id, 0)
 
         if expected == actual:
-            s.log.info(f"✓ '{sess_label}' ({day}): {actual} meals (expected {expected}).")
+            log.info(f"✓ '{sess_label}' ({day}): {actual} meals (expected {expected}).")
             checked += 1
         else:
-            s.log.error(
+            log.error(
                 f"✗ '{sess_label}' ({day}): {actual} meals, expected {expected} "
                 f"(diff {actual - expected:+d})."
             )
             errors += 1
 
-    s.log.info(f"Checked {checked + errors} session(s); {errors} mismatch(es).")
+    log.info(f"Checked {checked + errors} session(s); {errors} mismatch(es).")
     return errors
 
 
@@ -186,25 +187,26 @@ def check_session_totals(data, lk, week_dates):
 # Main
 # ---------------------------------------------------------------------------
 
-def main():
-    s.log.info("=== ORDER CONSTRAINTS TEST ===")
+def main(db: Database | None = None) -> int:
+    db = db or Database.from_env()
+    log.info("=== ORDER CONSTRAINTS TEST ===")
     week_dates = get_next_week_dates()
-    s.log.info(f"Testing week of {week_dates['Monday'].isoformat()}")
+    log.info(f"Testing week of {week_dates['Monday'].isoformat()}")
 
-    data = load_data()
-    lk   = build_lookups(data)
+    data  = ConstraintsData.load(db)
+    index = OrderingIndex.build(data.base)
 
-    err_minqty  = check_min_qty(data, lk, week_dates)
-    err_session = check_session_totals(data, lk, week_dates)
+    err_minqty  = check_min_qty(data, index, week_dates)
+    err_session = check_session_totals(data, index, week_dates)
 
     total = err_minqty + err_session
-    s.log.info("\n=== SUMMARY ===")
-    s.log.info(f"Min-qty violations:       {err_minqty}")
-    s.log.info(f"Session total mismatches: {err_session}")
+    log.info("\n=== SUMMARY ===")
+    log.info(f"Min-qty violations:       {err_minqty}")
+    log.info(f"Session total mismatches: {err_session}")
     if total == 0:
-        s.log.info("🎉 All order constraints passed!")
+        log.info("All order constraints passed!")
     else:
-        s.log.error(f"❌ {total} issue(s) found.")
+        log.error(f"{total} issue(s) found.")
     return total
 
 

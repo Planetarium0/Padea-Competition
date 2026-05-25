@@ -1,7 +1,23 @@
-import sys
+"""
+update_schema.py — Idempotent sync between data/schema.py and Airtable.
 
-from support import base, log
+Creates missing tables (primary key only), then adds missing fields in a
+second pass so circular link dependencies resolve. Renames orphaned tables
+and fields with the ``(deleted) `` prefix instead of deleting them — the
+personal access token Padea uses cannot delete schema, only rename it.
+"""
+
+from __future__ import annotations
+
+import sys
+from typing import Any
+
 from data.schema import TABLES_SCHEMA
+from pyairtable.api.base import Base as PyAirtableBase
+from pyairtable.api.table import Table as PyAirtableTable
+
+from support import Database, log
+
 
 # The personal access token used to push schema changes can rename but not
 # delete tables/fields. Anything in Airtable that's no longer in TABLES_SCHEMA
@@ -9,10 +25,14 @@ from data.schema import TABLES_SCHEMA
 DELETED_PREFIX = "(deleted) "
 
 
-def update_schema():
-    if not base:
-        log.error("Airtable Base not configured. Exiting.")
+def update_schema(db: Database | None = None) -> None:
+    try:
+        db = db or Database.from_env()
+    except RuntimeError as e:
+        log.error(f"{e}. Exiting.")
         sys.exit(1)
+
+    base = db.base
 
     log.info("Starting schema update process (idempotent mode)...")
 
@@ -20,18 +40,18 @@ def update_schema():
     try:
         existing_tables_list = base.tables()
         existing_tables = {t.name: t for t in existing_tables_list}
-        table_ids = {t.name: t.id for t in existing_tables_list}
+        table_ids: dict[str, str] = {t.name: t.id for t in existing_tables_list}
         log.info(f"Existing tables in base: {list(existing_tables.keys())}")
     except Exception as e:
         log.error(f"Error fetching existing tables: {e}")
         sys.exit(1)
 
     # 2. Create missing tables with primary key
-    table_mappings = {}  # table_name -> Table object
+    table_mappings: dict[str, PyAirtableTable] = {}
 
     for table_name, spec in TABLES_SCHEMA.items():
         primary_field = spec["primary"]
-        
+
         if table_name in existing_tables:
             log.info(f"Table '{table_name}' already exists. Reusing it.")
             tbl = existing_tables[table_name]
@@ -44,9 +64,9 @@ def update_schema():
                     name=table_name,
                     fields=[{
                         "name": primary_field["name"],
-                        "type": primary_field["type"]
+                        "type": primary_field["type"],
                     }],
-                    description=f"Table for {table_name} - managed programmatically"
+                    description=f"Table for {table_name} - managed programmatically",
                 )
                 table_mappings[table_name] = tbl
                 table_ids[table_name] = tbl.id
@@ -59,10 +79,9 @@ def update_schema():
     for table_name, spec in TABLES_SCHEMA.items():
         tbl = table_mappings[table_name]
         log.info(f"Syncing fields for table '{table_name}'...")
-        
+
         # Get existing fields in Airtable
         try:
-            # Re-fetch or inspect current fields in this table schema
             tbl_schema = tbl.schema()
             existing_fields = {f.name: f for f in tbl_schema.fields}
         except Exception as e:
@@ -72,7 +91,7 @@ def update_schema():
         for field in spec["fields"]:
             name = field["name"]
             field_type = field["type"]
-            options = field.get("options", {}).copy()
+            options: dict[str, Any] = field.get("options", {}).copy()
 
             if name in existing_fields:
                 existing_field = existing_fields[name]
@@ -98,14 +117,15 @@ def update_schema():
                 except Exception as e:
                     log.error(f"  Failed to rename mistyped field '{name}': {e}")
                     continue
-                # Fall through to the create-field block below.
 
-            # If it's a relational field, inject the target table ID
             if field_type == "multipleRecordLinks":
                 target_table = field["link_target"]
                 target_id = table_ids.get(target_table)
                 if not target_id:
-                    log.error(f"Unknown target table '{target_table}' for relational field '{name}' in table '{table_name}'")
+                    log.error(
+                        f"Unknown target table '{target_table}' for relational field "
+                        f"'{name}' in table '{table_name}'"
+                    )
                     continue
                 options["linkedTableId"] = target_id
 
@@ -114,26 +134,25 @@ def update_schema():
                 tbl.create_field(
                     name=name,
                     type=field_type,
-                    options=options if options else None
+                    options=options if options else None,
                 )
             except Exception as e:
                 log.error(f"Failed to add field '{name}' to table '{table_name}': {e}")
                 continue
 
-    # 4. Apply inverse_name renames on any multipleRecordLinks fields that
-    #    declare one (so Airtable's default "From field: …" back-link gets a
-    #    proper name).
+    # 4. Apply inverse_name renames on multipleRecordLinks fields.
     apply_inverse_link_names(table_mappings)
 
     # 5. Mark orphan tables/fields for deletion by prefixing with "(deleted) "
-    mark_orphans_for_deletion(table_mappings)
+    mark_orphans_for_deletion(base, table_mappings)
 
     log.info("Schema update process completed successfully!")
 
 
-def apply_inverse_link_names(table_mappings):
-    """For each spec field that declares `inverse_name`, locate the auto-created
-    inverse link field on the target table and rename it. Idempotent."""
+def apply_inverse_link_names(table_mappings: dict[str, PyAirtableTable]) -> None:
+    """For each spec field that declares ``inverse_name``, locate the
+    auto-created inverse link field on the target table and rename it.
+    Idempotent."""
     log.info("Applying inverse_name overrides on linked fields...")
     for table_name, spec in TABLES_SCHEMA.items():
         for field in spec["fields"]:
@@ -144,13 +163,12 @@ def apply_inverse_link_names(table_mappings):
             owning_tbl = table_mappings[table_name]
             target_tbl = table_mappings.get(field["link_target"])
             if not target_tbl:
-                log.warning(f"  Target table '{field['link_target']}' missing; "
-                            f"can't apply inverse_name for '{field['name']}'.")
+                log.warning(
+                    f"  Target table '{field['link_target']}' missing; "
+                    f"can't apply inverse_name for '{field['name']}'."
+                )
                 continue
 
-            # Find the owning field's record on the owning table, then resolve
-            # its inverse via options.inverse_link_field_id, then look that ID
-            # up on the target table's schema.
             try:
                 owning_schema = owning_tbl.schema(force=True)
             except Exception as e:
@@ -159,8 +177,11 @@ def apply_inverse_link_names(table_mappings):
             owning_field = next((f for f in owning_schema.fields if f.name == field["name"]), None)
             if not owning_field:
                 continue
-            inverse_id = getattr(getattr(owning_field, "options", None),
-                                 "inverse_link_field_id", None)
+            inverse_id = getattr(
+                getattr(owning_field, "options", None),
+                "inverse_link_field_id",
+                None,
+            )
             if not inverse_id:
                 continue
 
@@ -173,12 +194,16 @@ def apply_inverse_link_names(table_mappings):
             if not inverse_field:
                 continue
             if inverse_field.name == desired:
-                log.info(f"  Inverse of '{table_name}.{field['name']}' already "
-                         f"named '{desired}'. Skipping.")
+                log.info(
+                    f"  Inverse of '{table_name}.{field['name']}' already "
+                    f"named '{desired}'. Skipping."
+                )
                 continue
 
-            log.info(f"  Renaming inverse of '{table_name}.{field['name']}' "
-                     f"from '{inverse_field.name}' to '{desired}'")
+            log.info(
+                f"  Renaming inverse of '{table_name}.{field['name']}' "
+                f"from '{inverse_field.name}' to '{desired}'"
+            )
             try:
                 inverse_field.name = desired
                 inverse_field.save()
@@ -186,7 +211,10 @@ def apply_inverse_link_names(table_mappings):
                 log.error(f"  Failed to rename inverse link: {e}")
 
 
-def mark_orphans_for_deletion(table_mappings):
+def mark_orphans_for_deletion(
+    base: PyAirtableBase,
+    table_mappings: dict[str, PyAirtableTable],
+) -> None:
     """Rename any Airtable table/field that's no longer in TABLES_SCHEMA with
     the DELETED_PREFIX. Skips items already prefixed (idempotent) and skips
     auto-created back-link fields of managed multipleRecordLinks fields."""
@@ -197,7 +225,7 @@ def mark_orphans_for_deletion(table_mappings):
     #   (b) it's the auto-created back-link of a managed multipleRecordLinks
     #       field (Airtable creates these on the link's target table; we'd
     #       otherwise mistake them for orphans since they're not in the spec).
-    managed_field_ids = set()
+    managed_field_ids: set[str] = set()
     for table_name, spec in TABLES_SCHEMA.items():
         tbl = table_mappings[table_name]
         try:
@@ -211,7 +239,11 @@ def mark_orphans_for_deletion(table_mappings):
             if fs.name not in expected_names:
                 continue
             managed_field_ids.add(fs.id)
-            inverse_id = getattr(getattr(fs, "options", None), "inverse_link_field_id", None)
+            inverse_id = getattr(
+                getattr(fs, "options", None),
+                "inverse_link_field_id",
+                None,
+            )
             if inverse_id:
                 managed_field_ids.add(inverse_id)
 
@@ -254,7 +286,10 @@ def mark_orphans_for_deletion(table_mappings):
             if fs.id == primary_field_id:
                 # Airtable disallows renaming the primary in a way that breaks
                 # the table; leave it for the operator to resolve manually.
-                log.warning(f"  Primary field '{fs.name}' on '{table_name}' is not in spec but won't be auto-marked.")
+                log.warning(
+                    f"  Primary field '{fs.name}' on '{table_name}' is not in spec "
+                    f"but won't be auto-marked."
+                )
                 continue
             if fs.name.startswith(DELETED_PREFIX):
                 log.info(f"  Field '{fs.name}' on '{table_name}' already marked. Skipping.")
@@ -266,6 +301,7 @@ def mark_orphans_for_deletion(table_mappings):
                 fs.save()
             except Exception as e:
                 log.error(f"  Failed to rename field '{fs.name}' on '{table_name}': {e}")
+
 
 if __name__ == "__main__":
     update_schema()
