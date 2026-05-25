@@ -60,8 +60,11 @@ if [[ -z "$COMMAND" || "$COMMAND" == "help" ]]; then
 fi
 
 if [[ "$COMMAND" == "test" ]]; then
-    echo "Running test"
-    python "scripts/tests/$RESOURCE.py"
+    if [[ -z "$RESOURCE" ]]; then
+        python scripts/tests/run_all.py
+    else
+        python "scripts/tests/$RESOURCE.py"
+    fi
     exit 0
 fi
 
