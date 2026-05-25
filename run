@@ -18,6 +18,7 @@ Usage:
   $0 migrate [resource]
   $0 schema update
   $0 script [name]
+  $0 test [name]
   $0 orders
   $0 orders generate [--dry-run]
   $0 orders preview
@@ -52,6 +53,12 @@ RESOURCE="${2:-}"
 
 if [[ -z "$COMMAND" || "$COMMAND" == "help" ]]; then
     usage
+    exit 0
+fi
+
+if [[ "$COMMAND" == "test" ]]; then
+    echo "Running test"
+    python "scripts/tests/$RESOURCE.py"
     exit 0
 fi
 

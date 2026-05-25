@@ -50,7 +50,7 @@ CLAUDE_CODE_API_KEY=...
 ```
 resources/*.xlsx + resources/*.pdf
         ↓ (cache_pdf.py extracts PDF → txt)
-cache/*.txt  +  cache/dietary_mappings.json
+cache/*.txt
         ↓ (migrations/*.py)
 Airtable (10 tables, fully relational)
 ```
@@ -90,7 +90,7 @@ sessions → students → absences → exclusions
 
 - With `CLAUDE_CODE_API_KEY` / `ANTHROPIC_API_KEY`: uses `claude-3-5-sonnet-latest` for structured JSON extraction
 - Without a key: heuristic regex parsers handle most cases; `prompt_user.py` pops a Tkinter window for unresolvable cases
-- `cache/dietary_mappings.json` caches per-student dietary string translations to avoid repeated LLM calls
+- Dietary strings from the spreadsheet are mapped to standard restriction names by a comma-split + case-insensitive exact-match heuristic in `students.py`. Unrecognised parts are logged as errors.
 
 ### Airtable record linking
 

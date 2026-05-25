@@ -1,8 +1,6 @@
 from data.dietary_data import all_restriction_names
-import os
 import sys
 import pandas as pd
-import json
 from pathlib import Path
 import support as s
 
@@ -56,101 +54,27 @@ for name in xls.sheet_names:
         for val in df["Dietary"].dropna():
             unique_dietary.add(str(val).strip())
 
-s.log.info(f"Collected {len(unique_dietary)} unique dietary requirements strings across all sheets.")
+s.log.info(f"Collected {len(unique_dietary)} unique dietary requirement strings across all sheets.")
 
-# 2. Load or Build Dietary Mapping Cache
-cache_path = Path.cwd() / "cache" / "dietary_mappings.json"
-cache_path.parent.mkdir(exist_ok=True)
-dietary_mappings = {}
+# 2. Build dietary mapping via heuristic
+#    Raw values are expected to be comma-separated standard restriction names
+#    (case-insensitive). Unrecognised parts are logged as errors.
+STANDARD_DIETARY_CHOICES = {name.lower(): name for name in all_restriction_names()}
 
-if cache_path.is_file():
-    try:
-        dietary_mappings = json.loads(cache_path.read_text(encoding="utf-8"))
-        s.log.info(f"Loaded {len(dietary_mappings)} dietary mappings from cache.")
-    except Exception as e:
-        s.log.warning(f"Could not read dietary mapping cache: {e}")
-
-# Identify missing mappings
-missing_mappings = [d for d in unique_dietary if d not in dietary_mappings]
-
-# Standarized Airtable dietary choices
-STANDARD_DIETARY_CHOICES = all_restriction_names()
-
-def map_dietary_heuristically(raw_val):
-    cleaned = raw_val.strip()
-    if cleaned.lower() == "opted out of catering":
-        return ["Opted out of Catering"]
-    
+def map_dietary(raw_val):
     choices = []
-    # Split by comma
-    parts = [p.strip().lower() for p in cleaned.split(",")]
-    for p in parts:
-        matched = False
-        for std in STANDARD_DIETARY_CHOICES:
-            if std.lower() in p:
-                choices.append(std)
-                matched = True
-                break
-        if not matched:
-            # Special manual heuristic adjustments
-            if "no beef" in p:
-                choices.append("No Beef")
-            elif "no pork" in p:
-                choices.append("No Pork")
-            elif "no fish" in p:
-                choices.append("No Fish")
-            elif "no seafood" in p:
-                choices.append("No Seafood")
-            elif "no shellfish" in p:
-                choices.append("No Shellfish")
-            elif "no red meat" in p:
-                choices.append("No Red Meat")
-            else:
-                print(f"[WARNING] - dietary restriction not mapped : '{p}'")
-    return list(set(choices))
-
-if missing_mappings:
-    key = os.environ.get("CLAUDE_CODE_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
-    parsed_mappings = None
-
-    if key:
-        s.log.info(f"Prompting Claude LLM to translate {len(missing_mappings)} missing dietary strings...")
-        prompt = f"""You are a dietary taxonomy expert.
-Map the following list of raw dietary strings to a subset of standard Padea dietary choices.
-Standard Choices:
-{json.dumps(STANDARD_DIETARY_CHOICES, indent=2)}
-
-Return a JSON object where the keys are the raw strings exactly as provided, and the values are JSON arrays of standard choices. If a string has no matching choice, use an empty array.
-
-Raw Strings to Map:
-{json.dumps(missing_mappings, indent=2)}
-"""
-        resp = s.ask_llm(prompt)
-        if resp is not NotImplemented:
-            try:
-                json_str = resp
-                if "```json" in resp:
-                    json_str = resp.split("```json")[1].split("```")[0].strip()
-                elif "```" in resp:
-                    json_str = resp.split("```")[1].split("```")[0].strip()
-                parsed_mappings = json.loads(json_str)
-                s.log.info("LLM successfully mapped the dietary requirements!")
-            except Exception as e:
-                s.log.error(f"LLM returned malformed JSON: {e}")
-
-    # Merge mappings from LLM or Heuristics
-    for m in missing_mappings:
-        if parsed_mappings and m in parsed_mappings:
-            dietary_mappings[m] = parsed_mappings[m]
+    for part in raw_val.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        std = STANDARD_DIETARY_CHOICES.get(part.lower())
+        if std:
+            choices.append(std)
         else:
-            dietary_mappings[m] = map_dietary_heuristically(m)
+            s.log.error(f"Unrecognised dietary restriction: '{part}' (from '{raw_val}')")
+    return list(dict.fromkeys(choices))  # deduplicate, preserve order
 
-    # Save cache
-    try:
-        cache_path.write_text(json.dumps(dietary_mappings, indent=4), encoding="utf-8")
-        s.log.info("Dietary mapping cache updated.")
-    except Exception as e:
-        s.log.error(f"Failed to write dietary mappings cache: {e}")
+dietary_mappings = {raw: map_dietary(raw) for raw in unique_dietary}
 
 # 3. Fetch active sessions to resolve linked student sessions
 sessions_list = s.airtable_get("Sessions")
