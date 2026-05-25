@@ -1,9 +1,13 @@
 # Dietary System
 
-The most subtle part of the codebase. Two separate compatibility engines
-(webapp and order generator) need to agree on what counts as a "safe"
-meal for a student, even though they're implemented in different
-languages and have drifted apart over time.
+The most subtle part of the codebase. The webapp (JS) and the order
+generator (Python) both have to agree on what counts as a "safe" meal
+for a student. They share what they can:
+
+- **Closure** is derived live from Airtable (`Dietary Restrictions.Supersets`).
+- **Negative-keyword fallback** is held in `data/dietary_keywords.json` —
+  the Python side reads it via `support.compatibility`, the webapp fetches
+  it from `/data/dietary_keywords.json` (served by `host_webapp.py`).
 
 ## The taxonomy
 
@@ -54,18 +58,17 @@ Output is three buckets used by the picker: **ok**, **maybe**, **no**.
 
 ## Compatibility check (order generator)
 
-`scripts/actions/register_orders.py → is_item_compatible`.
+`scripts/support/compatibility.py → is_item_compatible`, used by both
+`register_orders.py` and `order_constraints.py`.
 
-Different implementation, same intent:
+Same algorithm as the webapp:
 
-1. Positive tags (Gluten Free, Dairy Free, Nut Free, Vegetarian, Halal):
-   the item's `Dietary Tags` must literally include the required tag.
-2. Negative keywords (No Beef, No Pork, …): the item's *name* must not
-   contain any of a bunch of substrings.
-
-> This implementation does **not** use the dietary hierarchy. A
-> Vegetarian-tagged item won't satisfy a No Red Meat student here even
-> though it logically should. See `plans/problems/`.
+1. Subset-closure satisfied → ok. (`build_hierarchy` over the live
+   `Dietary Restrictions` records gives the same closure the webapp computes.)
+2. Otherwise fall back to the shared `NEGATIVE_KEYWORDS` table loaded from
+   `data/dietary_keywords.json` — keyword match means "definitely incompatible",
+   no match means "may contain" (treated as compatible here to match the
+   webapp's lenient `maybe` bucket).
 
 ## Tag application during migration
 
@@ -78,9 +81,9 @@ Different implementation, same intent:
 - No other tag is inferred. If the menu names a dish "Vegan Stir-Fry" but
   doesn't mark it `VO`, it stays untagged.
 
-This means the item-tag set tends to be **sparse**. The webapp's subset
-closure logic partly compensates (a Vegetarian tag satisfies Pescatarian
-and No Red Meat), but the order generator doesn't.
+This means the item-tag set tends to be **sparse**. The shared subset-closure
+logic compensates (a Vegetarian tag satisfies Pescatarian and No Red Meat)
+for both the webapp and the order generator.
 
 ## Student-side: raw strings → tags
 
@@ -115,8 +118,8 @@ non-halal-slaughtered meat, etc. Keep an eye on it as the caterer set
 grows.
 
 ### "No Red Meat" includes "bulgogi"
-A keyword in `NEGATIVE_KEYWORDS["No Red Meat"]` because "Korean Beef
-Bulgogi Rice Bowl" was on a caterer's menu but the substring "beef"
+A keyword in `data/dietary_keywords.json → "No Red Meat"` because "Korean
+Beef Bulgogi Rice Bowl" was on a caterer's menu but the substring "beef"
 wasn't enough. This is brittle — every dish-naming convention is a
 landmine.
 

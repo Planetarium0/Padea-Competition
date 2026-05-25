@@ -69,9 +69,12 @@ locally (`./run host`) and reached via QR codes (`./run qr`).
 ├── cache/                    # PDF→txt extractions + dietary mapping cache
 ├── output/qrcodes/           # generated QR PNGs (one per session)
 ├── webapp/                   # static SPA (HTML/CSS/JS + config)
+├── data/                     # cross-runtime reference data — read by Python
+│                             #   and served at /data/ by host_webapp.py
+│                             #   (schema, dietary hierarchy, shared keywords)
 ├── scripts/
-│   ├── support/              # shared helpers (Airtable client, LLM wrapper)
-│   ├── data/                 # static reference data: schema + dietary hierarchy
+│   ├── support/              # shared helpers (Airtable client, LLM wrapper,
+│   │                         #   dietary compatibility logic)
 │   ├── migrations/           # one-per-table importers
 │   ├── actions/              # operational scripts (orders, schema, QR, host)
 │   └── tests/                # post-migration and post-order verification

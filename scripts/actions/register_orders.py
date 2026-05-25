@@ -27,6 +27,12 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from collections import defaultdict
 import support as s
+from support.compatibility import (
+    build_hierarchy,
+    has_opted_out,
+    is_item_compatible,
+    resolve_dietary_names,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -38,24 +44,6 @@ DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 # use variety assignment (least-ordered first) instead of popularity weighting,
 # so the order doesn't collapse to a single item.
 VARIETY_THRESHOLD = 10
-
-NEGATIVE_DIETARY_KEYWORDS = {
-    "No Beef":     ["beef", "bulgogi"],
-    "No Pork":     ["pork", "bacon", "ham"],
-    "No Seafood":  ["seafood", "shrimp", "prawn", "fish", "salmon", "tuna",
-                    "shellfish", "crab", "lobster"],
-    "No Shellfish": ["shellfish", "shrimp", "prawn", "crab", "lobster"],
-    "No Fish":     ["fish", "salmon", "tuna"],
-    "No Red Meat": ["beef", "lamb", "pork", "bulgogi"],
-}
-
-POSITIVE_DIETARY_TAGS = {
-    "Gluten Free": "Gluten Free",
-    "Dairy Free":  "Dairy Free",
-    "Nut Free":    "Nut Free",
-    "Vegetarian":  "Vegetarian",
-    "Halal":       "Halal",
-}
 
 # ---------------------------------------------------------------------------
 # Date helpers
@@ -103,10 +91,7 @@ def build_lookups(data):
     lk["student_by_id"]      = {r["id"]: r["fields"] for r in data["students"]}
     lk["caterer_by_id"]      = {r["id"]: r["fields"] for r in data["caterers"]}
     lk["menu_item_by_id"]    = {r["id"]: r["fields"] for r in data["menu_items"]}
-    lk["dietary_name_by_id"] = {
-        r["id"]: r["fields"].get("Restriction Name", "")
-        for r in data["dietary_restrictions"]
-    }
+    lk["dietary_hierarchy"] = build_hierarchy(data["dietary_restrictions"])
 
     lk["menu_items_by_caterer"] = defaultdict(list)
     for item in data["menu_items"]:
@@ -139,37 +124,6 @@ def build_lookups(data):
     }
 
     return lk
-
-
-# ---------------------------------------------------------------------------
-# Dietary compatibility
-# ---------------------------------------------------------------------------
-
-def resolve_dietary_names(dietary_ids, dietary_name_by_id):
-    """Convert list of dietary restriction record IDs to name strings."""
-    return [dietary_name_by_id.get(did, did) for did in (dietary_ids or [])]
-
-
-def is_item_compatible(item_fields, student_dietary_names, dietary_name_by_id):
-    """Check if a menu item satisfies a student's dietary requirements."""
-    if not student_dietary_names:
-        return True
-
-    tag_ids = item_fields.get("Dietary Tags") or []
-    item_tag_names = {dietary_name_by_id.get(tid, tid) for tid in tag_ids}
-    item_name_lower = item_fields.get("Menu Item Name", "").lower()
-
-    for req in student_dietary_names:
-        if req == "Opted out of Catering":
-            return False
-        if req in POSITIVE_DIETARY_TAGS:
-            if POSITIVE_DIETARY_TAGS[req] not in item_tag_names:
-                return False
-        if req in NEGATIVE_DIETARY_KEYWORDS:
-            for kw in NEGATIVE_DIETARY_KEYWORDS[req]:
-                if kw in item_name_lower:
-                    return False
-    return True
 
 
 # ---------------------------------------------------------------------------
@@ -208,7 +162,7 @@ def is_student_excluded(student_fields, session_fields, session_date, lk):
 # Meal assignment (fallback when no valid explicit preference)
 # ---------------------------------------------------------------------------
 
-def assign_fallback_meal(student_dietary_names, caterer_menu, item_counts, lk):
+def assign_fallback_meal(student_dietary_ids, caterer_menu, item_counts, lk):
     """
     Pick the best compatible meal weighted by:
       - Current batch popularity (80%)
@@ -216,7 +170,7 @@ def assign_fallback_meal(student_dietary_names, caterer_menu, item_counts, lk):
     """
     compatible = [
         item for item in caterer_menu
-        if is_item_compatible(item["fields"], student_dietary_names, lk["dietary_name_by_id"])
+        if is_item_compatible(item["fields"], student_dietary_ids, lk["dietary_hierarchy"])
     ]
     if not compatible:
         return None
@@ -253,7 +207,7 @@ def compute_max_variety(caterer_fields, total_students):
     return max(1, total_students // 3)
 
 
-def assign_variety_meal(student_dietary_names, caterer_menu, item_counts, lk,
+def assign_variety_meal(student_dietary_ids, caterer_menu, item_counts, lk,
                         max_items=None):
     """
     Pick the least-ordered compatible meal to spread variety across the batch.
@@ -265,7 +219,7 @@ def assign_variety_meal(student_dietary_names, caterer_menu, item_counts, lk,
     """
     compatible = [
         item for item in caterer_menu
-        if is_item_compatible(item["fields"], student_dietary_names, lk["dietary_name_by_id"])
+        if is_item_compatible(item["fields"], student_dietary_ids, lk["dietary_hierarchy"])
     ]
     if not compatible:
         return None
@@ -354,16 +308,14 @@ def enforce_min_qty(caterer_fields, assignments, lk):
         made_change = False
         for idx in swap_indices:
             stu_id, sess_id, old_item_id, _ = assignments[idx]
-            stu_fields     = lk["student_by_id"].get(stu_id, {})
-            dietary_names  = resolve_dietary_names(
-                stu_fields.get("Dietary Requirements"), lk["dietary_name_by_id"]
-            )
+            stu_fields  = lk["student_by_id"].get(stu_id, {})
+            dietary_ids = stu_fields.get("Dietary Requirements") or []
 
             # Prefer compatible items from valid (non-violating) set
             compat = {
                 iid: cnt for iid, cnt in valid_items.items()
                 if is_item_compatible(
-                    lk["menu_item_by_id"].get(iid, {}), dietary_names, lk["dietary_name_by_id"]
+                    lk["menu_item_by_id"].get(iid, {}), dietary_ids, lk["dietary_hierarchy"]
                 )
             }
             if not compat:
@@ -371,7 +323,7 @@ def enforce_min_qty(caterer_fields, assignments, lk):
                 compat = {
                     iid: cnt for iid, cnt in item_counts.items()
                     if iid != old_item_id and is_item_compatible(
-                        lk["menu_item_by_id"].get(iid, {}), dietary_names, lk["dietary_name_by_id"]
+                        lk["menu_item_by_id"].get(iid, {}), dietary_ids, lk["dietary_hierarchy"]
                     )
                 }
             if not compat:
@@ -488,10 +440,8 @@ def register_orders(dry_run=False):
                 continue
             if is_student_excluded(stu_fields, sess_fields, session_date, lk):
                 continue
-            dietary_names = resolve_dietary_names(
-                stu_fields.get("Dietary Requirements"), lk["dietary_name_by_id"]
-            )
-            if "Opted out of Catering" in dietary_names:
+            dietary_ids = stu_fields.get("Dietary Requirements") or []
+            if has_opted_out(dietary_ids, lk["dietary_hierarchy"]):
                 continue
             caterer_student_counts[cid] += 1
             pref_ids = stu_fields.get("Meal Preference") or []
@@ -554,11 +504,9 @@ def register_orders(dry_run=False):
                 stats["excluded"] += 1
                 continue
 
-            dietary_names = resolve_dietary_names(
-                stu_fields.get("Dietary Requirements"), lk["dietary_name_by_id"]
-            )
+            dietary_ids = stu_fields.get("Dietary Requirements") or []
 
-            if "Opted out of Catering" in dietary_names:
+            if has_opted_out(dietary_ids, lk["dietary_hierarchy"]):
                 stats["opted_out"] += 1
                 continue
 
@@ -573,7 +521,8 @@ def register_orders(dry_run=False):
                     pref_fields = lk["menu_item_by_id"].get(pref_id, {})
                     pref_name   = pref_fields.get("Menu Item Name", "?")
                     # Honour explicit preference even if it violates dietary requirements
-                    if not is_item_compatible(pref_fields, dietary_names, lk["dietary_name_by_id"]):
+                    if not is_item_compatible(pref_fields, dietary_ids, lk["dietary_hierarchy"]):
+                        dietary_names = resolve_dietary_names(dietary_ids, lk["dietary_hierarchy"])
                         s.log.warning(
                             f"  {stu_name}: explicit preference '{pref_name}' conflicts with "
                             f"dietary {dietary_names} — honouring explicit choice."
@@ -589,7 +538,7 @@ def register_orders(dry_run=False):
                 assign_fn   = assign_variety_meal if use_variety else assign_fallback_meal
                 kwargs      = {"max_items": caterer_max_variety.get(caterer_id)} if use_variety else {}
                 item_id     = assign_fn(
-                    dietary_names, caterer_menu, caterer_item_counts[caterer_id], lk, **kwargs
+                    dietary_ids, caterer_menu, caterer_item_counts[caterer_id], lk, **kwargs
                 )
                 if item_id is None:
                     s.log.warning(f"  {stu_name}: no compatible meal found — skipping.")

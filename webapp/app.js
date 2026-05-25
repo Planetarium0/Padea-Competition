@@ -47,24 +47,9 @@ const TAG_SHORT = {
   "Pescatarian": "Pesc",
 };
 
-// Name-keyword heuristic. If a menu item's NAME contains any of these
-// substrings, we treat that as definite evidence it violates the listed
-// constraint — i.e. "Contains beef" rather than the softer "May contain beef".
-const NEGATIVE_KEYWORDS = {
-  "No Beef": ["beef", "bulgogi"],
-  "No Pork": ["pork", "bacon", "ham"],
-  "No Lamb": ["lamb"],
-  "No Seafood": ["seafood", "shrimp", "prawn", "fish", "salmon", "tuna", "shellfish", "crab", "lobster"],
-  "No Shellfish": ["shellfish", "shrimp", "shrimps", "prawn", "crab", "lobster"],
-  "No Fish": ["fish", "salmon", "tuna"],
-  "No Red Meat": ["beef", "lamb", "pork", "bulgogi"],
-  "Vegetarian": ["beef", "pork", "lamb", "chicken", "fish", "shrimp", "prawn", "salmon", "tuna", "seafood", "shellfish", "crab", "lobster", "bulgogi", "bacon", "ham"],
-  "Vegan": ["beef", "pork", "lamb", "chicken", "fish", "shrimp", "prawn", "salmon", "tuna", "seafood", "shellfish", "crab", "lobster", "bulgogi", "bacon", "ham", "cheese", "milk", "butter", "cream", "yogurt"],
-  "Pescatarian": ["beef", "pork", "lamb", "chicken", "bulgogi", "bacon", "ham"],
-  "Dairy Free": ["cheese", "milk", "butter", "cream", "yogurt"],
-  "Halal": ["pork", "bacon", "ham"],
-  "Kosher": ["pork", "bacon", "ham", "shellfish", "shrimp", "prawn", "crab", "lobster"],
-};
+// Name-keyword heuristic is loaded from /data/dietary_keywords.json at boot
+// (see loadNegativeKeywords) so the order generator and the webapp share one
+// source of truth. The resolved object is attached to dietMaps.negativeKeywords.
 
 // Plain-language phrase for each constraint, used in reason labels.
 const CONSTRAINT_PHRASE = {
@@ -264,6 +249,18 @@ async function loadDietaryRestrictions() {
   return data;
 }
 
+async function loadNegativeKeywords() {
+  const key = "padea_neg_keywords";
+  const cached = cacheGet(key, "diet");
+  if (cached) return cached;
+  const res = await fetch("data/dietary_keywords.json", { cache: "no-cache" });
+  if (!res.ok) throw new Error(`keywords ${res.status}`);
+  const data = (await res.json()).negative_keywords || {};
+  console.log(`[padea] negative keywords loaded: ${Object.keys(data).length} entries`);
+  cacheSet(key, data);
+  return data;
+}
+
 async function loadExistingFeedback(studentId, sessionId, catererId) {
   console.log("Loading Existing Feedback");
   const key = `padea_fb_${studentId}_${sessionId}_${catererId || ""}`;
@@ -291,7 +288,7 @@ async function loadExistingFeedback(studentId, sessionId, catererId) {
 // Dietary hierarchy
 // ============================================================
 
-function buildHierarchyMaps(restrictions) {
+function buildHierarchyMaps(restrictions, negativeKeywords = {}) {
   const idToName = {};
   const nameToId = {};
   for (const r of restrictions) {
@@ -317,7 +314,7 @@ function buildHierarchyMaps(restrictions) {
   for (const r of restrictions) {
     subsetClosure[r.id] = descendants(r.id);
   }
-  return { idToName, nameToId, subsetClosure };
+  return { idToName, nameToId, subsetClosure, negativeKeywords };
 }
 
 // Returns { compatible, severity, issues } where:
@@ -343,7 +340,7 @@ function checkCompatibility(item, studentReqIds, maps) {
     // No tag confirms it. Use the name-keyword heuristic to distinguish
     // definitely-incompatible vs ambiguous-may-contain.
     const phrase = CONSTRAINT_PHRASE[reqName] || reqName.toLowerCase();
-    const kws = NEGATIVE_KEYWORDS[reqName];
+    const kws = maps.negativeKeywords?.[reqName];
     if (kws && kws.some(k => itemNameLower.includes(k))) {
       issues.push({ name: reqName, severity: "no", label: `Contains ${phrase}` });
     } else {
@@ -441,11 +438,15 @@ const app = {
     // Show the cutoff footnote immediately based on local time.
     renderCutoffFootnote();
 
-    // Start Dietary Restrictions fetch in parallel (independent of session).
-    state.dietPromise = loadDietaryRestrictions()
-      .then(rs => {
+    // Fetch Dietary Restrictions + the shared NEGATIVE_KEYWORDS table in
+    // parallel (both independent of session). Both feed dietMaps.
+    state.dietPromise = Promise.all([
+      loadDietaryRestrictions(),
+      loadNegativeKeywords(),
+    ])
+      .then(([rs, kws]) => {
         state.dietRestrictions = rs;
-        state.dietMaps = buildHierarchyMaps(rs);
+        state.dietMaps = buildHierarchyMaps(rs, kws);
         return rs;
       })
       .catch(err => { console.error("[padea] diet load failed:", err); return []; });

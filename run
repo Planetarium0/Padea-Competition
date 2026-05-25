@@ -7,7 +7,9 @@
 MIGRATION_DIR="scripts/migrations"
 SCRIPTS_DIR="scripts"
 
-export PYTHONPATH=$PYTHONPATH:"$PWD"/"$SCRIPTS_DIR"
+# Make both `scripts/` (so `support`, `actions`, etc. resolve as packages)
+# and the project root (so `data.*` resolves) importable.
+export PYTHONPATH=$PYTHONPATH:"$PWD":"$PWD"/"$SCRIPTS_DIR"
 
 # Helper to show usage
 function usage() {

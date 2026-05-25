@@ -16,9 +16,9 @@ import support as s
 from actions.register_orders import (
     get_next_week_dates,
     is_student_excluded,
-    resolve_dietary_names,
     _find_min_qty,
 )
+from support.compatibility import build_hierarchy, has_opted_out
 
 
 # ---------------------------------------------------------------------------
@@ -45,10 +45,7 @@ def build_lookups(data):
     lk["student_by_id"]   = {r["id"]: r["fields"] for r in data["students"]}
     lk["caterer_by_id"]   = {r["id"]: r["fields"] for r in data["caterers"]}
     lk["menu_item_by_id"] = {r["id"]: r["fields"] for r in data["menu_items"]}
-    lk["dietary_name_by_id"] = {
-        r["id"]: r["fields"].get("Restriction Name", "")
-        for r in data["dietary_restrictions"]
-    }
+    lk["dietary_hierarchy"] = build_hierarchy(data["dietary_restrictions"])
     lk["students_by_session"] = defaultdict(list)
     for stu in data["students"]:
         for sid in (stu["fields"].get("Sessions") or []):
@@ -79,10 +76,7 @@ def expected_eating_count(sess_rec, session_date, lk):
             continue
         if is_student_excluded(stu_fields, sess_fields, session_date, lk):
             continue
-        dietary_names = resolve_dietary_names(
-            stu_fields.get("Dietary Requirements"), lk["dietary_name_by_id"]
-        )
-        if "Opted out of Catering" in dietary_names:
+        if has_opted_out(stu_fields.get("Dietary Requirements"), lk["dietary_hierarchy"]):
             continue
         count += 1
     return count
