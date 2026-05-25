@@ -46,7 +46,7 @@ Single scrollable page with two cards:
 A footnote explains the purpose. A second footnote appears past the
 **Wednesday 8 PM cutoff** explaining that any change now affects the
 week *after* next, not next week (because the Wednesday cron has already
-snapshotted preferences).
+registered orders using the current preferences).
 
 The Submit button is disabled until at least one of {rating, comment,
 meal preference} has actually changed from its initial value.

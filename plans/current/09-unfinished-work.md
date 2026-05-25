@@ -32,12 +32,6 @@ Originally part of the plan: a rollup on `Caterers` averaging the last
 drops below 3.0. Tables and feedback collection exist; the dashboard
 doesn't.
 
-### Last-week fallback
-The revised emailing plan called for: "if no preference set, reuse the
-student's pick from previous equivalent sessions before falling back to
-AI assignment." `register_orders.py` doesn't do this — non-respondents
-go straight to variety / popularity assignment.
-
 ### Caterer email format A/B with the coordinator
 The current markdown format is one redesign. The original brief noted
 that the program coordinator may have habits — comparing a generated

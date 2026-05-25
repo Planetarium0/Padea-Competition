@@ -21,7 +21,7 @@ Run target: **Wednesday 8 PM**, for the *following* Mon–Fri week.
 
 ```
 1. Compute next week's Mon–Fri dates from today.
-2. Clear any Orders + Draft Weekly Orders dated in that range (idempotent).
+2. Clear any Orders + Weekly Orders dated in that range (idempotent).
 3. Pre-scan to count eligible students and explicit preferences per caterer.
    - Pick fallback mode for each caterer:
        explicit_count >= 10  →  POPULARITY mode
@@ -94,14 +94,12 @@ deliberate selection during min-qty enforcement.
 
 ### Idempotency
 
-`clear_existing_orders` deletes all Orders and `Draft` Weekly Orders
-whose Date / Week Start falls in next week's window. So you can re-run
-freely — but **`Sent` Weekly Orders are preserved**, since clearing those
-would lose the audit trail.
+`clear_existing_orders` deletes all Orders and Weekly Orders whose Date /
+Week Start falls in next week's window. Re-runs are safe.
 
 ### Outputs
 
-- One `Weekly Orders` row per caterer per week, `Status='Draft'`.
+- One `Weekly Orders` row per caterer per week.
 - One `Orders` row per (Session, Menu Item) pair, with `Quantity`.
 
 ## `send_orders.py` — format and queue caterer emails
@@ -110,14 +108,13 @@ Run target: **Thursday 3 PM**, the day after `register_orders.py`.
 
 ### Behaviour
 
-1. Reads every `Weekly Orders` row with `Status='Draft'`.
+1. Reads every `Weekly Orders` row with `Week Start >= today`.
 2. For each: fetches the caterer, the linked Sessions (with school +
    on-site manager details), and aggregates the Orders rows.
 3. Formats a Markdown email body, one section per delivery (sorted by
    Session ID alphabetically — which roughly orders Mon→Fri because
    Session IDs start with school names).
 4. Writes a record to `Scheduled Emails` with `Status='Queued'`.
-5. Flips the Weekly Order's `Status` to `Sent`.
 
 ### What gets *actually* sent
 

@@ -20,11 +20,9 @@ Usage:
   python scripts/register_orders.py [--dry-run]
 """
 
-import sys
 import argparse
 import random
 from datetime import datetime, timedelta
-from pathlib import Path
 from collections import defaultdict
 import support as s
 from support.compatibility import (

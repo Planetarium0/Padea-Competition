@@ -79,9 +79,9 @@ list. See `06-dietary-system.md`.
 - **Student Email**, **Parent Name / Email / Mobile**
 - **Sessions** → `Sessions` (a student is linked to every recurring weekly
   session they attend)
-- **Meal Preference** → `Menu Items` (single item; current preference for
-  next week — upserted by the webapp, snapshotted weekly by
-  `register_orders.py`)
+- **Meal Preference** → `Menu Items` (single item; the student's standing
+  pick — updated by the webapp and persists until changed. Read each week by
+  `register_orders.py`, which writes the result into `Orders`.)
 
 ### Sessions
 One record per recurring weekly session (~11). A session repeats every week of
@@ -90,7 +90,6 @@ the term on a given Day at a given School.
 - **Session ID** (primary, format: `"<School Name> - <Day>"` e.g.
   `"Loreto College - Friday"`)
 - **School** → `Schools`
-- **Region** — denormalised from School
 - **Caterer** → `Caterers`
 - **Date** — single date (one occurrence; the order generator uses Day, not this)
 - **Day** (Monday – Friday)
@@ -135,7 +134,6 @@ One per caterer per week. The aggregate parent of `Orders`.
 - **Caterer** → `Caterers`
 - **Week Start** (Monday of the target week)
 - **Total Meals**, **Total Cost**
-- **Status** (`Draft` / `Sent` / `Confirmed`)
 - **Notes**
 
 ### Orders

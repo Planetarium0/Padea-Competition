@@ -130,11 +130,14 @@ Raw Menu Text:
             s.log.warning(f"Caterer '{caterer_name}' not found in Caterers table — skipping.")
             continue
 
+        price = menu["Price per Item"]
+        if not menu["Price Includes GST"]:
+            price = round(price * 1.10, 2)
         caterer_updates.append({"id": caterer_id, "fields": {
             "Delivery Fee":           menu["Delivery Fee"],
             "Delivery Fee Structure": menu["Delivery Fee Structure"],
-            "Price Includes GST":     bool(menu["Price Includes GST"]),
-            "Price per Item":         menu["Price per Item"],
+            "Price Includes GST":     True,
+            "Price per Item":         price,
         }})
 
         for item in menu["Items"]:
