@@ -1,3 +1,4 @@
+from data.dietary_data import all_restriction_names
 import os
 import sys
 import pandas as pd
@@ -73,11 +74,7 @@ if cache_path.is_file():
 missing_mappings = [d for d in unique_dietary if d not in dietary_mappings]
 
 # Standarized Airtable dietary choices
-STANDARD_DIETARY_CHOICES = [
-    "Dairy Free", "Gluten Free", "Nut Free", "Vegetarian", "Halal", 
-    "No Beef", "No Pork", "No Seafood", "No Shellfish", "No Fish", 
-    "No Red Meat", "Opted out of Catering"
-]
+STANDARD_DIETARY_CHOICES = all_restriction_names()
 
 def map_dietary_heuristically(raw_val):
     cleaned = raw_val.strip()
@@ -108,6 +105,8 @@ def map_dietary_heuristically(raw_val):
                 choices.append("No Shellfish")
             elif "no red meat" in p:
                 choices.append("No Red Meat")
+            else:
+                print(f"[WARNING] - dietary restriction not mapped : '{p}'")
     return list(set(choices))
 
 if missing_mappings:

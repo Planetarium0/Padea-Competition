@@ -1,7 +1,7 @@
 # 14 — `Region` denormalised across three tables
 
 **Severity:** Low (data redundancy; not currently causing bugs).
-**File:** `scripts/data/schema.py`.
+**File:** `data/schema.py`.
 
 The same `Region` `singleSelect` choices (Redlands, South Brisbane, West
 Brisbane, Central Brisbane) appear three times:

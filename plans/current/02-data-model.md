@@ -1,6 +1,6 @@
 # Data Model
 
-Single source of truth: `scripts/data/schema.py` (`TABLES_SCHEMA`).
+Single source of truth: `data/schema.py` (`TABLES_SCHEMA`).
 `scripts/actions/update_schema.py` keeps the Airtable base in sync with it.
 
 ## Tables (13)

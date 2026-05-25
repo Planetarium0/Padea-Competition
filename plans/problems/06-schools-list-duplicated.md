@@ -23,6 +23,6 @@ College"` without apostrophe, etc.).
 ### Fix
 
 Move the canonical list (and region mapping) into
-`scripts/data/schools_data.py` or similar. Have every migration import
+`data/schools_data.py` or similar. Have every migration import
 it. For the keyword aliases, a single shared `resolve_school(raw_str)`
 helper avoids further drift.

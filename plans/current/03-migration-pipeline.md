@@ -71,7 +71,7 @@ seen (e.g. `"No Beef, No Pork"`) to a list of standard restriction names.
 This is *append-only* across runs: missing entries are added by LLM (or
 heuristic), existing entries are reused. Edit by hand to override.
 
-The full taxonomy is in `scripts/data/dietary_data.py` —
+The full taxonomy is in `data/dietary_data.py` —
 `STANDARD_DIETARY_CHOICES` in `migrations/students.py` is a **subset** of
 that, missing `Vegan`, `Kosher`, `Pescatarian`, `No Lamb`. (See problems.)
 

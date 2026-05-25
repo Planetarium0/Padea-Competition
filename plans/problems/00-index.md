@@ -24,7 +24,7 @@ assessment — operator should triage.
 | 16 | Last-week-fallback never implemented | Low |
 | 17 | `gst.md` open question unresolved | Medium |
 | 18 | `diet` resource missing from CLAUDE.md docs | Low |
-| 19 | No `__init__.py` in `scripts/data`, `migrations`, etc. | Low |
+| 19 | No `__init__.py` in `data`, `migrations`, etc. | Low |
 | 20 | `register_orders` has unused / dead imports + dead code | Low |
 | 21 | Order-generator caterer-feedback rating loaded but unused | Low |
 | 22 | Heuristic contact parser still misses Kenko Sushi House | Low |

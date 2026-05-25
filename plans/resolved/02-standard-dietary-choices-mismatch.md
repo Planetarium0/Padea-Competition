@@ -13,7 +13,7 @@ STANDARD_DIETARY_CHOICES = [
 ]
 ```
 
-But `scripts/data/dietary_data.py` lists 15 restrictions, including:
+But `data/dietary_data.py` lists 15 restrictions, including:
 
 - `Vegan`
 - `Kosher`
@@ -21,11 +21,7 @@ But `scripts/data/dietary_data.py` lists 15 restrictions, including:
 - `No Lamb`
 
 These four are **missing** from `STANDARD_DIETARY_CHOICES`. The heuristic
-fallback `map_dietary_heuristically` never produces them. If a student's
-raw cell value is "Vegan", the heuristic matches "Vegetarian" first
-(substring "vegan"... no wait, the matcher iterates choices and tests
-`std.lower() in p`, so "vegetarian".lower() = "vegetarian" not in "vegan"
-→ no match; nothing else matches → empty array).
+fallback `map_dietary_heuristically` never produces them.
 
 So without an LLM key, every Vegan, Kosher, Pescatarian or No-Lamb
 student loses their dietary tag silently.

@@ -2,7 +2,7 @@
 
 **Severity:** Medium (affects financial accuracy).
 **Files:** `plans/gst.md` (one-line question), `scripts/actions/register_orders.py`
-(uses raw `Price per Item`), `scripts/data/schema.py`
+(uses raw `Price per Item`), `data/schema.py`
 (stores `Price Includes GST` checkbox).
 
 `plans/gst.md` is one line:

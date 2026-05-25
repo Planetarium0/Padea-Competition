@@ -11,7 +11,7 @@ for a student. They share what they can:
 
 ## The taxonomy
 
-Defined in `scripts/data/dietary_data.py`. Restrictions form a directed
+Defined in `data/dietary_data.py`. Restrictions form a directed
 graph where each node lists its **supersets** — its less-restrictive parents.
 
 ```

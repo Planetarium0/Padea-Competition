@@ -24,7 +24,7 @@ For Halal and Kosher we encode their religious meat constraints. A full
 treatment of Kosher rules (e.g. no meat+dairy together) is out of scope.
 """
 
-DIETARY_HIERARCHY = [
+DIETARY_HIERARCHY: list[tuple[str, list[str]]] = [
     # name, direct supersets (less-restrictive parents)
     ("Vegan",         ["Vegetarian", "Dairy Free"]),
     # Pescatarians eat fish, so Vegetarian must reach No Fish / No Shellfish
@@ -48,7 +48,7 @@ DIETARY_HIERARCHY = [
 ]
 
 
-def all_restriction_names():
+def all_restriction_names() -> list[str]:
     """Flat list of all restriction names, including those only referenced
     as supersets — so the migration can create every record before linking."""
     names = {name for name, _ in DIETARY_HIERARCHY}

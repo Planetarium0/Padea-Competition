@@ -1,7 +1,7 @@
 # 01 — Dietary hierarchy is ignored by `register_orders.py`
 
 **Severity:** High.
-**Files:** `scripts/actions/register_orders.py`, `scripts/data/dietary_data.py`.
+**Files:** `scripts/actions/register_orders.py`, `data/dietary_data.py`.
 
 The webapp builds a subset-closure from the `Dietary Restrictions` table
 and uses it for compatibility checks (`webapp/app.js → buildHierarchyMaps`

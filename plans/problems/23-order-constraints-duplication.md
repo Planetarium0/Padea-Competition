@@ -23,7 +23,7 @@ both halves drift in tandem.
 ### Fix
 
 Export `build_lookups` from `register_orders.py` (or pull both into a
-shared module under `scripts/data/`) and import from one source.
+shared module under `data/`) and import from one source.
 Alternatively, have `order_constraints.py` call
 `register_orders.build_lookups` directly even though it loads more data
 than the constraints check needs — the cost is small.
