@@ -99,7 +99,6 @@ def run():
         sessions_records.append({
             "Session ID":      session_id,
             "School":          [school_id],
-            "Region":          _clean_str(row["region"]),
             "Caterer":         [caterer_id] if caterer_id else None,
             "Date":            session_date,
             "Day":             day_name,

@@ -17,9 +17,9 @@ assessment — operator should triage.
 | 09 | ~~Exclusion heuristic hard-codes May 2026~~ | ~~Medium~~ |
 | 10 | `exclusions.py` always calls LLM (`if key or True:`) | Medium |
 | 11 | API key exposed in webapp bundle | High |
-| 12 | "Sent" Weekly Order status is misleading | Low |
+| 12 | ~~"Sent" Weekly Order status is misleading~~ | ~~Low~~ |
 | 13 | ~~`send_orders.py` `Send Date` is wrong~~ | ~~Low~~ |
-| 14 | Region denormalised on Sessions and Caterers | Low |
+| 14 | ~~Region denormalised on Sessions and Caterers~~ | ~~Low~~ |
 | 15 | No mid-term enrolment / incremental migration path | Medium |
 | 16 | Last-week-fallback never implemented | Low |
 | 17 | `gst.md` open question unresolved | Medium |

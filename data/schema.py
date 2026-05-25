@@ -143,18 +143,6 @@ TABLES_SCHEMA = {
                 "link_target": "Schools"
             },
             {
-                "name": "Region",
-                "type": "singleSelect",
-                "options": {
-                    "choices": [
-                        {"name": "Redlands"},
-                        {"name": "South Brisbane"},
-                        {"name": "West Brisbane"},
-                        {"name": "Central Brisbane"}
-                    ]
-                }
-            },
-            {
                 "name": "Caterer",
                 "type": "multipleRecordLinks",
                 "link_target": "Caterers"
@@ -263,17 +251,6 @@ TABLES_SCHEMA = {
             {"name": "Week Start", "type": "date", "options": {"dateFormat": {"name": "iso"}}},
             {"name": "Total Meals", "type": "number", "options": {"precision": 0}},
             {"name": "Total Cost", "type": "currency", "options": {"precision": 2, "symbol": "$"}},
-            {
-                "name": "Status",
-                "type": "singleSelect",
-                "options": {
-                    "choices": [
-                        {"name": "Draft"},
-                        {"name": "Sent"},
-                        {"name": "Confirmed"}
-                    ]
-                }
-            },
             {"name": "Notes", "type": "multilineText"}
         ]
     },

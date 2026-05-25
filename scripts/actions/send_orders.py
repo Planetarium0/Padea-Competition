@@ -1,10 +1,11 @@
 """
 send_orders.py — Format and queue caterer order emails for next week.
 
-Reads all Weekly Orders with Status='Draft', aggregates the per-session Orders
-records linked to each into per-item counts, formats a caterer email, and
-creates a record in the 'Scheduled Emails' Airtable table with Status='Queued'.
-Airtable automations watch that table to trigger actual sending.
+Reads all Weekly Orders whose Week Start is >= today, aggregates the
+per-session Orders records linked to each into per-item counts, formats a
+caterer email, and creates a record in the 'Scheduled Emails' Airtable table
+with Status='Queued'. Airtable automations watch that table to trigger actual
+sending.
 
 Usage:
   python scripts/send_orders.py [--preview]
@@ -63,9 +64,9 @@ def schedule_email(to_email, cc_email, subject, body, weekly_order_id, send_date
 # Data loading
 # ---------------------------------------------------------------------------
 
-def load_draft_orders():
-    orders = s.airtable_get("Weekly Orders", filter_formula="{Status}='Draft'")
-    s.log.info(f"Found {len(orders)} draft Weekly Orders")
+def load_pending_orders():
+    orders = s.airtable_get("Weekly Orders", filter_formula="{Week Start} >= TODAY()")
+    s.log.info(f"Found {len(orders)} Weekly Orders")
     return orders
 
 
@@ -253,12 +254,12 @@ def format_email_body(wo_fields, caterer_fields, line_items):
 # ---------------------------------------------------------------------------
 
 def process_orders(preview_only=False):
-    draft_orders = load_draft_orders()
-    if not draft_orders:
-        s.log.info("No draft orders to process.")
+    pending_orders = load_pending_orders()
+    if not pending_orders:
+        s.log.info("No pending orders to process.")
         return
 
-    for wo_record in draft_orders:
+    for wo_record in pending_orders:
         wo_fields    = wo_record["fields"]
         wo_id_label  = wo_fields.get("Order ID", wo_record["id"])
         s.log.info(f"\nProcessing: {wo_id_label}")
@@ -306,11 +307,6 @@ def process_orders(preview_only=False):
                 send_date=send_date,
                 email_id=email_id,
             )
-            try:
-                s.get_table("Weekly Orders").update(wo_record["id"], {"Status": "Sent"})
-                s.log.info(f"Marked '{wo_id_label}' as Sent.")
-            except Exception as e:
-                s.log.error(f"Failed to mark '{wo_id_label}' as Sent: {e}")
         else:
             s.log.info(f"[PREVIEW] Would send to {contact_email}")
 

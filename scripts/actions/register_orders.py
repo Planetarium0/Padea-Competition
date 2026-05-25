@@ -380,10 +380,7 @@ def clear_existing_orders(week_dates, dry_run=False):
 
     existing_wo = s.airtable_get(
         "Weekly Orders",
-        filter_formula=(
-            f"AND({{Week Start}} >= '{min_date}', {{Week Start}} <= '{max_date}', "
-            f"{{Status}} = 'Draft')"
-        )
+        filter_formula=f"AND({{Week Start}} >= '{min_date}', {{Week Start}} <= '{max_date}')"
     )
     if existing_wo:
         s.log.info(f"Clearing {len(existing_wo)} existing draft Weekly Orders for next week...")
@@ -613,7 +610,6 @@ def register_orders(dry_run=False):
             "Week Start":  next_monday.isoformat(),
             "Total Meals": total_meals,
             "Total Cost":  total_cost,
-            "Status":      "Draft",
         }])
         if not created_wo:
             s.log.error(f"Failed to create Weekly Order for '{caterer_name}' — skipping.")
