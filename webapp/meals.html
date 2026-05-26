@@ -154,6 +154,18 @@
         <!-- Toast -->
         <div id="toast" class="toast hidden"></div>
 
+        <!-- Variant picker modal -->
+        <div id="variant-modal" class="modal hidden" onclick="if(event.target===this)closeVariantModal()">
+            <div class="modal-card">
+                <h3 class="modal-title">Choose your option</h3>
+                <div id="variant-options" class="variant-options"></div>
+                <div class="modal-actions">
+                    <button class="btn-ghost" onclick="closeVariantModal()">Cancel</button>
+                    <button class="btn-primary" onclick="confirmVariantModal()">Select</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Confirm modal -->
         <div id="confirm-modal" class="modal hidden" onclick="if(event.target===this) confirmModalNo()">
             <div class="modal-card">

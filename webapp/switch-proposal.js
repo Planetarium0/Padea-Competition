@@ -3,10 +3,10 @@
  * URL: /webapp/switch-proposal.html?id=<airtable_record_id>
  *
  * On Approve: performs the same mutations as execute_caterer_switch.py —
- *   sets Sessions.Incoming Caterer, updates Caterers.Serves Schools /
- *   Able to Serve Schools, clears Students.Meal Preference — then marks
- *   the proposal Executed. register_orders.py commits the final
- *   Caterer → Incoming Caterer flip at the next Wednesday 8 PM run.
+ *   sets Sessions.Incoming Caterer, updates Caterers.Able to Serve Schools,
+ *   clears Students.Meal Preference — then marks the proposal Executed.
+ *   register_orders.py commits the final Caterer → Incoming Caterer flip at
+ *   the next Wednesday 8 PM run.
  *
  * On Reject: sets Status='Rejected' with optional coordinator notes.
  *
@@ -111,14 +111,36 @@ function ratingDisplay(avg) {
 }
 
 // ---------------------------------------------------------------------------
+// Confirm modal
+// ---------------------------------------------------------------------------
+
+let _confirmCallback = null;
+
+function openConfirm({ title, body, confirmLabel, onConfirm }) {
+    document.getElementById('confirm-title').textContent = title;
+    document.getElementById('confirm-body').textContent  = body;
+    document.getElementById('confirm-yes').textContent   = confirmLabel || 'OK';
+    _confirmCallback = onConfirm;
+    document.getElementById('confirm-modal').classList.remove('hidden');
+}
+
+function closeConfirm() {
+    document.getElementById('confirm-modal').classList.add('hidden');
+    _confirmCallback = null;
+}
+
+window.confirmModalYes = () => { if (_confirmCallback) _confirmCallback(); };
+window.confirmModalNo  = () => closeConfirm();
+
+// ---------------------------------------------------------------------------
 // Progress-step helpers (used during the approve flow)
 // ---------------------------------------------------------------------------
 
 const STEPS = [
-    { id: 'step-sessions',  label: 'Queuing caterer change on sessions' },
-    { id: 'step-caterers',  label: 'Updating caterer assignments'       },
-    { id: 'step-students',  label: 'Clearing student meal preferences'  },
-    { id: 'step-finalise',  label: 'Finalising proposal'                },
+    { id: 'step-sessions',  label: 'Queuing caterer change on session'   },
+    { id: 'step-caterers',  label: 'Updating caterer eligibility'        },
+    { id: 'step-students',  label: 'Clearing student meal preferences'   },
+    { id: 'step-finalise',  label: 'Finalising proposal'                 },
 ];
 
 function initProgress() {
@@ -147,14 +169,15 @@ function stepDone(id) {
 // ---------------------------------------------------------------------------
 
 const page = {
-    proposalId:  null,
-    proposal:    null,   // full record
-    schoolId:    null,
-    outgoingId:  null,
-    incomingId:  null,
-    schoolName:  '(school)',
-    outgoingName:'(outgoing caterer)',
-    incomingName:'(incoming caterer)',
+    proposalId:   null,
+    proposal:     null,
+    sessionId:    null,
+    sessionName:  '(session)',
+    schoolId:     null,
+    outgoingId:   null,
+    incomingId:   null,
+    outgoingName: '(outgoing caterer)',
+    incomingName: '(incoming caterer)',
 
     async init() {
         const params = new URLSearchParams(location.search);
@@ -177,22 +200,27 @@ const page = {
         this.proposal   = rec;
         const f = rec.fields;
 
-        this.schoolId   = (f['School']           || [])[0] ?? null;
+        this.sessionId  = (f['Session']          || [])[0] ?? null;
         this.outgoingId = (f['Outgoing Caterer']  || [])[0] ?? null;
         this.incomingId = (f['Incoming Caterer']  || [])[0] ?? null;
 
-        // Resolve linked-record names in parallel
-        const [school, outgoing, incoming] = await Promise.all([
-            this.schoolId   ? atGetOne('Schools',  this.schoolId)   : null,
-            this.outgoingId ? atGetOne('Caterers', this.outgoingId) : null,
-            this.incomingId ? atGetOne('Caterers', this.incomingId) : null,
+        // Fetch session and caterers in parallel; then fetch school from session.
+        const [sessionRec, outgoing, incoming] = await Promise.all([
+            this.sessionId  ? atGetOne('Sessions', this.sessionId)   : null,
+            this.outgoingId ? atGetOne('Caterers', this.outgoingId)  : null,
+            this.incomingId ? atGetOne('Caterers', this.incomingId)  : null,
         ]);
 
-        this.schoolName   = school?.fields?.['School Name']   ?? '—';
+        this.schoolId = (sessionRec?.fields?.['School'] || [])[0] ?? null;
+        const schoolRec = this.schoolId ? await atGetOne('Schools', this.schoolId) : null;
+        const schoolName = schoolRec?.fields?.['School Name'] ?? '—';
+        const day = sessionRec?.fields?.['Day'] ?? '';
+        this.sessionName = day ? `${schoolName} — ${day}` : schoolName;
+
         this.outgoingName = outgoing?.fields?.['Caterer Name'] ?? '—';
         this.incomingName = incoming?.fields?.['Caterer Name'] ?? '—';
 
-        setText('d-school',   this.schoolName);
+        setText('d-session',  this.sessionName);
         setText('d-outgoing', this.outgoingName);
         setText('d-incoming', this.incomingName);
         setText('d-rating',   ratingDisplay(f['Avg Rating']));
@@ -231,49 +259,44 @@ const page = {
     // Approve flow
     // -----------------------------------------------------------------------
 
-    async approve() {
-        if (!confirm(
-            `Approve switching from ${this.outgoingName} to ${this.incomingName} ` +
-            `at ${this.schoolName}?\n\n` +
-            `This will update sessions and clear student meal preferences.`
-        )) return;
+    approve() {
+        openConfirm({
+            title:        'Approve switch?',
+            body:         `Switch from ${this.outgoingName} to ${this.incomingName} ` +
+                          `for ${this.sessionName}? This will update the session and ` +
+                          `clear student meal preferences.`,
+            confirmLabel: 'Approve',
+            onConfirm:    () => { closeConfirm(); this._doApprove(); },
+        });
+    },
 
+    async _doApprove() {
         showOnly('view-working');
         initProgress();
 
         try {
             // --- Step 1: Set Sessions.Incoming Caterer ----------------------
             stepWorking('step-sessions');
-            const sessions = await atGetAll('Sessions',
-                `FIND("${this.schoolId}", ARRAYJOIN({School}))`
-            );
-            if (sessions.length > 0) {
-                await atPatchBatch('Sessions', sessions.map(s => ({
-                    id:     s.id,
-                    fields: { 'Incoming Caterer': [this.incomingId] },
-                })));
-            }
+            await atPatch('Sessions', this.sessionId, {
+                'Incoming Caterer': [this.incomingId],
+            });
             stepDone('step-sessions');
 
-            // --- Step 2: Update Caterers.Serves Schools / Able to Serve ----
+            // --- Step 2: Update Caterers.Able to Serve Schools --------------
+            // Outgoing caterer gains the school back as eligible;
+            // incoming caterer loses it (it's now actively serving).
             stepWorking('step-caterers');
             const [outRec, inRec] = await Promise.all([
                 atGetOne('Caterers', this.outgoingId),
                 atGetOne('Caterers', this.incomingId),
             ]);
-
-            const outServes  = outRec.fields['Serves Schools']        || [];
-            const outAble    = outRec.fields['Able to Serve Schools']  || [];
-            const inServes   = inRec.fields['Serves Schools']         || [];
-            const inAble     = inRec.fields['Able to Serve Schools']   || [];
-
+            const outAble = outRec.fields['Able to Serve Schools'] || [];
+            const inAble  = inRec.fields['Able to Serve Schools']  || [];
             await Promise.all([
                 atPatch('Caterers', this.outgoingId, {
-                    'Serves Schools':       outServes.filter(id => id !== this.schoolId),
                     'Able to Serve Schools': [...new Set([...outAble, this.schoolId])],
                 }),
                 atPatch('Caterers', this.incomingId, {
-                    'Serves Schools':       [...new Set([...inServes, this.schoolId])],
                     'Able to Serve Schools': inAble.filter(id => id !== this.schoolId),
                 }),
             ]);
@@ -281,10 +304,9 @@ const page = {
 
             // --- Step 3: Clear Students.Meal Preference ---------------------
             stepWorking('step-students');
-            const sessionIds = new Set(sessions.map(s => s.id));
             const allStudents = await atGetAll('Students');
             const affected = allStudents.filter(stu =>
-                (stu.fields['Sessions'] || []).some(sid => sessionIds.has(sid))
+                (stu.fields['Sessions'] || []).includes(this.sessionId)
             );
             if (affected.length > 0) {
                 await atPatchBatch('Students', affected.map(stu => ({
@@ -301,13 +323,12 @@ const page = {
             });
             stepDone('step-finalise');
 
-            // Done
             document.getElementById('result-icon').className = 'result-icon icon-success';
             document.getElementById('result-icon').textContent = '✓';
             setText('result-title', 'Switch approved!');
             setText('result-msg',
                 `${this.incomingName} will take over from ${this.outgoingName} ` +
-                `at ${this.schoolName} from the next order run.`
+                `for ${this.sessionName} from the next order run.`
             );
             showOnly('view-done');
 
@@ -340,8 +361,8 @@ const page = {
             document.getElementById('result-icon').textContent = '✕';
             setText('result-title', 'Proposal rejected');
             setText('result-msg',
-                `You won't be reminded about ${this.outgoingName} at ` +
-                `${this.schoolName} again this term.`
+                `You won't be reminded about ${this.outgoingName} for ` +
+                `${this.sessionName} again this term.`
             );
             showOnly('view-done');
         } catch (e) {

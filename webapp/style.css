@@ -650,6 +650,70 @@ textarea:focus {
 }
 
 /* ============================================================
+   Variant picker (inside modal)
+   ============================================================ */
+.variant-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.variant-option {
+  display: flex;
+  align-items: center;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  cursor: pointer;
+  gap: 12px;
+  transition: border-color 100ms, background-color 100ms;
+}
+
+.variant-option:active { background: var(--primary-tint); }
+
+.variant-option.selected {
+  border-color: var(--primary);
+  background: var(--primary-tint);
+}
+
+.variant-option.incompatible {
+  background: #F4F0EE;
+  opacity: 0.75;
+}
+
+.variant-option.incompatible .meal-name { color: var(--text-muted); }
+
+.variant-option.incompatible.selected,
+.variant-option.maybe.selected {
+  opacity: 1;
+  border-color: var(--primary);
+  background: var(--primary-tint);
+}
+
+.variant-option.incompatible.selected .meal-name { color: var(--text); }
+
+.variant-option .meal-radio { /* inherits base .meal-radio */ }
+
+.variant-option.selected .meal-radio { border-color: var(--primary); }
+
+.variant-option.selected .meal-radio::after {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+/* "Options available" / "Dietary variant available" note on meal list rows */
+.meal-variant-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  font-style: italic;
+}
+
+/* ============================================================
    Confirm modal
    ============================================================ */
 .modal {

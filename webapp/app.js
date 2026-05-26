@@ -30,8 +30,8 @@ const CACHE_TTL = {
   session: 60 * 60 * 1000,         // 1h
   student: 24 * 60 * 60 * 1000,    // 24h
   students: 60 * 60 * 1000,         // 1h
-  menu: 24 * 60 * 60 * 1000,    // 24h
-  diet: 24 * 60 * 60 * 1000,    // 24h
+  menu: 60 * 60 * 1000,            // 1h — caterer menus can change during a switch transition
+  diet: 24 * 60 * 60 * 1000,       // 24h
   feedback: 5 * 60 * 1000,          // 5m
 };
 
@@ -241,7 +241,7 @@ async function loadMenuItems(catererId) {
   const formula = `OR(${menuIds.map(id => `RECORD_ID()='${id}'`).join(",")})`;
   const items = await atList("Menu Items", {
     filterByFormula: formula,
-    "fields[]": ["Menu Item Name", "Dietary Tags"],
+    "fields[]": ["Menu Item Name", "Dietary Tags", "Is Variant", "Variant Of"],
   });
   console.log(`[padea] menu loaded: ${items.length} items`);
   cacheSet(key, items);
@@ -277,28 +277,57 @@ async function loadNegativeKeywords() {
   return data;
 }
 
-async function loadExistingFeedback(studentId, sessionId, catererId) {
-  console.log("Loading Existing Feedback");
-  const key = `padea_fb_${studentId}_${sessionId}_${catererId || ""}`;
+async function loadExistingFeedback(studentId, catererId) {
+  // Key is (student, caterer) — one review per student per caterer, across sessions.
+  const key = `padea_fb_${studentId}_${catererId || ""}`;
   const cached = cacheGet(key, "feedback");
   if (cached !== null) return cached;
-  const catererClause = catererId ? `, FIND('${catererId}', ARRAYJOIN({Caterer}))` : "";
-  const formula = `AND(FIND('${studentId}', ARRAYJOIN({Student})), FIND('${sessionId}', ARRAYJOIN({Session}))${catererClause})`;
+  // Airtable formula filters on linked-record fields use primary-field values
+  // (names), not record IDs, so we can't filter by ID in the formula. Fetch
+  // all feedback and match by record ID client-side — the table is small.
   const recs = await atList("Caterer Feedback", {
-    filterByFormula: formula,
-    "fields[]": ["Rating", "Comment"],
+    "fields[]": ["Rating", "Comment", "Student", "Caterer"],
   });
-  const fb = recs[0]
-    ? {
-      recordId: recs[0].id,
-      rating: recs[0].fields.Rating || 0,
-      comment: recs[0].fields.Comment || "",
-    }
+  const match = recs.find(r =>
+    (r.fields.Student || []).includes(studentId) &&
+    (!catererId || (r.fields.Caterer || []).includes(catererId))
+  );
+  const fb = match
+    ? { recordId: match.id, rating: match.fields.Rating || 0, comment: match.fields.Comment || "" }
     : { recordId: null, rating: 0, comment: "" };
   cacheSet(key, fb);
   return fb;
 }
 
+
+// ============================================================
+// Variant helpers
+// ============================================================
+
+function buildVariantMap(items) {
+  const map = {};
+  for (const item of items) {
+    if (item.fields["Is Variant"]) {
+      const parentId = (item.fields["Variant Of"] || [])[0];
+      if (parentId) (map[parentId] ||= []).push(item);
+    }
+  }
+  return map;
+}
+
+// Returns the best dietary severity across a parent item and its variants,
+// so an item with an incompatible parent but a compatible variant isn't
+// bucketed into the "doesn't match" section of the meal list.
+function bestVariantSeverity(parentSeverity, variants, reqs, maps) {
+  if (!maps || !reqs.length || !variants.length) return parentSeverity;
+  let best = parentSeverity;
+  for (const v of variants) {
+    const { severity } = checkCompatibility(v, reqs, maps);
+    if (severity === "ok") return "ok";
+    if (severity === "maybe" && best === "no") best = "maybe";
+  }
+  return best;
+}
 
 // ============================================================
 // Dietary hierarchy
@@ -407,6 +436,7 @@ const state = {
   rating: 0,
   comment: "",
   mealItemId: null,
+  variantMap: {},   // parentItemId → [variantItem, ...]
 
   feedbackRecordId: null,
   feedbackPromise: null,
@@ -485,7 +515,11 @@ const app = {
     const catererId = menuCatererId(session);
     if (catererId) {
       state.menuPromise = loadMenuItems(catererId)
-        .then(items => { state.menuItems = items; return items; })
+        .then(items => {
+          state.menuItems = items;
+          state.variantMap = buildVariantMap(items);
+          return items;
+        })
         .catch(err => { console.error(err); return []; });
     }
 
@@ -536,6 +570,31 @@ const app = {
     updateMealTrigger();
     updateSubmitState();
     setTimeout(() => showView("form"), 140);
+  },
+
+  openVariantPicker(parentId) {
+    const parent = state.menuItems.find(i => i.id === parentId);
+    if (!parent) return;
+    const variants = state.variantMap[parentId] || [];
+    const allOptions = [parent, ...variants];
+    const reqs = state.student?.fields["Dietary Requirements"] || [];
+    const maps = state.dietMaps;
+
+    // Determine the initial selection:
+    // 1. Respect an existing choice within this group.
+    // 2. Otherwise auto-select the single fully-compatible option.
+    // 3. Fall back to the parent.
+    let selectedId = parentId;
+    if (allOptions.some(o => o.id === state.mealItemId)) {
+      selectedId = state.mealItemId;
+    } else if (maps && reqs.length) {
+      const compatible = allOptions.filter(
+        o => checkCompatibility(o, reqs, maps).severity === "ok"
+      );
+      if (compatible.length === 1) selectedId = compatible[0].id;
+    }
+
+    showVariantModal(allOptions, selectedId, maps, reqs);
   },
 
   attemptUnsafeSelect(itemId) {
@@ -680,7 +739,7 @@ async function loadFormData(studentId) {
   // promise before deciding create vs update, preventing duplicate records
   // if the user submits before this resolves.
   const catererId = (state.session?.fields?.Caterer || [])[0];
-  state.feedbackPromise = loadExistingFeedback(studentId, state.sessionId, catererId)
+  state.feedbackPromise = loadExistingFeedback(studentId, catererId)
     .then(fb => {
       state.feedbackRecordId = fb.recordId;
       state.initialRating = fb.rating;
@@ -784,12 +843,18 @@ function renderMealList() {
     return;
   }
 
+  // Exclude variants from the main list — they appear only inside the variant picker.
+  const displayItems = state.menuItems.filter(i => !i.fields["Is Variant"]);
+
   // Bucket items: compatible / possibly-compatible / definitely-incompatible.
+  // For items with variants, use the best severity across all options.
   const compat = [], maybe = [], incompat = [];
-  for (const item of state.menuItems) {
+  for (const item of displayItems) {
     const r = checkCompatibility(item, reqs, maps);
-    if (r.severity === "ok") compat.push({ item, result: r });
-    else if (r.severity === "maybe") maybe.push({ item, result: r });
+    const variants = state.variantMap[item.id] || [];
+    const effectiveSev = bestVariantSeverity(r.severity, variants, reqs, maps);
+    if (effectiveSev === "ok") compat.push({ item, result: r });
+    else if (effectiveSev === "maybe") maybe.push({ item, result: r });
     else incompat.push({ item, result: r });
   }
 
@@ -802,29 +867,53 @@ function renderMealList() {
       const short = TAG_SHORT[tName] || tName;
       return `<span class="tag">${escapeHtml(short)}</span>`;
     }).join("");
-    const selected = item.id === state.mealItemId;
+
+    const variants = state.variantMap[item.id] || [];
+    const hasVariants = variants.length > 0;
+
+    // An item counts as selected if it or one of its variants is chosen.
+    const selected = item.id === state.mealItemId ||
+      variants.some(v => v.id === state.mealItemId);
+
     const sev = result.severity;
-    const reasonHtml = result.issues.length
-      ? `<div class="meal-reason meal-reason-${sev}">${escapeHtml(result.issues.map(i => i.label).join(" · "))
-      }</div>`
+
+    // Items with variants always open the picker, never select directly.
+    const onclick = hasVariants
+      ? `app.openVariantPicker('${item.id}')`
+      : sev === "ok"
+        ? `app.selectMeal('${item.id}')`
+        : `app.attemptUnsafeSelect('${item.id}')`;
+
+    // Show the parent's incompatibility reason only when no variant rescues it.
+    const effectiveSev = hasVariants
+      ? bestVariantSeverity(sev, variants, reqs, maps)
+      : sev;
+    const reasonHtml = (!hasVariants || effectiveSev === "no") && result.issues.length
+      ? `<div class="meal-reason meal-reason-${sev}">${escapeHtml(result.issues.map(i => i.label).join(" · "))}</div>`
       : "";
-    // Both "no" and "maybe" rows require confirmation; only fully-compatible
-    // rows are picked directly.
-    const onclick = sev === "ok"
-      ? `app.selectMeal('${item.id}')`
-      : `app.attemptUnsafeSelect('${item.id}')`;
+
+    // Show a note when there are variant options.
+    const variantNoteText = hasVariants
+      ? (sev !== "ok" && effectiveSev !== "no" ? "Dietary variant available" : "Options available")
+      : "";
+    const variantNoteHtml = variantNoteText
+      ? `<div class="meal-variant-note">${variantNoteText}</div>`
+      : "";
+
     const klass = [
       "meal-item",
       selected ? "selected" : "",
-      sev === "no" ? "incompatible" : "",
-      sev === "maybe" ? "maybe" : "",
+      effectiveSev === "no" ? "incompatible" : "",
+      effectiveSev === "maybe" ? "maybe" : "",
     ].filter(Boolean).join(" ");
+
     return `
       <li class="${klass}" onclick="${onclick}">
         <div class="meal-radio"></div>
         <div class="meal-content">
           <div class="meal-name">${escapeHtml(name)}</div>
           ${reasonHtml}
+          ${variantNoteHtml}
           <div class="meal-tags">${tagsHtml}</div>
         </div>
       </li>`;
@@ -922,7 +1011,7 @@ async function persistChanges() {
     if (state.feedbackRecordId) {
       ops.push(atUpdate("Caterer Feedback", state.feedbackRecordId, fields));
     } else {
-      fields["Feedback ID"] = makeId("FB", state.studentId, state.sessionId);
+      fields["Feedback ID"] = makeId("FB", state.studentId, catererId || state.sessionId);
       ops.push(atCreate("Caterer Feedback", fields).then(rec => {
         state.feedbackRecordId = rec.id;
       }));
@@ -950,7 +1039,7 @@ async function persistChanges() {
   }
 
   const _catererId = (state.session?.fields?.Caterer || [])[0] || "";
-  ls.remove(`padea_fb_${state.studentId}_${state.sessionId}_${_catererId}`);
+  ls.remove(`padea_fb_${state.studentId}_${_catererId}`);
 }
 
 function doneMessage() {
@@ -1040,6 +1129,81 @@ function toast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.add("hidden"), 2400);
 }
+
+// ============================================================
+// Variant picker modal
+// ============================================================
+
+let variantModalSelected = null;
+
+function showVariantModal(options, selectedId, maps, reqs) {
+  variantModalSelected = selectedId;
+
+  const optionsEl = document.getElementById("variant-options");
+  optionsEl.innerHTML = options.map(item => {
+    const { severity, issues } = maps
+      ? checkCompatibility(item, reqs, maps)
+      : { severity: "ok", issues: [] };
+    const name = item.fields["Menu Item Name"] || "—";
+    const tagIds = item.fields["Dietary Tags"] || [];
+    const tagsHtml = tagIds.map(tid => {
+      const tName = maps?.idToName[tid];
+      if (!tName) return "";
+      return `<span class="tag">${escapeHtml(TAG_SHORT[tName] || tName)}</span>`;
+    }).join("");
+    const reasonHtml = issues.length
+      ? `<div class="meal-reason meal-reason-${severity}">${escapeHtml(issues.map(i => i.label).join(" · "))}</div>`
+      : "";
+    const isSelected = item.id === selectedId;
+    const klass = [
+      "variant-option",
+      isSelected ? "selected" : "",
+      severity === "no" ? "incompatible" : severity === "maybe" ? "maybe" : "",
+    ].filter(Boolean).join(" ");
+    return `
+      <div class="${klass}" data-item-id="${item.id}" onclick="selectVariantOption('${item.id}')">
+        <div class="meal-radio"></div>
+        <div class="meal-content">
+          <div class="meal-name">${escapeHtml(name)}</div>
+          ${reasonHtml}
+          <div class="meal-tags">${tagsHtml}</div>
+        </div>
+      </div>`;
+  }).join("");
+
+  document.getElementById("variant-modal").classList.remove("hidden");
+}
+
+window.selectVariantOption = function(itemId) {
+  variantModalSelected = itemId;
+  document.querySelectorAll(".variant-option").forEach(el => {
+    el.classList.toggle("selected", el.dataset.itemId === itemId);
+  });
+};
+
+window.closeVariantModal = function() {
+  document.getElementById("variant-modal").classList.add("hidden");
+  variantModalSelected = null;
+};
+
+window.confirmVariantModal = function() {
+  const id = variantModalSelected;
+  closeVariantModal();
+  if (!id) return;
+
+  // If the chosen option is dietarily problematic, route through the
+  // existing unsafe-select confirmation flow.
+  const item = state.menuItems.find(i => i.id === id);
+  const reqs = state.student?.fields["Dietary Requirements"] || [];
+  if (item && state.dietMaps && reqs.length) {
+    const { severity } = checkCompatibility(item, reqs, state.dietMaps);
+    if (severity !== "ok") {
+      app.attemptUnsafeSelect(id);
+      return;
+    }
+  }
+  app.selectMeal(id);
+};
 
 // ============================================================
 // Bootstrap

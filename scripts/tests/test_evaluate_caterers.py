@@ -14,6 +14,8 @@ from datetime import date
 
 import fixtures
 from actions.evaluate_caterers import (
+    EvaluationData,
+    EvaluationIndex,
     FeedbackEntry,
     MIN_RATERS,
     MIN_SESSIONS,
@@ -21,6 +23,7 @@ from actions.evaluate_caterers import (
     SWITCH_THRESHOLD,
     WATCH_THRESHOLD,
     caterer_covers_all_students,
+    find_candidates,
     get_rolling_stats,
     get_term_start,
     has_active_proposal,
@@ -323,6 +326,148 @@ class TestGetTermStart(unittest.TestCase):
     def test_before_all_term_starts_falls_back_to_first(self):
         # Date earlier than the first term start returns the first term.
         self.assertEqual(get_term_start(date(2026, 1, 1)), date(2026, 1, 27))
+
+
+# ---------------------------------------------------------------------------
+# find_candidates — dietary hard filter integration
+# ---------------------------------------------------------------------------
+
+def _build_eval_index(
+    caterers: list[Record],
+    menu_items: list[Record],
+    students: list[Record] | None = None,
+) -> EvaluationIndex:
+    """Build a real EvaluationIndex from minimal test data."""
+    data = EvaluationData(
+        sessions=             [],
+        feedback=             [],
+        caterers=             caterers,
+        students=             students or [],
+        menu_items=           menu_items,
+        dietary_restrictions= fixtures.dietary_records(),
+        proposals=            [],
+        schools=              [fixtures.school_alpha(), fixtures.school_beta()],
+        managers=             [],
+    )
+    return EvaluationIndex.build(data)
+
+
+class TestFindCandidates(unittest.TestCase):
+    """Verify find_candidates applies the dietary hard filter end-to-end,
+    not just that caterer_covers_all_students works in isolation."""
+
+    def test_caterer_without_vegan_option_excluded(self):
+        # School A has a vegan student.  Meat Masters can serve but has
+        # only chicken and beef items — neither is compatible with Vegan.
+        # A second caterer ("Good Eats") has a vegan-tagged item and should
+        # be the sole candidate returned.
+        good_caterer_id = "cGood0001"
+        good_caterer = Record(id=good_caterer_id, fields={
+            "Caterer Name":          "Good Eats",
+            "Able to Serve Schools": [fixtures.SCHOOL_A_ID],
+        })
+        good_menu_item = Record(id="iGoodVgn", fields={
+            "Menu Item Name": "Vegan Curry",
+            "Caterer":        [good_caterer_id],
+            "Dietary Tags":   [fixtures.DIET_VEGAN_ID],
+        })
+
+        index = _build_eval_index(
+            caterers=[fixtures.caterer_meat_only(), good_caterer],
+            menu_items=fixtures.menu_items_meat_only() + [good_menu_item],
+        )
+        school_students = [fixtures.student_vegan()]
+
+        candidates = find_candidates(
+            school_id=           fixtures.SCHOOL_A_ID,
+            outgoing_caterer_id= "cOutgoing",
+            school_students=     school_students,
+            index=               index,
+        )
+
+        candidate_ids = [cid for _, cid, _ in candidates]
+        self.assertNotIn(fixtures.CATERER_MEAT_ID, candidate_ids,
+                         "Meat-only caterer should be excluded (can't cover vegan student)")
+        self.assertIn(good_caterer_id, candidate_ids,
+                      "Caterer with vegan item should be included")
+
+    def test_all_candidates_excluded_returns_empty_list(self):
+        # Both available caterers are meat-only — no valid replacement exists.
+        caterer_2 = Record(id="cMeat0002", fields={
+            "Caterer Name":          "Burger Palace",
+            "Able to Serve Schools": [fixtures.SCHOOL_A_ID],
+        })
+        burger_item = Record(id="iBurger", fields={
+            "Menu Item Name": "Beef Burger",
+            "Caterer":        ["cMeat0002"],
+            "Dietary Tags":   [],
+        })
+
+        index = _build_eval_index(
+            caterers=[fixtures.caterer_meat_only(), caterer_2],
+            menu_items=fixtures.menu_items_meat_only() + [burger_item],
+        )
+        school_students = [fixtures.student_vegan()]
+
+        candidates = find_candidates(
+            school_id=           fixtures.SCHOOL_A_ID,
+            outgoing_caterer_id= "cOutgoing",
+            school_students=     school_students,
+            index=               index,
+        )
+        self.assertEqual(candidates, [])
+
+    def test_outgoing_caterer_not_listed_as_candidate(self):
+        # The caterer being replaced must never appear in the candidate list,
+        # even if it's on Able to Serve and would otherwise be valid.
+        outgoing_id = fixtures.CATERER_A_ID
+        index = _build_eval_index(
+            caterers=[fixtures.caterer_a()],
+            menu_items=fixtures.menu_items_caterer_a(),
+        )
+        # caterer_a has Able to Serve = [] so it wouldn't pass the able check
+        # anyway, but we explicitly test the skip-self logic with a caterer
+        # that IS able to serve.
+        caterer_self_able = Record(id=outgoing_id, fields={
+            "Caterer Name":          "Self Caterer",
+            "Able to Serve Schools": [fixtures.SCHOOL_A_ID],
+        })
+        index2 = _build_eval_index(
+            caterers=[caterer_self_able],
+            menu_items=fixtures.menu_items_caterer_a(),
+        )
+        candidates = find_candidates(
+            school_id=           fixtures.SCHOOL_A_ID,
+            outgoing_caterer_id= outgoing_id,
+            school_students=     [fixtures.student_normal()],
+            index=               index2,
+        )
+        candidate_ids = [cid for _, cid, _ in candidates]
+        self.assertNotIn(outgoing_id, candidate_ids)
+
+    def test_caterer_not_able_to_serve_school_excluded(self):
+        # Even a caterer with a perfect menu is excluded if the school isn't
+        # in its Able to Serve Schools list.
+        caterer_wrong_area = Record(id="cFarAway", fields={
+            "Caterer Name":          "Far Away Foods",
+            "Able to Serve Schools": [fixtures.SCHOOL_B_ID],  # wrong school
+        })
+        far_menu = [Record(id="iFarVgn", fields={
+            "Menu Item Name": "Vegan Delight",
+            "Caterer":        ["cFarAway"],
+            "Dietary Tags":   [fixtures.DIET_VEGAN_ID],
+        })]
+        index = _build_eval_index(
+            caterers=[caterer_wrong_area],
+            menu_items=far_menu,
+        )
+        candidates = find_candidates(
+            school_id=           fixtures.SCHOOL_A_ID,
+            outgoing_caterer_id= "cOutgoing",
+            school_students=     [fixtures.student_normal()],
+            index=               index,
+        )
+        self.assertEqual(candidates, [])
 
 
 if __name__ == "__main__":

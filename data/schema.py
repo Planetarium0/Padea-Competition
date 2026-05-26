@@ -66,11 +66,10 @@ TABLES_SCHEMA: dict[str, dict[str, Any]] = {
             {"name": "Price Includes GST", "type": "checkbox", "options": {"icon": "check", "color": "greenBright"}},
             {"name": "Notes", "type": "multilineText"},
             {
-                "name": "Serves Schools",
-                "type": "multipleRecordLinks",
-                "link_target": "Schools"
-            },
-            {
+                # Schools this caterer is eligible to serve (but does not currently).
+                # Used by evaluate_caterers.py when selecting replacement candidates.
+                # The current assignment is derived from Sessions.Caterer — no
+                # separate "Serves Schools" field is needed.
                 "name": "Able to Serve Schools",
                 "type": "multipleRecordLinks",
                 "link_target": "Schools"
@@ -90,6 +89,16 @@ TABLES_SCHEMA: dict[str, dict[str, Any]] = {
                 "name": "Dietary Tags",
                 "type": "multipleRecordLinks",
                 "link_target": "Dietary Restrictions"
+            },
+            # If checked, this item is a dietary variant of another item and is
+            # hidden from the webapp's main meal list. Students see the parent
+            # item and choose their preferred option via a dropdown.
+            {"name": "Is Variant", "type": "checkbox", "options": {"icon": "check", "color": "greenBright"}},
+            {
+                "name": "Variant Of",
+                "type": "multipleRecordLinks",
+                "link_target": "Menu Items",
+                "inverse_name": "Variants",
             },
             {"name": "Notes", "type": "multilineText"}
         ]
@@ -343,9 +352,9 @@ TABLES_SCHEMA: dict[str, dict[str, Any]] = {
         "primary": {"name": "Proposal ID", "type": "singleLineText"},
         "fields": [
             {
-                "name": "School",
+                "name": "Session",
                 "type": "multipleRecordLinks",
-                "link_target": "Schools"
+                "link_target": "Sessions"
             },
             {
                 "name": "Outgoing Caterer",

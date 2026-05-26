@@ -36,23 +36,31 @@ def _parse_menus_heuristic(text: str) -> list[dict[str, Any]]:
             line = line.strip()
             if not line or "dietary legend" in line.lower() or "gst" in line.lower() or "=" in line:
                 continue
-            tags: list[str] = []
+            flags: list[str] = []
             item_words: list[str] = []
             for w in line.split():
                 clean_w = w.strip(" ,()").upper()
                 if clean_w in ("GF", "DF", "NF", "VO"):
-                    tags.append(clean_w)
+                    flags.append(clean_w)
                 else:
                     item_words.append(w)
             item_name = " ".join(item_words).strip()
             if not item_name:
                 continue
-            tag_map = {"GF": "Gluten Free", "DF": "Dairy Free", "NF": "Nut Free", "VO": "Vegetarian"}
-            dietary = [tag_map[t] for t in tags if t in tag_map]
+            # VO means a vegetarian *variant* exists, not that the item itself is
+            # vegetarian. Exclude it from the base item's tags; a companion variant
+            # record will be created after the base items are inserted.
+            base_tag_map = {"GF": "Gluten Free", "DF": "Dairy Free", "NF": "Nut Free"}
+            dietary = [base_tag_map[f] for f in flags if f in base_tag_map]
             _PORK_WORDS = ("pork", "bacon", "ham", "prosciutto", "pancetta", "lard", "salami", "chorizo")
             if not any(w in item_name.lower() for w in _PORK_WORDS):
                 dietary.append("Halal")
-            items.append({"Menu Item Name": item_name, "Dietary Tags": list(set(dietary)), "Notes": None})
+            items.append({
+                "Menu Item Name":        item_name,
+                "Dietary Tags":          list(set(dietary)),
+                "Has Vegetarian Option": "VO" in flags,
+                "Notes":                 None,
+            })
 
         caterer_menus.append({
             "Caterer Name":           caterer_name,
@@ -98,11 +106,13 @@ Return a JSON array of objects, where each object represents one caterer and has
 - "Price Includes GST" (boolean)
 - "Delivery Fee" (number)
 - "Delivery Fee Structure" (string, either "Per trip" or "Per school per trip")
-- "Items" (array of objects with "Menu Item Name", "Dietary Tags", "Notes")
+- "Items" (array of objects with "Menu Item Name", "Dietary Tags", "Has Vegetarian Option", "Notes")
 
 Dietary tag rules:
-1. Map GF→"Gluten Free", DF→"Dairy Free", NF→"Nut Free", VO→"Vegetarian".
-2. Add "Halal" to any item whose name does not imply pork.
+1. Map GF→"Gluten Free", DF→"Dairy Free", NF→"Nut Free".
+2. VO means a vegetarian variant exists alongside the standard item — do NOT add "Vegetarian"
+   to "Dietary Tags". Instead set "Has Vegetarian Option": true on that item.
+3. Add "Halal" to any item whose name does not imply pork.
 
 Raw Menu Text:
 ```
@@ -137,7 +147,8 @@ Raw Menu Text:
         log.error("No Dietary Restrictions found. Run dietary_restrictions migration first.")
         sys.exit(1)
 
-    menu_items_records: list[MenuItemFields] = []
+    # (item_fields, has_vo, base_tag_ids) — tracked so we can build variants after insertion.
+    pending_items: list[tuple[MenuItemFields, bool, list[str]]] = []
     caterer_updates: list[dict[str, Any]] = []
 
     for menu in parsed_menus:
@@ -173,14 +184,44 @@ Raw Menu Text:
             note = item.get("Notes")
             if note:
                 menu_record["Notes"] = note
-            menu_items_records.append(menu_record)
+            has_vo = bool(item.get("Has Vegetarian Option"))
+            pending_items.append((menu_record, has_vo, tag_ids))
 
     if caterer_updates:
         log.info(f"Updating pricing for {len(caterer_updates)} caterer(s)...")
         db.Caterers.batch_update(caterer_updates)
-    if menu_items_records:
-        log.info(f"Migrating {len(menu_items_records)} Menu Item(s)...")
-        db.MenuItems.create(menu_items_records)
+
+    if not pending_items:
+        log.info("Caterer menus migration completed successfully.")
+        return
+
+    # Pass 1 — insert all base items (VO items are not vegetarian themselves).
+    base_records = [fields for fields, _, _ in pending_items]
+    log.info(f"Migrating {len(base_records)} Menu Item(s)...")
+    created = db.MenuItems.create(base_records)
+
+    # Pass 2 — create a vegetarian variant for each VO-flagged item.
+    veg_id = diet_name_to_id.get("Vegetarian")
+    variant_records: list[MenuItemFields] = []
+    for created_rec, (_, has_vo, base_tag_ids) in zip(created, pending_items):
+        if not has_vo:
+            continue
+        variant_tag_ids = list(base_tag_ids)  # inherit GF/DF/NF/Halal from base
+        if veg_id and veg_id not in variant_tag_ids:
+            variant_tag_ids.append(veg_id)
+        variant_name = f"{created_rec.fields['Menu Item Name']} (Vegetarian Option)"
+        caterer_link = created_rec.fields.get("Caterer") or []
+        variant_records.append({
+            "Menu Item Name": variant_name,
+            "Caterer":        caterer_link,
+            "Dietary Tags":   variant_tag_ids,
+            "Is Variant":     True,
+            "Variant Of":     [created_rec.id],
+        })
+
+    if variant_records:
+        log.info(f"Creating {len(variant_records)} vegetarian variant(s)...")
+        db.MenuItems.create(variant_records)
 
     log.info("Caterer menus migration completed successfully.")
 

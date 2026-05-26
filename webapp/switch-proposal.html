@@ -163,8 +163,8 @@
 
                 <div class="card">
                     <div class="detail-grid">
-                        <span class="detail-label">School</span>
-                        <span class="detail-value" id="d-school">—</span>
+                        <span class="detail-label">Session</span>
+                        <span class="detail-value" id="d-session">—</span>
 
                         <hr class="detail-divider">
 
@@ -261,6 +261,18 @@
             </section>
 
         </main>
+
+        <!-- Confirm modal -->
+        <div id="confirm-modal" class="modal hidden" onclick="if(event.target===this) confirmModalNo()">
+            <div class="modal-card">
+                <h3 id="confirm-title" class="modal-title"></h3>
+                <p id="confirm-body" class="modal-body"></p>
+                <div class="modal-actions">
+                    <button class="btn-ghost" onclick="confirmModalNo()">Cancel</button>
+                    <button id="confirm-yes" class="btn-primary" onclick="confirmModalYes()">OK</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="config.env.js"></script>
