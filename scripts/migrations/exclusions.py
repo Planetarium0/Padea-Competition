@@ -54,8 +54,7 @@ def _parse_exclusions_heuristic(
         if "all year levels" not in blk.lower():
             year_match = re.search(r"years?\s+([\d\s,and]+)", blk, re.IGNORECASE)
             if year_match:
-                years_raw = year_match.group(1).replace("and", ",")
-                parsed = [y.strip() for y in years_raw.split(",") if y.strip().isdigit()]
+                parsed = re.findall(r"\d+", year_match.group(1))
                 if parsed:
                     years = parsed
 

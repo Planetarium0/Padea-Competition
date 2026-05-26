@@ -746,8 +746,11 @@ def evaluate(
             f"{stats.num_raters} raters"
         )
 
+        if stats.avg_rating > WATCH_THRESHOLD:
+            continue
+
         # --- Watch threshold only ---
-        if SWITCH_THRESHOLD < stats.avg_rating <= WATCH_THRESHOLD:
+        if stats.avg_rating > SWITCH_THRESHOLD:
             recipient = index.session_manager_email(session_id)
             subject   = f"[Padea] Caterer watch — {session_name}"
             body      = format_watch_email(
@@ -756,9 +759,6 @@ def evaluate(
             )
             email_id = f"WATCH-{session_id[:6]}-{caterer_id[:6]}-{date.today().isoformat()}"
             queue_alert_email(db, subject, body, recipient, email_id, dry_run)
-            continue
-
-        if stats.avg_rating > WATCH_THRESHOLD:
             continue
 
         # --- Switch threshold ---

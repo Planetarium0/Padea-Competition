@@ -63,7 +63,6 @@ TABLES_SCHEMA: dict[str, dict[str, Any]] = {
                     ]
                 }
             },
-            {"name": "Price Includes GST", "type": "checkbox", "options": {"icon": "check", "color": "greenBright"}},
             {"name": "Notes", "type": "multilineText"},
             {
                 # Schools this caterer is eligible to serve (but does not currently).
@@ -187,7 +186,22 @@ TABLES_SCHEMA: dict[str, dict[str, Any]] = {
             {"name": "Start Time", "type": "singleLineText"},
             {"name": "End Time", "type": "singleLineText"},
             {"name": "Dinner Time", "type": "singleLineText"},
-            {"name": "Year Levels", "type": "singleLineText"},
+            {
+                "name": "Year Levels",
+                "type": "multipleSelects",
+                "options": {
+                    "choices": [
+                        {"name": "All"},
+                        {"name": "12"},
+                        {"name": "11"},
+                        {"name": "10"},
+                        {"name": "9"},
+                        {"name": "8"},
+                        {"name": "7"},
+                        {"name": "6"}
+                    ]
+                }
+            },
             {"name": "Building", "type": "singleLineText"},
             {
                 # Set when a caterer switch is approved but not yet live.

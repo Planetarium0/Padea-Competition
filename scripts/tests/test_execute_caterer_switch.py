@@ -18,16 +18,15 @@ from support import Record
 # Test data builders
 # ---------------------------------------------------------------------------
 
-PROPOSAL_ID   = "recProp001"
+PROPOSAL_ID    = "recProp001"
 OUT_CATERER_ID = fixtures.CATERER_A_ID
 IN_CATERER_ID  = fixtures.CATERER_B_ID
-SCHOOL_ID      = fixtures.SCHOOL_A_ID
 
 
 def _approved_proposal() -> Record:
     return Record(id=PROPOSAL_ID, fields={
         "Proposal ID":      "PROP-ALPHA-2026-05-01",
-        "School":           [SCHOOL_ID],
+        "Session":          [fixtures.SESSION_MON_ID],
         "Outgoing Caterer": [OUT_CATERER_ID],
         "Incoming Caterer": [IN_CATERER_ID],
         "Status":           "Approved",
@@ -63,49 +62,13 @@ class TestExecuteCatererSwitch(unittest.TestCase):
         db = _setup_db()
         execute(PROPOSAL_ID, dry_run=False, db=db)
 
-        # Both sessions at SCHOOL_A should have Incoming Caterer set
+        # Only the proposed session should have Incoming Caterer set
         session_update_ids = {uid for uid, _ in db.Sessions.updates}
         self.assertIn(fixtures.SESSION_MON_ID, session_update_ids)
-        self.assertIn(fixtures.SESSION_WED_ID, session_update_ids)
+        self.assertNotIn(fixtures.SESSION_WED_ID, session_update_ids)
 
         for _, fields in db.Sessions.updates:
             self.assertEqual(fields["Incoming Caterer"], [IN_CATERER_ID])
-
-    def test_happy_path_updates_serves_schools(self):
-        db = _setup_db()
-        execute(PROPOSAL_ID, dry_run=False, db=db)
-
-        # Each caterer gets two update calls (Serves Schools + Able to Serve),
-        # so merge all updates per caterer before asserting.
-        from collections import defaultdict
-        merged: dict = defaultdict(dict)
-        for uid, fields in db.Caterers.updates:
-            merged[uid].update(fields)
-
-        out_merged = merged.get(OUT_CATERER_ID, {})
-        self.assertIn("Serves Schools", out_merged)
-        self.assertNotIn(SCHOOL_ID, out_merged["Serves Schools"])
-
-        in_merged = merged.get(IN_CATERER_ID, {})
-        self.assertIn("Serves Schools", in_merged)
-        self.assertIn(SCHOOL_ID, in_merged["Serves Schools"])
-
-    def test_happy_path_updates_able_to_serve(self):
-        db = _setup_db()
-        execute(PROPOSAL_ID, dry_run=False, db=db)
-
-        from collections import defaultdict
-        merged: dict = defaultdict(dict)
-        for uid, fields in db.Caterers.updates:
-            merged[uid].update(fields)
-
-        out_merged = merged.get(OUT_CATERER_ID, {})
-        self.assertIn("Able to Serve Schools", out_merged)
-        self.assertIn(SCHOOL_ID, out_merged["Able to Serve Schools"])
-
-        in_merged = merged.get(IN_CATERER_ID, {})
-        self.assertIn("Able to Serve Schools", in_merged)
-        self.assertNotIn(SCHOOL_ID, in_merged["Able to Serve Schools"])
 
     def test_happy_path_clears_student_meal_preferences(self):
         db = _setup_db()
@@ -133,7 +96,7 @@ class TestExecuteCatererSwitch(unittest.TestCase):
         for status in ("Pending", "Rejected", "Executed"):
             with self.subTest(status=status):
                 proposal = Record(id=PROPOSAL_ID, fields={
-                    "School":           [SCHOOL_ID],
+                    "Session":          [fixtures.SESSION_MON_ID],
                     "Outgoing Caterer": [OUT_CATERER_ID],
                     "Incoming Caterer": [IN_CATERER_ID],
                     "Status":           status,
@@ -159,8 +122,9 @@ class TestExecuteCatererSwitch(unittest.TestCase):
         self.assertEqual(db.Students.batch_update_calls, [])
         self.assertEqual(db.CatererSwitchProposals.updates, [])
 
-    def test_only_sessions_at_affected_school_are_updated(self):
-        # Add a session at a different school — must not be touched.
+    def test_only_the_proposed_session_is_updated(self):
+        # Sessions not named in the proposal must not be touched —
+        # whether at the same school or a different one.
         other_session = Record(id="sessOther", fields={
             "Session ID": "Beta College - Tuesday",
             "School":     [fixtures.SCHOOL_B_ID],
@@ -171,9 +135,9 @@ class TestExecuteCatererSwitch(unittest.TestCase):
         execute(PROPOSAL_ID, dry_run=False, db=db)
 
         updated_ids = {uid for uid, _ in db.Sessions.updates}
-        self.assertNotIn("sessOther", updated_ids)
-        self.assertIn(fixtures.SESSION_MON_ID, updated_ids)
-        self.assertIn(fixtures.SESSION_WED_ID, updated_ids)
+        self.assertIn(fixtures.SESSION_MON_ID, updated_ids)       # the proposed session
+        self.assertNotIn(fixtures.SESSION_WED_ID, updated_ids)    # same school, not proposed
+        self.assertNotIn("sessOther", updated_ids)                 # different school
 
 
 if __name__ == "__main__":

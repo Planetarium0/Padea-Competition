@@ -175,7 +175,6 @@ def school_beta() -> Record:
 def caterer_a() -> Record:
     return Record(id=CATERER_A_ID, fields={
         "Caterer Name":          "Café Deluxe",
-        "Serves Schools":        [SCHOOL_A_ID],
         "Able to Serve Schools": [],
         "Contact Email":         "cafe@deluxe.com",
         "Contact Name":          "Alice Smith",
@@ -189,7 +188,6 @@ def caterer_a() -> Record:
 def caterer_b() -> Record:
     return Record(id=CATERER_B_ID, fields={
         "Caterer Name":          "Fresh Eats",
-        "Serves Schools":        [],
         "Able to Serve Schools": [SCHOOL_A_ID],
         "Contact Email":         "info@fresh-eats.com",
         "Contact Name":          "Bob Jones",
@@ -202,7 +200,6 @@ def caterer_b() -> Record:
 def caterer_meat_only() -> Record:
     return Record(id=CATERER_MEAT_ID, fields={
         "Caterer Name":          "Meat Masters",
-        "Serves Schools":        [],
         "Able to Serve Schools": [SCHOOL_A_ID],
     })
 

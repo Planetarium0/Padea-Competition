@@ -21,14 +21,23 @@ After starting, generate matching QR codes with:
 from __future__ import annotations
 
 import argparse
+import json
+import re
 import socket
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
+
+from support import Database
+from actions.api import api_approve_proposal, api_get_proposal, api_reject_proposal
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 WEBAPP_DIR = PROJECT_ROOT / "webapp"
 DATA_DIR = PROJECT_ROOT / "data"
 DEFAULT_PORT = 8000
+
+_RE_PROPOSAL = re.compile(r"^/api/proposal/([^/?]+)$")
+_RE_APPROVE  = re.compile(r"^/api/proposal/([^/?]+)/approve$")
+_RE_REJECT   = re.compile(r"^/api/proposal/([^/?]+)/reject$")
 
 
 def local_ip() -> str:
@@ -44,7 +53,49 @@ def local_ip() -> str:
 
 
 class PadeaHandler(SimpleHTTPRequestHandler):
-    """Maps URL prefixes to two whitelisted directories on disk."""
+    """Serves static webapp files and handles /api/proposal/* routes."""
+
+    # ------------------------------------------------------------------
+    # API routing
+    # ------------------------------------------------------------------
+
+    def do_GET(self) -> None:
+        bare = self.path.split("?", 1)[0]
+        m = _RE_PROPOSAL.match(bare)
+        if m:
+            status, body = api_get_proposal(m.group(1), Database.from_env())
+            self._send_json(status, body)
+            return
+        super().do_GET()
+
+    def do_POST(self) -> None:
+        bare = self.path.split("?", 1)[0]
+        m = _RE_APPROVE.match(bare)
+        if m:
+            status, body = api_approve_proposal(m.group(1), Database.from_env())
+            self._send_json(status, body)
+            return
+        m = _RE_REJECT.match(bare)
+        if m:
+            length = int(self.headers.get("Content-Length", 0))
+            data   = json.loads(self.rfile.read(length)) if length else {}
+            notes  = data.get("notes", "") if isinstance(data, dict) else ""
+            status, body = api_reject_proposal(m.group(1), notes, Database.from_env())
+            self._send_json(status, body)
+            return
+        self._send_json(404, {"error": "Not found"})
+
+    def _send_json(self, status: int, body: dict) -> None:
+        encoded = json.dumps(body).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(encoded)))
+        self.end_headers()
+        self.wfile.write(encoded)
+
+    # ------------------------------------------------------------------
+    # Static file routing
+    # ------------------------------------------------------------------
 
     def translate_path(self, path: str) -> str:
         # Strip query string + normalise (parent does this, but we want the

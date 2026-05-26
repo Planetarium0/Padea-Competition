@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -7,7 +8,23 @@ from typing import Any, cast
 
 import pandas as pd
 
-from support import Database, DayName, OnSiteManagerFields, SessionFields, log
+from support import Database, DayName, OnSiteManagerFields, SessionFields, YearLevel, log
+
+
+_VALID_YEAR_LEVELS = {"6", "7", "8", "9", "10", "11", "12"}
+
+
+def _parse_year_levels(val: str) -> list[YearLevel]:
+    if "all" in val.lower():
+        return [cast(YearLevel, "All")]
+    range_match = re.match(r"(\d+)\s*[-–]\s*(\d+)", val.strip())
+    if range_match:
+        start, end = int(range_match.group(1)), int(range_match.group(2))
+        levels = [str(y) for y in range(start, end + 1) if str(y) in _VALID_YEAR_LEVELS]
+        if levels:
+            return cast(list[YearLevel], levels)
+    nums = [n for n in re.findall(r"\d+", val) if n in _VALID_YEAR_LEVELS]
+    return cast(list[YearLevel], nums) if nums else [cast(YearLevel, "All")]
 
 
 def _clean_str(val: Any) -> str | None:
@@ -128,12 +145,14 @@ def run(db: Database | None = None) -> None:
             ("Start Time",  "start-time"),
             ("End Time",    "end-time"),
             ("Dinner Time", "dinner-time"),
-            ("Year Levels", "year-levels"),
             ("Building",    "Building"),
         ):
             value = _clean_str(row[col])
             if value:
                 record[field_name] = value
+        year_levels_raw = _clean_str(row["year-levels"])
+        if year_levels_raw:
+            record["Year Levels"] = _parse_year_levels(year_levels_raw)
         sessions_records.append(record)
 
     log.info(f"Migrating {len(sessions_records)} Sessions...")

@@ -164,7 +164,6 @@ Raw Menu Text:
         caterer_updates.append({"id": caterer_id, "fields": {
             "Delivery Fee":           menu["Delivery Fee"],
             "Delivery Fee Structure": menu["Delivery Fee Structure"],
-            "Price Includes GST":     True,
             "Price per Item":         price,
         }})
 

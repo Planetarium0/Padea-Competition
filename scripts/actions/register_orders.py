@@ -4,14 +4,16 @@ register_orders.py — Snapshot student meal preferences into the Orders table.
 For every session occurring next week, for each attending student (enrolled,
 not absent, not excluded):
   1. Uses Meal Preference (set via webapp) if it belongs to the session's
-     caterer's menu. This is treated as explicit — protected from swapping.
+     caterer's menu. Honoured even if it conflicts with the student's declared
+     dietary requirements (a warning is logged).
   2. Falls back to a dietary-safe, popularity-weighted assignment otherwise.
 
 After all meals are resolved, enforces caterer min-qty constraints:
   - Items below the per-item minimum are dissolved by proportionally swapping
-    non-explicit students to more popular items.
+    students to more popular items that are compatible with their dietary
+    requirements.
   - Dietary requirements are always respected during swaps.
-  - Explicit preferences are never swapped.
+  - If no compatible swap target exists for a student, they are left in place.
 
 Idempotent: clears any existing Orders and draft Weekly Orders for next week
 before creating fresh records.
@@ -330,8 +332,14 @@ def enforce_min_qty(
     assignments:    list[Assignment],
     index:          OrderingIndex,
 ) -> list[Assignment]:
-    """Enforce caterer per-item min-qty by swapping non-explicit students from
-    under-represented items to more popular ones, proportionally.
+    """Enforce caterer per-item min-qty by dissolving under-populated items.
+
+    For each violating item, first checks that *every* student on it has at
+    least one dietarily compatible target among the non-violating items. Only
+    if all students pass this check is the item dissolved; otherwise the item
+    is left in place. This avoids partially dissolving an item that cannot be
+    fully removed — which would displace students from their meals while still
+    leaving the same violation behind.
     """
     caterer_name = caterer_fields.get("Caterer Name", "?")
     assignments = list(assignments)
@@ -352,67 +360,72 @@ def enforce_min_qty(
         if not violating:
             break
 
-        swap_indices = [
-            idx
-            for iid in violating
-            for idx in item_to_indices[iid]
-            if not assignments[idx].is_explicit
-        ]
-
-        if not swap_indices:
-            log.warning(
-                f"Caterer '{caterer_name}': min-qty violation cannot be fixed — "
-                f"all affected students have explicit preferences."
-            )
-            break
-
         valid_items = {iid: cnt for iid, cnt in item_counts.items() if iid not in violating}
         if not valid_items:
             log.warning(f"Caterer '{caterer_name}': all items violate min-qty constraint.")
             break
 
         made_change = False
-        for idx in swap_indices:
-            a = assignments[idx]
-            stu_fields  = index.student_by_id.get(a.student_id, {})
-            dietary_ids = stu_fields.get("Dietary Requirements") or []
+        for viol_item_id in list(violating):
+            indices_on_item = item_to_indices[viol_item_id]
+            viol_item_name  = index.menu_item_by_id.get(viol_item_id, {}).get("Menu Item Name", "?")
 
-            compat = {
-                iid: cnt for iid, cnt in valid_items.items()
-                if is_item_compatible(
-                    index.menu_item_by_id.get(iid, {}), dietary_ids, index.dietary_hierarchy,
+            # First pass: verify every student on this item has a compatible target.
+            # If any student is blocked, leave the whole item in place.
+            dissolvable = True
+            for idx in indices_on_item:
+                a           = assignments[idx]
+                stu_fields  = index.student_by_id.get(a.student_id, {})
+                dietary_ids = stu_fields.get("Dietary Requirements") or []
+                has_target  = any(
+                    is_item_compatible(
+                        index.menu_item_by_id.get(iid, {}), dietary_ids, index.dietary_hierarchy,
+                    )
+                    for iid in valid_items
                 )
-            }
-            if not compat:
+                if not has_target:
+                    stu_name = stu_fields.get("Student Name", "?")
+                    log.warning(
+                        f"  Item '{viol_item_name}' cannot be dissolved — "
+                        f"{stu_name} has no dietarily compatible swap target."
+                    )
+                    dissolvable = False
+                    break
+
+            if not dissolvable:
+                continue
+
+            # Second pass: dissolve the item — reassign each student proportionally.
+            for idx in indices_on_item:
+                a           = assignments[idx]
+                stu_fields  = index.student_by_id.get(a.student_id, {})
+                dietary_ids = stu_fields.get("Dietary Requirements") or []
+
                 compat = {
-                    iid: cnt for iid, cnt in item_counts.items()
-                    if iid != a.item_id and is_item_compatible(
+                    iid: cnt for iid, cnt in valid_items.items()
+                    if is_item_compatible(
                         index.menu_item_by_id.get(iid, {}), dietary_ids, index.dietary_hierarchy,
                     )
                 }
-            if not compat:
+
+                total      = sum(compat.values()) or 1
+                rand_val   = random.uniform(0, total)
+                cumulative = 0.0
+                chosen_id  = next(iter(compat))
+                for iid, cnt in sorted(compat.items(), key=lambda x: -x[1]):
+                    cumulative += cnt
+                    if rand_val <= cumulative:
+                        chosen_id = iid
+                        break
+
+                assignments[idx] = a.with_item(chosen_id)
+                valid_items[chosen_id] = valid_items.get(chosen_id, 0) + 1
+
                 stu_name = stu_fields.get("Student Name", "?")
-                log.warning(f"  No compatible swap for {stu_name} — leaving as-is.")
-                continue
-
-            total      = sum(compat.values()) or 1
-            rand_val   = random.uniform(0, total)
-            cumulative = 0.0
-            chosen_id  = next(iter(compat))
-            for iid, cnt in sorted(compat.items(), key=lambda x: -x[1]):
-                cumulative += cnt
-                if rand_val <= cumulative:
-                    chosen_id = iid
-                    break
-
-            assignments[idx] = a.with_item(chosen_id)
-            valid_items[chosen_id] = valid_items.get(chosen_id, 0) + 1
-
-            stu_name = stu_fields.get("Student Name", "?")
-            old_name = index.menu_item_by_id.get(a.item_id, {}).get("Menu Item Name", "?")
-            new_name = index.menu_item_by_id.get(chosen_id, {}).get("Menu Item Name", "?")
-            log.info(f"  Min-qty swap: {stu_name}: {old_name} → {new_name}")
-            made_change = True
+                old_name = index.menu_item_by_id.get(a.item_id, {}).get("Menu Item Name", "?")
+                new_name = index.menu_item_by_id.get(chosen_id, {}).get("Menu Item Name", "?")
+                log.info(f"  Min-qty swap: {stu_name}: {old_name} → {new_name}")
+                made_change = True
 
         if not made_change:
             break

@@ -58,7 +58,6 @@ def _parse_contacts_heuristic(
         chef_name: str | None = None
         chef_email: str | None = None
         chef_wants_cc = False
-        serves: list[str] = []
         able_to_serve: list[str] = []
         notes: list[str] = []
 
@@ -68,9 +67,7 @@ def _parse_contacts_heuristic(
             emails_found.extend(re.findall(email_pattern, l))
 
         for l in lines[1:]:
-            if l.startswith("Serves:"):
-                serves = _clean_school_names(l.replace("Serves:", "").strip(), canonical_schools)
-            elif l.startswith("Able to serve:"):
+            if l.startswith("Able to serve:"):
                 able_to_serve = _clean_school_names(l.replace("Able to serve:", "").strip(), canonical_schools)
             elif "chef" in l.lower():
                 name_match = re.match(r"^([^(]+)", l)
@@ -92,7 +89,7 @@ def _parse_contacts_heuristic(
                 chef_email = emails_found[1]
 
         if "main point of contact and chef" in blk.lower():
-            chef_name = contact_name
+            contact_name = chef_name
             chef_email = contact_email
             chef_wants_cc = True
 
@@ -103,7 +100,6 @@ def _parse_contacts_heuristic(
             "Chef Name":             chef_name,
             "Chef Email":            chef_email,
             "Chef Wants CC":         chef_wants_cc,
-            "Serves Schools":        serves,
             "Able to Serve Schools": able_to_serve,
             "Notes":                 " | ".join(notes) if notes else None,
         })
@@ -150,7 +146,6 @@ Return a JSON array of objects, where each object represents one caterer and has
 - "Chef Name" (string, or null)
 - "Chef Email" (string, or null)
 - "Chef Wants CC" (boolean)
-- "Serves Schools" (array of strings from the standard list below)
 - "Able to Serve Schools" (array of strings from the standard list below)
 - "Notes" (string or null)
 
@@ -188,8 +183,7 @@ Raw Text:
             log.warning(f"Caterer '{caterer_name}' not found in Caterers table — skipping.")
             continue
 
-        serves_ids = [school_name_to_id[n] for n in data["Serves Schools"]       if n in school_name_to_id]
-        able_ids   = [school_name_to_id[n] for n in data["Able to Serve Schools"] if n in school_name_to_id]
+        able_ids = [school_name_to_id[n] for n in data["Able to Serve Schools"] if n in school_name_to_id]
 
         update_batch.append({
             "id": rec_id,
@@ -200,7 +194,6 @@ Raw Text:
                 "Chef Email":            data["Chef Email"],
                 "Chef Wants CC":         bool(data["Chef Wants CC"]),
                 "Notes":                 data["Notes"],
-                "Serves Schools":        serves_ids,
                 "Able to Serve Schools": able_ids,
             },
         })

@@ -60,14 +60,16 @@ After all assignments, the script:
 
 1. Finds the constraint for the current number of distinct items.
 2. Identifies violating items (count < min_qty).
-3. Picks **non-explicit** students currently on violating items.
-4. For each such student, swaps to a more popular **valid** item that
-   matches their diet. Selection is weighted by current popularity
-   (proportional reassignment).
+3. For each violating item, checks whether **every** student on it has at
+   least one dietarily compatible target among the non-violating items.
+   If any student on the item is blocked, the **entire item** is left
+   in place — partially dissolving it would swap students off their meals
+   while still leaving the same violation behind.
+4. Dissolves each item that passed the check: proportionally reassigns its
+   students to non-violating compatible items (weighted by current
+   popularity). Item counts are updated as each student is moved, so later
+   students within the same dissolution benefit from up-to-date weights.
 5. Repeats up to 30 iterations.
-
-Explicit preferences are **never** swapped. If all violators are
-explicit, the constraint is logged as unfixable and left in place.
 
 ### Per-meal dietary checks during fallback
 
@@ -87,10 +89,14 @@ explicit, the constraint is logged as unfixable and left in place.
 ### Explicit preference override
 
 If a student's `Meal Preference` is set and the item is on the session's
-caterer's menu, the script uses it even if the item violates their
+caterer's menu, the script uses it even if the item conflicts with their
 declared dietary requirements. A warning is logged; the student's choice
-is treated as informed override. This avoids accidentally swapping out a
-deliberate selection during min-qty enforcement.
+is treated as an informed override.
+
+Note: explicit preferences receive no special protection during min-qty
+enforcement. If the preferred item falls below the per-item minimum, the
+student is a dissolution candidate like any other. The only constraint on
+the swap target is dietary compatibility.
 
 ### Idempotency
 

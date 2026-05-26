@@ -5,13 +5,13 @@ Reads the named Caterer Switch Proposals record, verifies Status='Approved',
 then:
   1. Sets Sessions.Incoming Caterer for the affected session
      (the actual Caterer flip happens at the next register_orders.py run).
-  2. Updates Caterers.Able to Serve Schools (add school to outgoing, remove from incoming).
-  3. Clears Students.Meal Preference for every student enrolled in that session
+  2. Clears Students.Meal Preference for every student enrolled in that session
      (their preferences referenced the old caterer's menu).
-  4. Marks the proposal Status='Executed'.
+  3. Marks the proposal Status='Executed'.
 
-Note: there is no separate "Serves Schools" field. The current caterer for a
-session is always derived from Sessions.Caterer, which is the single source of truth.
+Note: Caterers.Able to Serve Schools is intentionally NOT modified. That field
+tracks capability (can a caterer serve a school?), not current assignment. The
+current assignment is always derived from Sessions.Caterer.
 
 Usage:
   python scripts/actions/execute_caterer_switch.py <proposal_id> [--dry-run]
@@ -40,7 +40,6 @@ class SwitchContext:
     proposal:     Record[CatererSwitchProposalFields]
     session_id:   str
     session_name: str
-    school_id:    str
     outgoing:     Record[CatererFields]
     incoming:     Record[CatererFields]
 
@@ -118,7 +117,6 @@ def _resolve_context(
         proposal=proposal,
         session_id=session_id,
         session_name=session_name,
-        school_id=school_id,
         outgoing=out_rec,
         incoming=in_rec,
     )
@@ -146,23 +144,7 @@ def execute(proposal_id: str, dry_run: bool = False, db: Database | None = None)
         db.Sessions.update(ctx.session_id, {"Incoming Caterer": [ctx.incoming.id]})
 
     # ------------------------------------------------------------------
-    # 2. Update Caterers.Able to Serve Schools (still school-scoped)
-    # ------------------------------------------------------------------
-    out_able = ctx.outgoing.fields.get("Able to Serve Schools") or []
-    in_able  = ctx.incoming.fields.get("Able to Serve Schools") or []
-    new_out_able = list(set(out_able + [ctx.school_id]))
-    new_in_able  = [sid for sid in in_able if sid != ctx.school_id]
-
-    log.info(
-        f"  Caterers.Able to Serve: adding school to "
-        f"{ctx.outgoing_name}, removing from {ctx.incoming_name}"
-    )
-    if not dry_run:
-        db.Caterers.update(ctx.outgoing.id, {"Able to Serve Schools": new_out_able})
-        db.Caterers.update(ctx.incoming.id, {"Able to Serve Schools": new_in_able})
-
-    # ------------------------------------------------------------------
-    # 3. Clear Students.Meal Preference for students in this session
+    # 2. Clear Students.Meal Preference for students in this session
     # ------------------------------------------------------------------
     all_students = db.Students.all()
     affected_students = [
@@ -180,7 +162,7 @@ def execute(proposal_id: str, dry_run: bool = False, db: Database | None = None)
         db.Students.batch_update(updates)
 
     # ------------------------------------------------------------------
-    # 4. Mark proposal as Executed
+    # 3. Mark proposal as Executed
     # ------------------------------------------------------------------
     log.info(f"  Marking proposal {proposal_id} as Executed")
     if not dry_run:
@@ -191,6 +173,16 @@ def execute(proposal_id: str, dry_run: bool = False, db: Database | None = None)
         f"for session {ctx.session_name}. Caterer flip will take effect at the next "
         f"register_orders.py run."
     )
+
+
+def reject(proposal_id: str, notes: str = "", db: Database | None = None) -> None:
+    """Mark a Caterer Switch Proposal as Rejected with optional coordinator notes."""
+    db = db or Database.from_env()
+    fields: dict[str, object] = {"Status": "Rejected"}
+    if notes:
+        fields["Notes"] = notes
+    db.CatererSwitchProposals.update(proposal_id, fields)
+    log.info(f"Proposal {proposal_id} marked Rejected.")
 
 
 # ---------------------------------------------------------------------------

@@ -310,24 +310,60 @@ class TestEnforceMinQty(unittest.TestCase):
         for iid, cnt in counts.items():
             self.assertGreaterEqual(cnt, 3)
 
-    def test_explicit_preference_never_swapped(self):
-        # C=1 explicit, D=1 non-explicit.  D can be swapped, C must not be.
+    def test_explicit_preference_swapped_when_below_min_qty(self):
+        # C=1 explicit, D=1 non-explicit; both violate min-qty.
+        # Explicit no longer protects from swapping — both should be dissolved.
         students = fixtures.make_students(10)
         index    = self._make_index_for_students(students)
         cf       = {"Caterer Name": "X", "Min Qty 4 Items": 3}
         assignments = (
             [Assignment(students[i].id, "sess", "iA", False) for i in range(5)] +
             [Assignment(students[i].id, "sess", "iB", False) for i in range(5, 8)] +
-            [Assignment(students[8].id, "sess", "iC", True)] +   # explicit
+            [Assignment(students[8].id, "sess", "iC", True)] +   # explicit but still a candidate
             [Assignment(students[9].id, "sess", "iD", False)]
         )
         result = enforce_min_qty(cf, list(assignments), index)
-        # Explicit assignment on iC must survive
-        c_assignments = [a for a in result if a.item_id == "iC"]
-        self.assertEqual(len(c_assignments), 1)
-        self.assertTrue(c_assignments[0].is_explicit)
-        # D's student must have been moved
+        # Both C and D should be dissolved into A or B
+        self.assertFalse(any(a.item_id == "iC" for a in result))
         self.assertFalse(any(a.item_id == "iD" for a in result))
+        self.assertEqual(sum(1 for a in result), 10)
+
+    def test_dietary_incompatibility_prevents_swap(self):
+        # Veg student is on a violating item (iC, veg-tagged).
+        # The valid items (iA, iB) both contain meat keywords → incompatible with Vegetarian.
+        # No compatible swap exists, so the veg student must stay on iC.
+        veg_student = Record(id="stuVeg", fields={
+            "Student Name":         "Veg Student",
+            "Sessions":             ["sess"],
+            "Dietary Requirements": [fixtures.DIET_VEG_ID],
+        })
+        other = fixtures.make_students(9)
+        items = [
+            Record(id="iA", fields={"Menu Item Name": "Chicken Rice",   "Caterer": [fixtures.CATERER_A_ID], "Dietary Tags": []}),
+            Record(id="iB", fields={"Menu Item Name": "Beef Burger",    "Caterer": [fixtures.CATERER_A_ID], "Dietary Tags": []}),
+            Record(id="iC", fields={"Menu Item Name": "Veg Pasta",      "Caterer": [fixtures.CATERER_A_ID], "Dietary Tags": [fixtures.DIET_VEG_ID]}),
+            Record(id="iD", fields={"Menu Item Name": "Chicken Burger", "Caterer": [fixtures.CATERER_A_ID], "Dietary Tags": []}),
+        ]
+        index = _make_index(
+            students=other + [veg_student],
+            caterers=[fixtures.caterer_a()],
+            menu_items=items,
+        )
+        cf = {"Caterer Name": "X", "Min Qty 4 Items": 3}
+        # A=5, B=3 (valid); C=1 veg student, D=1 non-veg student (both violating)
+        assignments = (
+            [Assignment(other[i].id,      "sess", "iA", False) for i in range(5)] +
+            [Assignment(other[i].id,      "sess", "iB", False) for i in range(5, 8)] +
+            [Assignment(veg_student.id,   "sess", "iC", False)] +
+            [Assignment(other[8].id,      "sess", "iD", False)]
+        )
+        result = enforce_min_qty(cf, list(assignments), index)
+        # D's student (no dietary restriction) is moved to A or B
+        self.assertFalse(any(a.item_id == "iD" for a in result))
+        # Veg student has no compatible target in A or B (meat keywords) — stays on iC
+        veg_result = [a for a in result if a.student_id == veg_student.id]
+        self.assertEqual(len(veg_result), 1)
+        self.assertEqual(veg_result[0].item_id, "iC")
 
 
 # ---------------------------------------------------------------------------
