@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -849,6 +850,114 @@ def evaluate(
 
 
 # ---------------------------------------------------------------------------
+# Force a proposal for testing
+# ---------------------------------------------------------------------------
+
+def _resolve_session_ref(
+    ref:      str,
+    sessions: list[Record],
+) -> str | None:
+    """Return the record ID for a session matched by name or record ID.
+
+    Matches the ``Session ID`` field case-insensitively.  Falls back to
+    treating ``ref`` as a raw record ID if no name match is found.
+    """
+    needle = ref.strip().lower()
+    matches = [s for s in sessions if s.fields.get("Session ID", "").lower() == needle]
+    if len(matches) == 1:
+        return matches[0].id
+    if len(matches) > 1:
+        names = ", ".join(s.fields.get("Session ID", s.id) for s in matches)
+        log.error(f"Ambiguous session name {ref!r} — matched: {names}")
+        return None
+    # No name match — try as a raw record ID.
+    for s in sessions:
+        if s.id == ref:
+            return s.id
+    return None
+
+def force_proposal(
+    session_ref:         str,
+    incoming_caterer_id: str | None = None,
+    db:                  Database | None = None,
+    dry_run:             bool = False,
+    immediate:           bool = False,
+) -> None:
+    """Create a switch proposal directly, bypassing rating thresholds.
+
+    Intended for development and testing: lets you produce a real proposal
+    record (and its notification email) for any session without needing
+    enough feedback data to trigger the automated path.
+
+    ``session_ref`` can be a human-readable session name
+    (e.g. "MacGregor State High School - Thursday") or a raw record ID.
+    If ``incoming_caterer_id`` is omitted the best candidate from
+    ``find_candidates`` is used.  All duplicate-suppression checks
+    (active proposals, rejected-this-term) are skipped.
+    """
+    db = db or Database.from_env()
+    data  = EvaluationData.load(db)
+    index = EvaluationIndex.build(data)
+
+    session_id = _resolve_session_ref(session_ref, data.sessions)
+    if not session_id:
+        log.error(
+            f"No session found matching {session_ref!r}. "
+            "Pass the Session ID field value (e.g. 'MacGregor State High School - Thursday') "
+            "or the Airtable record ID."
+        )
+        sys.exit(1)
+
+    session_name = index.session_labels.get(session_id, session_id)
+    outgoing_caterer_id = index.session_to_caterer.get(session_id)
+    if not outgoing_caterer_id:
+        log.error(f"Session {session_name!r} has no current caterer — cannot create proposal.")
+        sys.exit(1)
+
+    outgoing_name = index.caterer_names.get(outgoing_caterer_id, outgoing_caterer_id)
+
+    if incoming_caterer_id:
+        incoming_name = index.caterer_names.get(incoming_caterer_id, incoming_caterer_id)
+    else:
+        session_students = index.session_to_students.get(session_id, [])
+        candidates       = find_candidates(session_id, outgoing_caterer_id, session_students, index)
+        if not candidates:
+            log.error(
+                f"No eligible replacement caterer found for session {session_name!r}. "
+                "Pass --incoming <caterer_id> to specify one explicitly."
+            )
+            sys.exit(1)
+        _, incoming_caterer_id, incoming_name = candidates[0]
+        log.info(f"Auto-selected best candidate: {incoming_name}")
+
+    effective_week = get_effective_week()
+    recipient      = index.session_manager_email(session_id)
+
+    log.info(
+        f"Force-creating proposal: {outgoing_name} → {incoming_name} "
+        f"for {session_name}"
+        + (" [DRY RUN]" if dry_run else "")
+    )
+
+    create_proposal_and_email(
+        db=db,
+        session_id=session_id,
+        session_name=session_name,
+        outgoing_caterer_id=outgoing_caterer_id,
+        outgoing_name=outgoing_name,
+        incoming_caterer_id=incoming_caterer_id,
+        incoming_name=incoming_name,
+        avg_rating=0.0,
+        num_sessions=0,
+        num_raters=0,
+        effective_week=effective_week,
+        recipient_email=recipient,
+        dry_run=dry_run,
+        immediate=immediate,
+    )
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -864,5 +973,28 @@ if __name__ == "__main__":
         "--immediate", action="store_true",
         help="Flag the email as to be sent immediately",
     )
+    parser.add_argument(
+        "--force", action="store_true",
+        help="Force-create a proposal for a given session, bypassing rating thresholds",
+    )
+    parser.add_argument(
+        "--session",
+        help="Session name (e.g. 'MacGregor State High School - Thursday') or record ID, for use with --force",
+    )
+    parser.add_argument(
+        "--incoming",
+        help="Incoming caterer record ID (optional with --force; auto-selected if omitted)",
+    )
     args = parser.parse_args()
-    evaluate(dry_run=args.dry_run, immediate=args.immediate)
+
+    if args.force:
+        if not args.session:
+            parser.error("--force requires --session <record_id>")
+        force_proposal(
+            session_ref=args.session,
+            incoming_caterer_id=args.incoming,
+            dry_run=args.dry_run,
+            immediate=args.immediate,
+        )
+    else:
+        evaluate(dry_run=args.dry_run, immediate=args.immediate)

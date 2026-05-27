@@ -52,7 +52,7 @@ def api_get_proposal(proposal_id: str, db: Database) -> tuple[int, dict]:
 def api_approve_proposal(proposal_id: str, db: Database) -> tuple[int, dict]:
     """Execute the switch; returns 422 if the proposal is not executable."""
     try:
-        execute(proposal_id, dry_run=False, db=db)
+        execute(proposal_id, dry_run=False, approve=True, db=db)
         return 200, {"ok": True}
     except SystemExit:
         # execute() calls sys.exit(1) for invalid state — surface as 422.

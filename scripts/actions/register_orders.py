@@ -475,11 +475,16 @@ def flip_incoming_caterers(db: Database, dry_run: bool = False) -> None:
     ``execute_caterer_switch.py`` when the coordinator approved a switch),
     flip Caterer = Incoming Caterer and clear Incoming Caterer so the rest
     of this run sees the new caterer as the active one.
+
+    Also marks the corresponding Caterer Switch Proposal Status='Executed'
+    (proposals are Status='Approved' between coordinator approval and here).
     """
     sessions = db.Sessions.all()
     to_flip = [r for r in sessions if r.fields.get("Incoming Caterer")]
     if not to_flip:
         return
+
+    proposals = db.CatererSwitchProposals.all()
 
     log.info(f"Committing {len(to_flip)} pending caterer switch(es)...")
     if dry_run:
@@ -492,6 +497,12 @@ def flip_incoming_caterers(db: Database, dry_run: bool = False) -> None:
         incoming = r.fields.get("Incoming Caterer") or []
         db.Sessions.update(r.id, {"Caterer": incoming, "Incoming Caterer": []})
         log.info(f"  Flipped session {r.id} to caterer {incoming[0] if incoming else '?'}")
+
+        for p in proposals:
+            pf = p.fields
+            if r.id in (pf.get("Session") or []) and pf.get("Status") == "Approved":
+                db.CatererSwitchProposals.update(p.id, {"Status": "Executed"})
+                log.info(f"  Marked proposal {p.id} as Executed")
 
 
 # ---------------------------------------------------------------------------

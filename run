@@ -24,7 +24,7 @@ Usage:
   $0 orders preview
   $0 orders send
   $0 evaluate [--dry-run]
-  $0 switch <proposal_record_id> [--dry-run]
+  $0 switch <proposal_record_id> [--approve] [--dry-run]
   $0 host [--port PORT]
   $0 qr [--origin URL_ORIGIN] [--base-url URL] [--session ID]
 

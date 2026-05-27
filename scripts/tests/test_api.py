@@ -107,11 +107,11 @@ class TestApiApproveProposal(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(body["ok"])
 
-    def test_approve_marks_proposal_executed(self):
+    def test_approve_marks_proposal_approved(self):
         db = _base_db(_approved_proposal())
         api_approve_proposal(PROPOSAL_ID, db)
         updates = {uid: f for uid, f in db.CatererSwitchProposals.updates}
-        self.assertEqual(updates[PROPOSAL_ID]["Status"], "Executed")
+        self.assertEqual(updates[PROPOSAL_ID]["Status"], "Approved")
 
     def test_approve_updates_session(self):
         db = _base_db(_approved_proposal())
@@ -119,8 +119,19 @@ class TestApiApproveProposal(unittest.TestCase):
         updated_ids = {uid for uid, _ in db.Sessions.updates}
         self.assertIn(fixtures.SESSION_MON_ID, updated_ids)
 
-    def test_pending_proposal_returns_422(self):
+    def test_pending_proposal_succeeds(self):
         db = _base_db(_pending_proposal())
+        status, body = api_approve_proposal(PROPOSAL_ID, db)
+        self.assertEqual(status, 200)
+        self.assertTrue(body["ok"])
+
+    def test_already_executed_returns_422(self):
+        db = _base_db(Record(id=PROPOSAL_ID, fields={
+            "Status":           "Executed",
+            "Session":          [fixtures.SESSION_MON_ID],
+            "Outgoing Caterer": [OUT_ID],
+            "Incoming Caterer": [IN_ID],
+        }))
         status, body = api_approve_proposal(PROPOSAL_ID, db)
         self.assertEqual(status, 422)
         self.assertIn("error", body)

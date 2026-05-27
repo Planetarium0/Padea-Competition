@@ -329,7 +329,7 @@ TABLES_SCHEMA: dict[str, dict[str, Any]] = {
         "primary": {"name": "Email ID", "type": "singleLineText"},
         "fields": [
             {"name": "To", "type": "email"},
-            {"name": "CC", "type": "email"},
+            {"name": "CC", "type": "singleLineText"},
             {"name": "Subject", "type": "singleLineText"},
             {"name": "Body", "type": "multilineText"},
             {

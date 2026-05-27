@@ -51,7 +51,11 @@ class TestSubtractMinutes(unittest.TestCase):
 # format_email_body
 # ---------------------------------------------------------------------------
 
-def _make_session_context(day: str = "Monday", session_id: str = "Alpha Academy - Monday") -> SessionContext:
+def _make_session_context(
+    day: str = "Monday",
+    session_id: str = "Alpha Academy - Monday",
+    manager_email: str | None = "carol@alpha.edu.au",
+) -> SessionContext:
     return SessionContext(
         fields={
             "Session ID":  session_id,
@@ -62,6 +66,7 @@ def _make_session_context(day: str = "Monday", session_id: str = "Alpha Academy 
         school_name    = "Alpha Academy",
         manager_name   = "Carol Manager",
         manager_mobile = "0412345678",
+        manager_email  = manager_email,
     )
 
 
@@ -143,7 +148,7 @@ class TestFormatEmailBody(unittest.TestCase):
         caterer_fields = {"Caterer Name": "X", "Contact Name": "Y", "Delivery Fee": 0.0}
         sess = SessionContext(
             fields={"Session ID": "S", "Day": "Monday", "Dinner Time": "6:30 PM", "Building": ""},
-            school_name="School", manager_name=None, manager_mobile=None,
+            school_name="School", manager_name=None, manager_mobile=None, manager_email=None,
         )
         body = format_email_body(wo_fields, caterer_fields, [_make_line_item(sess, "Meal", 1)])
         self.assertIn("6:20 PM", body)
@@ -174,12 +179,26 @@ class TestScheduleEmail(unittest.TestCase):
         self.assertEqual(f["Weekly Order"], ["recWO001"])
         self.assertNotIn("CC", f)
 
+    def test_multiple_cc_addresses_joined(self):
+        db = MockDatabase()
+        schedule_email(
+            db,
+            to_email="chef@example.com",
+            cc_email=["manager@school.edu.au", "deputy@school.edu.au"],
+            subject="Order",
+            body="Body",
+            email_id="EMAIL-002",
+            weekly_order_id="recWO002",
+        )
+        f = db.ScheduledEmails.created_fields[0]
+        self.assertEqual(f["CC"], "manager@school.edu.au, deputy@school.edu.au")
+
     def test_creates_send_immediately_record_with_switch_proposal_link(self):
         db = MockDatabase()
         schedule_email(
             db,
             to_email="manager@school.edu.au",
-            cc_email="copy@school.edu.au",
+            cc_email=["copy@school.edu.au"],
             subject="Switch Proposal",
             body="Body",
             email_id="SWITCH-001",

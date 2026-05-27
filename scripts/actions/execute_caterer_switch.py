@@ -1,20 +1,23 @@
 """
-execute_caterer_switch.py — Execute an approved caterer switch proposal.
+execute_caterer_switch.py — Execute a caterer switch proposal.
 
-Reads the named Caterer Switch Proposals record, verifies Status='Approved',
-then:
+Reads the named Caterer Switch Proposals record, verifies the status, then:
   1. Sets Sessions.Incoming Caterer for the affected session
      (the actual Caterer flip happens at the next register_orders.py run).
   2. Clears Students.Meal Preference for every student enrolled in that session
      (their preferences referenced the old caterer's menu).
   3. Marks the proposal Status='Executed'.
 
+By default only Status='Approved' proposals are accepted.  Pass --approve
+(CLI) or approve=True (Python) to also accept Status='Pending', which is
+what the webapp does when the coordinator clicks the Approve button.
+
 Note: Caterers.Able to Serve Schools is intentionally NOT modified. That field
 tracks capability (can a caterer serve a school?), not current assignment. The
 current assignment is always derived from Sessions.Caterer.
 
 Usage:
-  python scripts/actions/execute_caterer_switch.py <proposal_id> [--dry-run]
+  python scripts/actions/execute_caterer_switch.py <proposal_id> [--approve] [--dry-run]
 """
 
 from __future__ import annotations
@@ -55,6 +58,7 @@ class SwitchContext:
 def _resolve_context(
     db:          Database,
     proposal_id: str,
+    approve:     bool = False,
 ) -> SwitchContext:
     try:
         proposal = db.CatererSwitchProposals.get(proposal_id)
@@ -67,10 +71,13 @@ def _resolve_context(
 
     pf = proposal.fields
     status = pf.get("Status")
-    if status != "Approved":
+    allowed = ("Pending", "Approved") if approve else ("Approved",)
+    if status not in allowed:
         log.error(
             f"Proposal {proposal_id} has Status='{status}'. "
-            "Only 'Approved' proposals can be executed."
+            + ("Only 'Approved' or 'Pending' proposals can be executed with --approve."
+               if approve else
+               "Only 'Approved' proposals can be executed. Use --approve to also accept 'Pending'.")
         )
         sys.exit(1)
 
@@ -122,9 +129,9 @@ def _resolve_context(
     )
 
 
-def execute(proposal_id: str, dry_run: bool = False, db: Database | None = None) -> None:
+def execute(proposal_id: str, dry_run: bool = False, approve: bool = False, db: Database | None = None) -> None:
     db = db or Database.from_env()
-    ctx = _resolve_context(db, proposal_id)
+    ctx = _resolve_context(db, proposal_id, approve=approve)
 
     log.info(
         f"Executing switch: {ctx.outgoing_name} → {ctx.incoming_name} "
@@ -162,16 +169,16 @@ def execute(proposal_id: str, dry_run: bool = False, db: Database | None = None)
         db.Students.batch_update(updates)
 
     # ------------------------------------------------------------------
-    # 3. Mark proposal as Executed
+    # 3. Mark proposal Approved — the order run marks it Executed
     # ------------------------------------------------------------------
-    log.info(f"  Marking proposal {proposal_id} as Executed")
+    log.info(f"  Marking proposal {proposal_id} as Approved")
     if not dry_run:
-        db.CatererSwitchProposals.update(proposal_id, {"Status": "Executed"})
+        db.CatererSwitchProposals.update(proposal_id, {"Status": "Approved"})
 
     log.info(
-        f"Switch executed successfully: {ctx.outgoing_name} → {ctx.incoming_name} "
+        f"Switch queued: {ctx.outgoing_name} → {ctx.incoming_name} "
         f"for session {ctx.session_name}. Caterer flip will take effect at the next "
-        f"register_orders.py run."
+        f"register_orders.py run, which will also mark this proposal Executed."
     )
 
 
@@ -199,5 +206,9 @@ if __name__ == "__main__":
         "--dry-run", action="store_true",
         help="Log what would happen without writing to Airtable",
     )
+    parser.add_argument(
+        "--approve", action="store_true",
+        help="Also accept Pending proposals (approve and execute in one step)",
+    )
     args = parser.parse_args()
-    execute(args.proposal_id, dry_run=args.dry_run)
+    execute(args.proposal_id, dry_run=args.dry_run, approve=args.approve)

@@ -378,6 +378,9 @@ class TestFlipIncomingCaterers(unittest.TestCase):
             Record(id="s1", fields={"Caterer": ["cOld"], "Incoming Caterer": ["cNew"], "Day": "Monday"}),
             Record(id="s2", fields={"Caterer": ["cOld"], "Day": "Wednesday"}),  # no incoming
         ]
+        db.CatererSwitchProposals._records = [
+            Record(id="p1", fields={"Session": ["s1"], "Status": "Approved"}),
+        ]
         flip_incoming_caterers(db, dry_run=False)
 
         self.assertEqual(len(db.Sessions.updates), 1)
@@ -386,13 +389,42 @@ class TestFlipIncomingCaterers(unittest.TestCase):
         self.assertEqual(updated_fields["Caterer"], ["cNew"])
         self.assertEqual(updated_fields["Incoming Caterer"], [])
 
+    def test_marks_proposal_executed(self):
+        db = MockDatabase()
+        db.Sessions._records = [
+            Record(id="s1", fields={"Caterer": ["cOld"], "Incoming Caterer": ["cNew"]}),
+        ]
+        db.CatererSwitchProposals._records = [
+            Record(id="p1", fields={"Session": ["s1"], "Status": "Approved"}),
+        ]
+        flip_incoming_caterers(db, dry_run=False)
+
+        proposal_updates = {uid: f for uid, f in db.CatererSwitchProposals.updates}
+        self.assertEqual(proposal_updates["p1"]["Status"], "Executed")
+
+    def test_only_approved_proposals_marked_executed(self):
+        db = MockDatabase()
+        db.Sessions._records = [
+            Record(id="s1", fields={"Caterer": ["cOld"], "Incoming Caterer": ["cNew"]}),
+        ]
+        db.CatererSwitchProposals._records = [
+            Record(id="p1", fields={"Session": ["s1"], "Status": "Pending"}),
+        ]
+        flip_incoming_caterers(db, dry_run=False)
+
+        self.assertEqual(db.CatererSwitchProposals.updates, [])
+
     def test_dry_run_makes_no_writes(self):
         db = MockDatabase()
         db.Sessions._records = [
             Record(id="s1", fields={"Caterer": ["cOld"], "Incoming Caterer": ["cNew"]}),
         ]
+        db.CatererSwitchProposals._records = [
+            Record(id="p1", fields={"Session": ["s1"], "Status": "Approved"}),
+        ]
         flip_incoming_caterers(db, dry_run=True)
         self.assertEqual(db.Sessions.updates, [])
+        self.assertEqual(db.CatererSwitchProposals.updates, [])
 
     def test_no_sessions_with_incoming_caterer(self):
         db = MockDatabase()

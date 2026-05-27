@@ -117,7 +117,7 @@ const page = {
             show('pending-actions');
         } else {
             const notices = {
-                Approved: `This proposal has been approved. To execute it via the CLI, run: ./run switch ${this.proposalId}`,
+                Approved: 'This switch is queued and will take effect at the next order run.',
                 Rejected: 'This proposal was rejected.',
                 Executed: 'This switch has already been executed.',
             };

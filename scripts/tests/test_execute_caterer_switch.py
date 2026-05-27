@@ -84,13 +84,13 @@ class TestExecuteCatererSwitch(unittest.TestCase):
         # All 3 students enrolled at SESSION_MON_ID should be cleared
         self.assertEqual(cleared_ids, {"stu0", "stu1", "stu2"})
 
-    def test_happy_path_marks_proposal_executed(self):
+    def test_happy_path_marks_proposal_approved(self):
         db = _setup_db()
         execute(PROPOSAL_ID, dry_run=False, db=db)
 
         proposal_updates = {uid: fields for uid, fields in db.CatererSwitchProposals.updates}
         self.assertIn(PROPOSAL_ID, proposal_updates)
-        self.assertEqual(proposal_updates[PROPOSAL_ID]["Status"], "Executed")
+        self.assertEqual(proposal_updates[PROPOSAL_ID]["Status"], "Approved")
 
     def test_non_approved_status_raises_system_exit(self):
         for status in ("Pending", "Rejected", "Executed"):

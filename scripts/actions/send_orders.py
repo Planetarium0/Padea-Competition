@@ -43,7 +43,8 @@ class SessionContext:
     fields:          SessionFields
     school_name:     str
     manager_name:    str | None
-    manager_mobile: str | None
+    manager_mobile:  str | None
+    manager_email:   str | None
 
 
 @dataclass(frozen=True)
@@ -82,7 +83,7 @@ def subtract_minutes(time_str: str | None, minutes: int = 10) -> str:
 def schedule_email(
     db:                          Database,
     to_email:                    str,
-    cc_email:                    str | None,
+    cc_email:                    list[str] | None,
     subject:                     str,
     body:                        str,
     email_id:                    str,
@@ -104,7 +105,7 @@ def schedule_email(
         "Send Date": None,  # set when actually sent by automation
     }
     if cc_email:
-        fields["CC"] = cc_email
+        fields["CC"] = ", ".join(cc_email)
     if weekly_order_id:
         fields["Weekly Order"] = [weekly_order_id]
     if caterer_switch_proposal_id:
@@ -185,18 +186,21 @@ def load_order_details(
             s_rec: Record[SchoolFields] | None = db.Schools.get(school_links[0])
             if s_rec:
                 school_name = s_rec.fields.get("School Name", "?")
+        manager_email: str | None = None
         mgr_links = sf.get("On-Site Manager") or []
         if mgr_links:
             m_rec: Record[OnSiteManagerFields] | None = db.OnSiteManagers.get(mgr_links[0])
             if m_rec:
                 manager_name   = m_rec.fields.get("Manager Name")
                 manager_mobile = m_rec.fields.get("Mobile")
+                manager_email  = m_rec.fields.get("Email")
 
         session_map[sid] = SessionContext(
             fields=sf,
             school_name=school_name,
             manager_name=manager_name,
             manager_mobile=manager_mobile,
+            manager_email=manager_email,
         )
 
     item_map: dict[str, MenuItemFields] = {}
@@ -341,6 +345,22 @@ def process_orders(db: Database | None = None, preview_only: bool = False) -> No
             if caterer_fields.get("Chef Wants CC")
             else None
         )
+        # Do not cc chef if chef is main contact
+        if chef_email == contact_email:
+            chef_email = None
+
+        # Collect unique on-site manager emails across all sessions in this order.
+        seen: set[str] = set()
+        cc_list: list[str] = []
+        for addr in ([chef_email] if chef_email else []) + [
+            li.session.manager_email
+            for li in line_items
+            if li.session.manager_email
+        ]:
+            if addr not in seen:
+                seen.add(addr)
+                cc_list.append(addr)
+
         subject = f"Padea Meal Order — Week of {week_display}"
         body    = format_email_body(wo_fields, caterer_fields, line_items)
 
@@ -349,7 +369,7 @@ def process_orders(db: Database | None = None, preview_only: bool = False) -> No
             schedule_email(
                 db,
                 to_email=contact_email,
-                cc_email=chef_email,
+                cc_email=cc_list or None,
                 subject=subject,
                 body=body,
                 email_id=email_id,
