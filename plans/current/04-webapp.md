@@ -36,9 +36,18 @@ Shown when no student is identified. Lazy-loads the session's student list
 in the background (the session record already carries a `Students` backlink
 of IDs). Search box filters by name on every keystroke. Tap to proceed.
 
-### 2. Form
-Single scrollable page with two cards:
+The picker endpoint **filters out students whose `Last Submitted == today`**
+— part of the one-way roster lockout (see below). Already-submitted
+students simply don't appear in the dropdown.
 
+### 2. Form
+Single scrollable page with three sections:
+
+- **Meal ticket banner** (if an `Orders` record exists for this student
+  today). Shows the student's finalized assigned meal for today's session,
+  plus an allergy tag in red if they have a registered allergy. Acts as
+  the on-site manager's "line pass" — the student opens the webapp, picks
+  their name, and shows the screen at the catering box pickup.
 - **Rating card**: 1–5 stars. If ≤ 3, an optional textarea slides in.
 - **Meal preference card**: a button labelled "Tap to choose a meal" (or
   showing the current selection). Tapping opens the meal picker overlay.
@@ -62,11 +71,24 @@ compatibility:
 3. **Doesn't match** items last, greyed out — shown with a "Contains X"
    subtitle. Tapping prompts a stronger confirmation modal.
 
-The student can always override; the system honours their explicit pick
-even if it conflicts with their declared diet.
+The student can override lifestyle restrictions; the system honours their
+explicit pick even if it conflicts with a declared lifestyle preference.
+
+**Allergy-blocked items** (an item that definitely violates a restriction
+flagged `Is Allergy = True`) get separate treatment: red strike-through
+styling, a ⊘ radio, and tapping shows a non-overridable lockout dialog
+pointing to the on-site manager. Variants follow the same rule. See
+`06-dietary-system.md` → *Medical allergies — hard block*.
 
 ### 4. Done
-A confirmation screen with an "Edit response" link back to the form.
+A confirmation screen. No "edit response" path — once submitted, the
+device is locked out for the rest of the day (see one-way lockout below).
+The copy directs the student to the on-site manager for changes.
+
+### 5. Locked
+Shown on subsequent visits from a device that has already submitted today
+(or `Last Submitted == today` was already populated). Mirrors the Done
+copy: *"Already submitted — see the on-site manager for changes."*
 
 ## Caching strategy
 
@@ -84,9 +106,15 @@ TTL; write handlers additionally bust relevant entries immediately.
 | Dietary Restrictions | `"diet"` | 24 h | — |
 | Caterer menu | `"menu:{caterer_id}"` | 24 h | — |
 | Session record | `"session:{session_id}"` | 1 h | — |
-| Student list for a session | `"students:{session_id}"` | 1 h | — |
-| Student record | `"student:{student_id}"` | ∞ | meal-preference PATCH |
+| Student record | `"student:{student_id}"` | ∞ | meal-preference PATCH, mark-submitted |
 | Caterer Feedback table | `"feedback_table"` | 60 s | feedback POST |
+
+The picker endpoint (`/api/session/<id>/students`) is **not** cached — it
+filters by `Last Submitted == today`, which changes throughout the night.
+
+The student's "digital ticket" (`/api/student/<id>/ticket`) is **not**
+cached either — it reads `Orders` for today, which is small and rarely
+hit per student.
 
 The feedback table is cached as a whole (not per-student) so every student
 on the same session night benefits from the same Airtable scan.
@@ -121,9 +149,34 @@ On Submit:
   can't create duplicates.
 - **Meal preference changed** → PATCHes the `Students.Meal Preference`
   field directly with a single Menu Item link.
+- **Always** → POSTs `/api/student/<id>/mark-submitted`, setting
+  `Students.Last Submitted = today`. This is the server-side half of
+  the one-way lockout (see below).
 
 After saving, the per-student cache key is busted so the next visit reads
 the new preference.
+
+## One-way roster lockout
+
+Goal: prevent a prankster from impersonating a classmate by picking their
+name from the dropdown. Two layers, independent:
+
+1. **Device lock** (`localStorage`). On successful submit, the webapp sets
+   `padea_submitted_<sessionId>_<YYYY-MM-DD>=1`. On subsequent loads on the
+   same device that key triggers the *Locked* view immediately — no
+   network round-trip.
+2. **Roster filter** (server-side). `Students.Last Submitted` is updated
+   to today on every successful submit. The picker endpoint refuses to
+   return students whose `Last Submitted == today`, so they vanish from
+   the dropdown for everyone scanning the QR after that point.
+
+Together: a friend who submits *first* disappears from the dropdown; a
+friend who hasn't submitted yet and finds their name missing is the
+canary that alerts the on-site manager that someone tried to pose as
+them. Manual overrides go through the on-site manager.
+
+The picker endpoint is *not cached* server-side — caching would let
+already-submitted students reappear in the dropdown until the TTL expired.
 
 ## Opted-out lock
 

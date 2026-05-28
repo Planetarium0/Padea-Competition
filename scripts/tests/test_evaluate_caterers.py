@@ -51,19 +51,21 @@ def _make_eval_index(
     hierarchy=None,
     feedback_index: dict | None = None,
     caterer_names: dict | None = None,
+    school_to_sessions: dict | None = None,
 ) -> object:
     """Minimal namespace sufficient for the pure evaluation functions."""
     return types.SimpleNamespace(
-        menu_by_caterer  = menu_by_caterer  or {},
-        dietary_hierarchy= hierarchy         or fixtures.test_hierarchy(),
-        feedback_index   = feedback_index   or {},
-        caterer_names    = caterer_names    or {},
+        menu_by_caterer   = menu_by_caterer    or {},
+        dietary_hierarchy = hierarchy          or fixtures.test_hierarchy(),
+        feedback_index    = feedback_index     or {},
+        caterer_names     = caterer_names      or {},
+        school_to_sessions= school_to_sessions or {},
     )
 
 
-def _proposal(school_id: str, caterer_id: str, status: str, proposed_on: str) -> Record:
+def _proposal(session_id: str, caterer_id: str, status: str, proposed_on: str) -> Record:
     return Record(id=f"prop-{status[:3]}", fields={
-        "School":           [school_id],
+        "Session":          [session_id],
         "Outgoing Caterer": [caterer_id],
         "Status":           status,
         "Proposed On":      proposed_on,
@@ -75,14 +77,17 @@ def _proposal(school_id: str, caterer_id: str, status: str, proposed_on: str) ->
 # ---------------------------------------------------------------------------
 
 class TestGetRollingStats(unittest.TestCase):
-    def test_returns_none_when_fewer_than_min_sessions(self):
-        # MIN_SESSIONS = 3; only 2 distinct sessions
+    def test_returns_stats_when_at_or_above_min_sessions(self):
+        # MIN_SESSIONS is currently 0 (intentionally disabled — see problem 28
+        # in plans/problems). Any non-empty entry list produces stats.
         entries = [
             _fb("2026-01-05", "s1", 2, "u1"),
             _fb("2026-01-05", "s1", 3, "u2"),
             _fb("2026-01-12", "s2", 2, "u3"),
         ]
-        self.assertIsNone(get_rolling_stats(entries))
+        result = get_rolling_stats(entries)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.num_sessions, 2)
 
     def test_returns_stats_with_enough_sessions(self):
         entries = [
@@ -116,10 +121,15 @@ class TestGetRollingStats(unittest.TestCase):
         self.assertEqual(result.num_sessions, ROLLING_WINDOW)
 
     def test_multiple_students_same_session_counted_as_one_session(self):
-        # 10 ratings but only 2 distinct sessions → below MIN_SESSIONS
+        # 10 ratings across only 2 distinct sessions. MIN_SESSIONS=0 lets this
+        # through (see problem 28); the assertion verifies the session bucketing
+        # is by session_id rather than counting each rating as its own "session".
         entries = [_fb("2026-01-05", "s1", 3, f"u{i}") for i in range(5)]
         entries += [_fb("2026-01-12", "s2", 3, f"u{i+5}") for i in range(5)]
-        self.assertIsNone(get_rolling_stats(entries))
+        result = get_rolling_stats(entries)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.num_sessions, 2)
+        self.assertEqual(result.num_raters, 10)
 
     def test_rater_count_is_unique_students(self):
         # Same student u1 rates twice across two sessions — should count once.
@@ -201,15 +211,22 @@ class TestCatererCoversAllStudents(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestScoreCandidate(unittest.TestCase):
+    """Feedback index is keyed by (session_id, caterer_id); the school-scoped
+    average is computed by filtering on the session IDs that belong to the
+    school via index.school_to_sessions."""
 
     def test_school_history_blended_with_overall(self):
-        # School A: avg 4.0; School B (same caterer): avg 2.0
+        # School A session 's1' has a 4-rating; school B session 's2' has 2.
         # Overall avg = (4+2)/2 = 3.0
         # Score at school A = 0.6*4.0 + 0.4*3.0 = 3.6
         idx = _make_eval_index(
             feedback_index={
-                (fixtures.SCHOOL_A_ID, fixtures.CATERER_A_ID): [_fb("2026-01-01", "s1", 4, "u1")],
-                (fixtures.SCHOOL_B_ID, fixtures.CATERER_A_ID): [_fb("2026-01-01", "s2", 2, "u2")],
+                ("s1", fixtures.CATERER_A_ID): [_fb("2026-01-01", "s1", 4, "u1")],
+                ("s2", fixtures.CATERER_A_ID): [_fb("2026-01-01", "s2", 2, "u2")],
+            },
+            school_to_sessions={
+                fixtures.SCHOOL_A_ID: ["s1"],
+                fixtures.SCHOOL_B_ID: ["s2"],
             },
             caterer_names={fixtures.CATERER_A_ID: "Café Deluxe"},
         )
@@ -217,13 +234,18 @@ class TestScoreCandidate(unittest.TestCase):
         self.assertAlmostEqual(score, 3.6)
 
     def test_no_school_history_uses_overall_only(self):
-        # School B has no history with this caterer; overall avg = 4.0
+        # School B has no sessions of its own with this caterer.
+        # Overall avg from school A's sessions = 4.0.
         idx = _make_eval_index(
             feedback_index={
-                (fixtures.SCHOOL_A_ID, fixtures.CATERER_A_ID): [
+                ("s1", fixtures.CATERER_A_ID): [
                     _fb("2026-01-01", "s1", 4, "u1"),
                     _fb("2026-01-08", "s2", 4, "u2"),
                 ],
+            },
+            school_to_sessions={
+                fixtures.SCHOOL_A_ID: ["s1", "s2"],
+                fixtures.SCHOOL_B_ID: [],
             },
             caterer_names={fixtures.CATERER_A_ID: "Café Deluxe"},
         )
@@ -233,6 +255,7 @@ class TestScoreCandidate(unittest.TestCase):
     def test_no_history_anywhere_defaults_to_3(self):
         idx = _make_eval_index(
             feedback_index={},
+            school_to_sessions={fixtures.SCHOOL_A_ID: ["s1"]},
             caterer_names={fixtures.CATERER_B_ID: "Fresh Eats"},
         )
         score = score_candidate(fixtures.CATERER_B_ID, fixtures.SCHOOL_A_ID, idx)
@@ -246,27 +269,27 @@ class TestScoreCandidate(unittest.TestCase):
 class TestHasActiveProposal(unittest.TestCase):
 
     def test_pending_proposal_blocks(self):
-        proposals = [_proposal(fixtures.SCHOOL_A_ID, fixtures.CATERER_A_ID, "Pending", "2026-02-01")]
-        self.assertTrue(has_active_proposal(fixtures.SCHOOL_A_ID, fixtures.CATERER_A_ID, proposals))
+        proposals = [_proposal(fixtures.SESSION_MON_ID, fixtures.CATERER_A_ID, "Pending", "2026-02-01")]
+        self.assertTrue(has_active_proposal(fixtures.SESSION_MON_ID, fixtures.CATERER_A_ID, proposals))
 
     def test_approved_proposal_blocks(self):
-        proposals = [_proposal(fixtures.SCHOOL_A_ID, fixtures.CATERER_A_ID, "Approved", "2026-02-01")]
-        self.assertTrue(has_active_proposal(fixtures.SCHOOL_A_ID, fixtures.CATERER_A_ID, proposals))
+        proposals = [_proposal(fixtures.SESSION_MON_ID, fixtures.CATERER_A_ID, "Approved", "2026-02-01")]
+        self.assertTrue(has_active_proposal(fixtures.SESSION_MON_ID, fixtures.CATERER_A_ID, proposals))
 
     def test_executed_proposal_blocks(self):
-        proposals = [_proposal(fixtures.SCHOOL_A_ID, fixtures.CATERER_A_ID, "Executed", "2026-02-01")]
-        self.assertTrue(has_active_proposal(fixtures.SCHOOL_A_ID, fixtures.CATERER_A_ID, proposals))
+        proposals = [_proposal(fixtures.SESSION_MON_ID, fixtures.CATERER_A_ID, "Executed", "2026-02-01")]
+        self.assertTrue(has_active_proposal(fixtures.SESSION_MON_ID, fixtures.CATERER_A_ID, proposals))
 
     def test_rejected_proposal_does_not_block(self):
-        proposals = [_proposal(fixtures.SCHOOL_A_ID, fixtures.CATERER_A_ID, "Rejected", "2026-02-01")]
-        self.assertFalse(has_active_proposal(fixtures.SCHOOL_A_ID, fixtures.CATERER_A_ID, proposals))
+        proposals = [_proposal(fixtures.SESSION_MON_ID, fixtures.CATERER_A_ID, "Rejected", "2026-02-01")]
+        self.assertFalse(has_active_proposal(fixtures.SESSION_MON_ID, fixtures.CATERER_A_ID, proposals))
 
-    def test_different_school_does_not_block(self):
-        proposals = [_proposal(fixtures.SCHOOL_B_ID, fixtures.CATERER_A_ID, "Pending", "2026-02-01")]
-        self.assertFalse(has_active_proposal(fixtures.SCHOOL_A_ID, fixtures.CATERER_A_ID, proposals))
+    def test_different_session_does_not_block(self):
+        proposals = [_proposal(fixtures.SESSION_WED_ID, fixtures.CATERER_A_ID, "Pending", "2026-02-01")]
+        self.assertFalse(has_active_proposal(fixtures.SESSION_MON_ID, fixtures.CATERER_A_ID, proposals))
 
     def test_no_proposals(self):
-        self.assertFalse(has_active_proposal(fixtures.SCHOOL_A_ID, fixtures.CATERER_A_ID, []))
+        self.assertFalse(has_active_proposal(fixtures.SESSION_MON_ID, fixtures.CATERER_A_ID, []))
 
 
 # ---------------------------------------------------------------------------
@@ -278,33 +301,33 @@ class TestWasRejectedThisTerm(unittest.TestCase):
     TERM_START = date(2026, 4, 20)
 
     def test_rejected_after_term_start(self):
-        proposals = [_proposal(fixtures.SCHOOL_A_ID, fixtures.CATERER_A_ID, "Rejected", "2026-05-01")]
+        proposals = [_proposal(fixtures.SESSION_MON_ID, fixtures.CATERER_A_ID, "Rejected", "2026-05-01")]
         self.assertTrue(was_rejected_this_term(
-            fixtures.SCHOOL_A_ID, fixtures.CATERER_A_ID, proposals, self.TERM_START,
+            fixtures.SESSION_MON_ID, fixtures.CATERER_A_ID, proposals, self.TERM_START,
         ))
 
     def test_rejected_on_term_start_day(self):
-        proposals = [_proposal(fixtures.SCHOOL_A_ID, fixtures.CATERER_A_ID, "Rejected", "2026-04-20")]
+        proposals = [_proposal(fixtures.SESSION_MON_ID, fixtures.CATERER_A_ID, "Rejected", "2026-04-20")]
         self.assertTrue(was_rejected_this_term(
-            fixtures.SCHOOL_A_ID, fixtures.CATERER_A_ID, proposals, self.TERM_START,
+            fixtures.SESSION_MON_ID, fixtures.CATERER_A_ID, proposals, self.TERM_START,
         ))
 
     def test_rejected_before_term_start_not_suppressed(self):
-        proposals = [_proposal(fixtures.SCHOOL_A_ID, fixtures.CATERER_A_ID, "Rejected", "2026-04-15")]
+        proposals = [_proposal(fixtures.SESSION_MON_ID, fixtures.CATERER_A_ID, "Rejected", "2026-04-15")]
         self.assertFalse(was_rejected_this_term(
-            fixtures.SCHOOL_A_ID, fixtures.CATERER_A_ID, proposals, self.TERM_START,
+            fixtures.SESSION_MON_ID, fixtures.CATERER_A_ID, proposals, self.TERM_START,
         ))
 
     def test_pending_not_treated_as_rejected(self):
-        proposals = [_proposal(fixtures.SCHOOL_A_ID, fixtures.CATERER_A_ID, "Pending", "2026-05-01")]
+        proposals = [_proposal(fixtures.SESSION_MON_ID, fixtures.CATERER_A_ID, "Pending", "2026-05-01")]
         self.assertFalse(was_rejected_this_term(
-            fixtures.SCHOOL_A_ID, fixtures.CATERER_A_ID, proposals, self.TERM_START,
+            fixtures.SESSION_MON_ID, fixtures.CATERER_A_ID, proposals, self.TERM_START,
         ))
 
     def test_different_caterer_not_matched(self):
-        proposals = [_proposal(fixtures.SCHOOL_A_ID, fixtures.CATERER_B_ID, "Rejected", "2026-05-01")]
+        proposals = [_proposal(fixtures.SESSION_MON_ID, fixtures.CATERER_B_ID, "Rejected", "2026-05-01")]
         self.assertFalse(was_rejected_this_term(
-            fixtures.SCHOOL_A_ID, fixtures.CATERER_A_ID, proposals, self.TERM_START,
+            fixtures.SESSION_MON_ID, fixtures.CATERER_A_ID, proposals, self.TERM_START,
         ))
 
 
@@ -336,10 +359,11 @@ def _build_eval_index(
     caterers: list[Record],
     menu_items: list[Record],
     students: list[Record] | None = None,
+    sessions: list[Record] | None = None,
 ) -> EvaluationIndex:
     """Build a real EvaluationIndex from minimal test data."""
     data = EvaluationData(
-        sessions=             [],
+        sessions=             sessions if sessions is not None else [fixtures.session_monday()],
         feedback=             [],
         caterers=             caterers,
         students=             students or [],
@@ -379,9 +403,9 @@ class TestFindCandidates(unittest.TestCase):
         school_students = [fixtures.student_vegan()]
 
         candidates = find_candidates(
-            school_id=           fixtures.SCHOOL_A_ID,
+            session_id=          fixtures.SESSION_MON_ID,
             outgoing_caterer_id= "cOutgoing",
-            school_students=     school_students,
+            session_students=    school_students,
             index=               index,
         )
 
@@ -410,9 +434,9 @@ class TestFindCandidates(unittest.TestCase):
         school_students = [fixtures.student_vegan()]
 
         candidates = find_candidates(
-            school_id=           fixtures.SCHOOL_A_ID,
+            session_id=          fixtures.SESSION_MON_ID,
             outgoing_caterer_id= "cOutgoing",
-            school_students=     school_students,
+            session_students=    school_students,
             index=               index,
         )
         self.assertEqual(candidates, [])
@@ -437,9 +461,9 @@ class TestFindCandidates(unittest.TestCase):
             menu_items=fixtures.menu_items_caterer_a(),
         )
         candidates = find_candidates(
-            school_id=           fixtures.SCHOOL_A_ID,
+            session_id=          fixtures.SESSION_MON_ID,
             outgoing_caterer_id= outgoing_id,
-            school_students=     [fixtures.student_normal()],
+            session_students=    [fixtures.student_normal()],
             index=               index2,
         )
         candidate_ids = [cid for _, cid, _ in candidates]
@@ -462,9 +486,9 @@ class TestFindCandidates(unittest.TestCase):
             menu_items=far_menu,
         )
         candidates = find_candidates(
-            school_id=           fixtures.SCHOOL_A_ID,
+            session_id=          fixtures.SESSION_MON_ID,
             outgoing_caterer_id= "cOutgoing",
-            school_students=     [fixtures.student_normal()],
+            session_students=    [fixtures.student_normal()],
             index=               index,
         )
         self.assertEqual(candidates, [])

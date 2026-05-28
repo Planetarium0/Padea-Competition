@@ -99,6 +99,7 @@ DietaryRestrictionFields = TypedDict(
         "Restriction Name": str,
         "Supersets": list[str],
         "Subsets": list[str],
+        "Is Allergy": bool,
     },
     total=False,
 )
@@ -116,6 +117,7 @@ StudentFields = TypedDict(
         "Parent Mobile": str,
         "Sessions": list[str],
         "Meal Preference": list[str],
+        "Last Submitted": str,
     },
     total=False,
 )
@@ -197,6 +199,7 @@ OrderFields = TypedDict(
         "Weekly Order": list[str],
         "Menu Item": list[str],
         "Session": list[str],
+        "Student": list[str],
         "Date": str,
         "Quantity": int,
     },

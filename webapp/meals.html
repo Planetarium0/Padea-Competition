@@ -65,6 +65,20 @@
                     <span>No rating or preference needed — enjoy your own dinner!</span>
                 </div>
 
+                <!-- Digital meal ticket — shown when an Order exists for this
+                     student + today. Acts as the on-site manager's "line pass". -->
+                <div id="meal-ticket" class="meal-ticket hidden">
+                    <div class="meal-ticket-allergy hidden" id="ticket-allergy-banner"></div>
+                    <div class="meal-ticket-label">🍱 Your meal for today</div>
+                    <div class="meal-ticket-name" id="ticket-meal-name"></div>
+                    <div class="meal-ticket-tags" id="ticket-meal-tags"></div>
+                    <div class="meal-ticket-note">
+                        Show this screen to the on-site manager to collect your box.
+                        If this doesn't match what you voted for, your choice was
+                        swapped to satisfy catering limits or dietary safety.
+                    </div>
+                </div>
+
                 <!-- Rating -->
                 <div id="rating-card" class="card">
                     <h2 class="card-title">How was today's caterer?</h2>
@@ -145,7 +159,25 @@
                     <div class="check-circle">✓</div>
                     <h1 class="view-title">Thanks!</h1>
                     <p class="view-sub" id="done-msg">Your response has been saved.</p>
-                    <button class="link-btn" onclick="app.reset()">Edit response</button>
+                    <p class="footnote">
+                        If you need to change anything, please speak to the on-site manager.
+                    </p>
+                </div>
+            </section>
+
+            <!-- ============================================================
+                  Locked view — device has already submitted today
+                  ============================================================ -->
+            <section id="view-locked" class="view hidden">
+                <div class="done-wrap">
+                    <div class="check-circle">✓</div>
+                    <h1 class="view-title">Already submitted</h1>
+                    <p class="view-sub">
+                        Your preference has already been submitted for next week.
+                    </p>
+                    <p class="footnote">
+                        If you need to make changes, please see the on-site manager.
+                    </p>
                 </div>
             </section>
 
@@ -172,7 +204,7 @@
                 <h3 id="confirm-title" class="modal-title"></h3>
                 <p id="confirm-body" class="modal-body"></p>
                 <div class="modal-actions">
-                    <button class="btn-ghost" onclick="confirmModalNo()">Cancel</button>
+                    <button id="confirm-no" class="btn-ghost" onclick="confirmModalNo()">Cancel</button>
                     <button id="confirm-yes" class="btn-primary" onclick="confirmModalYes()">OK</button>
                 </div>
             </div>

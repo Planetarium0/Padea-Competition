@@ -53,7 +53,7 @@ def _base_db(proposal: Record | None = None) -> MockDatabase:
 class TestApiGetProposal(unittest.TestCase):
 
     def test_returns_display_data(self):
-        status, body = api_get_proposal(PROPOSAL_ID, _base_db())
+        status, body = api_get_proposal(PROPOSAL_ID, db=_base_db())
         self.assertEqual(status, 200)
         self.assertEqual(body["status"],       "Pending")
         self.assertEqual(body["outgoingName"], "Café Deluxe")
@@ -68,7 +68,7 @@ class TestApiGetProposal(unittest.TestCase):
     def test_missing_proposal_returns_404(self):
         db = MockDatabase()
         db.CatererSwitchProposals._records = []
-        status, body = api_get_proposal(PROPOSAL_ID, db)
+        status, body = api_get_proposal(PROPOSAL_ID, db=db)
         self.assertEqual(status, 404)
         self.assertIn("error", body)
 
@@ -80,7 +80,7 @@ class TestApiGetProposal(unittest.TestCase):
             "Incoming Caterer": [IN_ID],
             "Notes":            "Caterer has been underperforming",
         }))
-        status, body = api_get_proposal(PROPOSAL_ID, db)
+        status, body = api_get_proposal(PROPOSAL_ID, db=db)
         self.assertEqual(status, 200)
         self.assertEqual(body["notes"], "Caterer has been underperforming")
 
@@ -90,7 +90,7 @@ class TestApiGetProposal(unittest.TestCase):
             "Outgoing Caterer": [OUT_ID],
             "Incoming Caterer": [IN_ID],
         }))
-        status, body = api_get_proposal(PROPOSAL_ID, db)
+        status, body = api_get_proposal(PROPOSAL_ID, db=db)
         self.assertEqual(status, 200)
         self.assertEqual(body["sessionName"], "—")
 
@@ -103,25 +103,25 @@ class TestApiApproveProposal(unittest.TestCase):
 
     def test_approve_executes_switch(self):
         db = _base_db(_approved_proposal())
-        status, body = api_approve_proposal(PROPOSAL_ID, db)
+        status, body = api_approve_proposal(PROPOSAL_ID, db=db)
         self.assertEqual(status, 200)
         self.assertTrue(body["ok"])
 
     def test_approve_marks_proposal_approved(self):
         db = _base_db(_approved_proposal())
-        api_approve_proposal(PROPOSAL_ID, db)
+        api_approve_proposal(PROPOSAL_ID, db=db)
         updates = {uid: f for uid, f in db.CatererSwitchProposals.updates}
         self.assertEqual(updates[PROPOSAL_ID]["Status"], "Approved")
 
     def test_approve_updates_session(self):
         db = _base_db(_approved_proposal())
-        api_approve_proposal(PROPOSAL_ID, db)
+        api_approve_proposal(PROPOSAL_ID, db=db)
         updated_ids = {uid for uid, _ in db.Sessions.updates}
         self.assertIn(fixtures.SESSION_MON_ID, updated_ids)
 
     def test_pending_proposal_succeeds(self):
         db = _base_db(_pending_proposal())
-        status, body = api_approve_proposal(PROPOSAL_ID, db)
+        status, body = api_approve_proposal(PROPOSAL_ID, db=db)
         self.assertEqual(status, 200)
         self.assertTrue(body["ok"])
 
@@ -132,14 +132,14 @@ class TestApiApproveProposal(unittest.TestCase):
             "Outgoing Caterer": [OUT_ID],
             "Incoming Caterer": [IN_ID],
         }))
-        status, body = api_approve_proposal(PROPOSAL_ID, db)
+        status, body = api_approve_proposal(PROPOSAL_ID, db=db)
         self.assertEqual(status, 422)
         self.assertIn("error", body)
 
     def test_missing_proposal_returns_422(self):
         db = MockDatabase()
         db.CatererSwitchProposals._records = []
-        status, body = api_approve_proposal(PROPOSAL_ID, db)
+        status, body = api_approve_proposal(PROPOSAL_ID, db=db)
         self.assertEqual(status, 422)
         self.assertIn("error", body)
 

@@ -54,7 +54,10 @@ For example:
    - Match → "Contains X" (definitely incompatible).
    - No match → "May contain X" (ambiguous).
 
-Output is three buckets used by the picker: **ok**, **maybe**, **no**.
+Output is three buckets used by the picker: **ok**, **maybe**, **no**. The
+returned object also carries an `allergyBlocked` flag — true when at least
+one `no` issue is against a restriction flagged `Is Allergy = True`. The
+picker uses this to switch from the soft override path to the hard block.
 
 ## Compatibility check (order generator)
 
@@ -124,7 +127,28 @@ wasn't enough. This is brittle — every dish-naming convention is a
 landmine.
 
 ### Explicit override
-A student's explicit `Meal Preference` is honoured *even if* it violates
-their declared diet. The assumption is they know best — maybe the
-declared diet was a typo, or a temporary preference, or a "I'll cheat
-this once" thing. Both webapp and order generator preserve this rule.
+A student's explicit `Meal Preference` is honoured *even if* it violates a
+**lifestyle** restriction (Vegetarian, Halal, No Beef, …). The assumption is
+they know best — declared diet may have been a typo, a temporary
+preference, or a "I'll cheat this once" thing. Both webapp and order
+generator preserve this rule for non-allergy restrictions.
+
+### Medical allergies — hard block
+Restrictions flagged `Is Allergy = True` in the Dietary Restrictions table
+are **not overridable** by the student:
+
+- **Webapp**: incompatible items render in the "blocked" style (struck-out,
+  red, ⊘ radio). Tapping shows an explanatory dialog and *not* the
+  confirm-override modal. Variant-picker rows with allergy hits refuse
+  selection too. The lockout copy directs the student to the on-site
+  manager for manual overrides.
+- **`register_orders.py`**: if a student's explicit `Meal Preference`
+  violates an allergy, the script refuses to honour it, logs a severe
+  warning, and force-swaps the student to a dietary-safe fallback. (A
+  lifestyle violation continues to log a normal warning and proceeds.)
+
+Defaults (`data/dietary_data.py → ALLERGY_RESTRICTIONS`): **Nut Free**,
+**Gluten Free**, **Dairy Free**. The operator can flag additional
+restrictions directly in Airtable; nothing in the pipeline assumes this
+exact set. Restrictions that are ambiguous between religious and medical
+(No Fish, No Shellfish) stay lifestyle by default.

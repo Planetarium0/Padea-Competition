@@ -123,7 +123,14 @@ TABLES_SCHEMA: dict[str, dict[str, Any]] = {
                 "type": "multipleRecordLinks",
                 "link_target": "Dietary Restrictions",
                 "inverse_name": "Subsets",
-            }
+            },
+            # Medical-grade allergy flag. True for restrictions that are a
+            # health/legal hazard if violated (Nut Free, Gluten Free, ...).
+            # The webapp hard-blocks incompatible picks; the order generator
+            # refuses to honour explicit overrides that violate an allergy.
+            # Lifestyle preferences (Vegetarian, Halal, No Beef, ...) remain
+            # soft — student can override with a confirmation.
+            {"name": "Is Allergy", "type": "checkbox", "options": {"icon": "check", "color": "redBright"}}
         ]
     },
     "Students": {
@@ -151,7 +158,12 @@ TABLES_SCHEMA: dict[str, dict[str, Any]] = {
                 "name": "Meal Preference",
                 "type": "multipleRecordLinks",
                 "link_target": "Menu Items"
-            }
+            },
+            # Date of the last successful webapp submission (any of rating /
+            # comment / meal preference). Used by the picker to filter out
+            # students who have already submitted for the current session, so
+            # a prankster can't pose as them — see "One-Way Roster Lockout".
+            {"name": "Last Submitted", "type": "date", "options": {"dateFormat": {"name": "iso"}}}
         ]
     },
     "Sessions": {
@@ -308,9 +320,12 @@ TABLES_SCHEMA: dict[str, dict[str, Any]] = {
         ]
     },
     "Orders": {
-        # Per-session-per-item quantity record. One row per unique (Session,
-        # Menu Item) pair for a given week; Quantity holds the total portions
-        # to order. Rolled up from student preferences by register_orders.py.
+        # Per-student-per-session record of the finalized meal assignment for
+        # a given week. One row per (Student, Session, Date) — Quantity is
+        # always 1 and is kept only so caterer-facing aggregations
+        # (send_orders.py, order_constraints.py) can sum it without caring
+        # whether the row is per-student or pre-aggregated. The Student link
+        # backs the webapp's "digital ticket" lookup.
         "primary": {"name": "Order ID", "type": "singleLineText"},
         "fields": [
             {
@@ -327,6 +342,11 @@ TABLES_SCHEMA: dict[str, dict[str, Any]] = {
                 "name": "Session",
                 "type": "multipleRecordLinks",
                 "link_target": "Sessions"
+            },
+            {
+                "name": "Student",
+                "type": "multipleRecordLinks",
+                "link_target": "Students"
             },
             {"name": "Date", "type": "date", "options": {"dateFormat": {"name": "iso"}}},
             {"name": "Quantity", "type": "number", "options": {"precision": 0}}

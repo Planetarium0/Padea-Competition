@@ -30,5 +30,9 @@ assessment — operator should triage.
 | 22 | Heuristic contact parser still misses Kenko Sushi House | Low |
 | 23 | `order_constraints.py` re-implements `build_lookups` | Low |
 | 24 | `host_webapp.py` uses `os.chdir` (process-wide side effect) | Low |
+| 25 | ~~Explicit override of medical allergies is a legal/health hazard~~ | ~~High~~ |
+| 26 | ~~Shared student picker dropdown allows pranks~~ | ~~Medium~~ |
+| 27 | ~~Swapped orders cause lunch line confusion and waste~~ | ~~Medium~~ |
+| 28 | `MIN_SESSIONS = 0` disables caterer-switch sanity floor | Medium |
 
 See individual files for detail and suggested fixes.

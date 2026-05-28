@@ -64,6 +64,11 @@ Static lookup table. Defines the dietary taxonomy and its hierarchy.
 - **Restriction Name** (primary)
 - **Supersets** → `Dietary Restrictions` (self-link). A restriction lists its
   *less-restrictive* parents. The inverse back-link is renamed to **Subsets**.
+- **Is Allergy** (checkbox). True for medical-grade restrictions (Nut Free,
+  Gluten Free, Dairy Free by default). The webapp hard-blocks incompatible
+  picks, and `register_orders.py` refuses to honour an explicit override
+  that hits one of these. Lifestyle restrictions (Vegetarian, Halal, No
+  Beef, …) stay soft — the student can override with a confirmation modal.
 
 Read `Supersets` as "X is a subset of these" — every item that satisfies X
 also satisfies any superset of X. Used by the webapp to soft-filter the meal
@@ -82,6 +87,10 @@ list. See `06-dietary-system.md`.
 - **Meal Preference** → `Menu Items` (single item; the student's standing
   pick — updated by the webapp and persists until changed. Read each week by
   `register_orders.py`, which writes the result into `Orders`.)
+- **Last Submitted** (date). Set by the webapp on every successful submit.
+  The student-picker filters out students whose `Last Submitted == today`
+  so a prankster can't impersonate them — see the one-way-roster lockout
+  in `04-webapp.md`.
 
 ### Sessions
 One record per recurring weekly session (~11). A session repeats every week of
@@ -137,16 +146,19 @@ One per caterer per week. The aggregate parent of `Orders`.
 - **Notes**
 
 ### Orders
-One per (Session, Menu Item) pair per week — i.e. one row says "this many
-of *that* dish for *that* session." Rolled up from individual student
-preferences in `register_orders.py`.
+One row per **student** per week — each row is one student's finalized meal
+assignment for a specific session date. `Quantity` is always `1`; callers
+that want per-item totals (`send_orders.py`, `order_constraints.py`) sum
+`Quantity` across rows, which is equivalent to counting them. The per-student
+granularity powers the webapp's "digital ticket" lookup (see `04-webapp.md`).
 
-- **Order ID** (primary, format: `"<Session ID> — <Item Name> — <YYYY-Www>"`)
+- **Order ID** (primary, format: `"<Session ID> — <Student> — <Item Name> — <YYYY-Www>"`)
 - **Weekly Order** → `Weekly Orders`
 - **Menu Item** → `Menu Items`
 - **Session** → `Sessions`
+- **Student** → `Students`
 - **Date** (the actual date this session occurs, computed from Day)
-- **Quantity**
+- **Quantity** (always 1)
 
 ### Scheduled Emails
 A queue table — `send_orders.py` inserts records, an Airtable automation
@@ -169,7 +181,7 @@ during migration linking and verification. Changing them breaks the linkers.
 | Absences.Absence ID | `<Student> - <School> - <YYYY-MM-DD>` | Built from Session ID + Student |
 | Exclusions.Exclusion ID | `<School> - <YYYY-MM-DD>` | Date-specific |
 | Weekly Orders.Order ID | `<Caterer> — <YYYY-Www>` | em-dash, ISO week number |
-| Orders.Order ID | `<Session ID> — <Item> — <YYYY-Www>` | em-dash |
+| Orders.Order ID | `<Session ID> — <Student> — <Item> — <YYYY-Www>` | em-dash; one row per student per week |
 | Scheduled Emails.Email ID | `EMAIL-<YYYY-MM-DD>-<wo_id[:8]>` | |
 
 ## Schema-sync behaviour (`update_schema.py`)

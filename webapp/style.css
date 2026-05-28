@@ -475,6 +475,33 @@ textarea:focus {
   color: var(--text);
 }
 
+/* Allergy hard-block — overrides .incompatible / .maybe styling above. */
+.meal-item.blocked {
+  background: #FBE9EC;
+  border-color: var(--primary);
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.meal-item.blocked .meal-name {
+  color: var(--primary-dark);
+  text-decoration: line-through;
+}
+
+.meal-item.blocked .meal-radio {
+  border-color: var(--primary);
+  background: var(--primary);
+  position: relative;
+}
+
+.meal-item.blocked .meal-radio::after {
+  content: '⊘';
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .meal-reason {
   font-size: 12px;
   font-weight: 500;
@@ -487,6 +514,11 @@ textarea:focus {
 
 .meal-reason-maybe {
   color: #B0660B; /* warm amber for caution */
+}
+
+.meal-reason-blocked {
+  color: var(--primary-dark);
+  font-weight: 600;
 }
 
 .meal-divider {
@@ -618,6 +650,60 @@ textarea:focus {
 }
 
 /* ============================================================
+   Meal ticket
+   ============================================================ */
+.meal-ticket {
+  background: linear-gradient(135deg, var(--primary-tint) 0%, #FFFFFF 100%);
+  border: 1.5px solid var(--primary-tint-strong);
+  border-radius: var(--radius-lg);
+  padding: 18px 18px 14px;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.meal-ticket-label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.meal-ticket-name {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--primary-dark);
+  letter-spacing: -0.01em;
+}
+
+.meal-ticket-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.meal-ticket-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  line-height: 1.45;
+}
+
+.meal-ticket-allergy {
+  align-self: flex-start;
+  background: var(--primary);
+  color: white;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  padding: 4px 10px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+}
+
+/* ============================================================
    Opted-out banner
    ============================================================ */
 .opted-out {
@@ -692,6 +778,18 @@ textarea:focus {
 }
 
 .variant-option.incompatible.selected .meal-name { color: var(--text); }
+
+.variant-option.blocked {
+  background: #FBE9EC;
+  border-color: var(--primary);
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.variant-option.blocked .meal-name {
+  color: var(--primary-dark);
+  text-decoration: line-through;
+}
 
 .variant-option .meal-radio { /* inherits base .meal-radio */ }
 

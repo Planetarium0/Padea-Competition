@@ -56,6 +56,10 @@ class DietaryHierarchy:
     # Used to detect definite incompatibility when a caterer's Dietary Legend
     # explicitly tracks an ancestor restriction and the item is missing it.
     superset_closure: dict[str, set[str]] = field(default_factory=dict)
+    # IDs of restrictions flagged Is Allergy=True. Medical-grade — a violation
+    # is a health/legal hazard, not a lifestyle preference, and the order
+    # generator refuses to honour an explicit override that hits one of these.
+    allergy_ids: frozenset[str] = field(default_factory=frozenset)
 
 
 def build_hierarchy(
@@ -67,6 +71,7 @@ def build_hierarchy(
     name_to_id: dict[str, str] = {}
     children: dict[str, list[str]] = {}  # parent_id -> [subset child ids]
     parents: dict[str, list[str]] = {}   # rid -> [parent/superset ids]
+    allergy_ids: set[str] = set()
 
     for r in restrictions:
         rid = r.id
@@ -78,6 +83,8 @@ def build_hierarchy(
         parents[rid] = supersets
         for parent_id in supersets:
             children.setdefault(parent_id, []).append(rid)
+        if r.fields.get("Is Allergy"):
+            allergy_ids.add(rid)
 
     def descendants(rid: str, acc: set[str]) -> set[str]:
         if rid in acc:
@@ -102,6 +109,7 @@ def build_hierarchy(
         name_to_id=name_to_id,
         subset_closure=subset_closure,
         superset_closure=superset_closure,
+        allergy_ids=frozenset(allergy_ids),
     )
 
 
@@ -144,31 +152,73 @@ def is_item_compatible(
          match means "may contain" — treated as compatible here for the
          same lenient behaviour the webapp groups under the "maybe" badge.
     """
+    return not item_incompatibility_ids(
+        item_fields, student_dietary_ids, hierarchy, caterer_legend_tag_ids,
+    )
+
+
+def item_incompatibility_ids(
+    item_fields: MenuItemFields,
+    student_dietary_ids: Iterable[str] | None,
+    hierarchy: DietaryHierarchy,
+    caterer_legend_tag_ids: Iterable[str] | None = None,
+) -> list[str]:
+    """Return the restriction IDs the item *definitely* violates for this
+    student (i.e. would make ``is_item_compatible`` return False). Empty
+    list means the item is compatible.
+
+    Used by register_orders.py to distinguish allergy violations from
+    lifestyle violations when honouring an explicit override.
+    """
     dietary_ids = list(student_dietary_ids or [])
     if not dietary_ids:
-        return True
+        return []
 
     item_tag_ids = set(item_fields.get("Dietary Tags") or [])
     item_name_lower = item_fields.get("Menu Item Name", "").lower()
     legend_ids = set(caterer_legend_tag_ids or [])
 
+    failed: list[str] = []
     for req_id in dietary_ids:
         req_name = hierarchy.id_to_name.get(req_id, "")
         if req_name == OPTED_OUT:
-            return False
+            failed.append(req_id)
+            continue
         closure = hierarchy.subset_closure.get(req_id, {req_id})
         if item_tag_ids & closure:
             continue
 
+        legend_blocked = False
         if legend_ids:
             for ancestor_id in hierarchy.superset_closure.get(req_id, {req_id}):
                 if ancestor_id not in legend_ids:
                     continue
                 ancestor_closure = hierarchy.subset_closure.get(ancestor_id, {ancestor_id})
                 if not (item_tag_ids & ancestor_closure):
-                    return False
+                    legend_blocked = True
+                    break
+        if legend_blocked:
+            failed.append(req_id)
+            continue
 
         for kw in NEGATIVE_KEYWORDS.get(req_name, ()):
             if kw in item_name_lower:
-                return False
-    return True
+                failed.append(req_id)
+                break
+    return failed
+
+
+def violates_allergy(
+    item_fields: MenuItemFields,
+    student_dietary_ids: Iterable[str] | None,
+    hierarchy: DietaryHierarchy,
+    caterer_legend_tag_ids: Iterable[str] | None = None,
+) -> list[str]:
+    """Return the *allergy* restriction IDs the item violates. Empty list
+    means no allergy-grade hazard. A lifestyle-only violation returns []."""
+    return [
+        rid for rid in item_incompatibility_ids(
+            item_fields, student_dietary_ids, hierarchy, caterer_legend_tag_ids,
+        )
+        if rid in hierarchy.allergy_ids
+    ]

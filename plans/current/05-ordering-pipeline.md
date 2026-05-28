@@ -89,9 +89,19 @@ After all assignments, the script:
 ### Explicit preference override
 
 If a student's `Meal Preference` is set and the item is on the session's
-caterer's menu, the script uses it even if the item conflicts with their
-declared dietary requirements. A warning is logged; the student's choice
-is treated as an informed override.
+caterer's menu, the script uses it — even if the item conflicts with a
+**lifestyle** dietary restriction (Vegetarian, Halal, …). A warning is
+logged; the student's choice is treated as an informed override.
+
+**Allergies are not overridable.** If the explicit preference violates a
+restriction flagged `Is Allergy = True` (Nut Free, Gluten Free, Dairy
+Free by default), the script:
+
+1. Refuses to honour the preference.
+2. Logs a severe warning naming the offending allergy.
+3. Falls through to the dietary-safe fallback as if no preference was set.
+
+See `06-dietary-system.md → Medical allergies — hard block`.
 
 Note: explicit preferences receive no special protection during min-qty
 enforcement. If the preferred item falls below the per-item minimum, the
@@ -106,7 +116,10 @@ Week Start falls in next week's window. Re-runs are safe.
 ### Outputs
 
 - One `Weekly Orders` row per caterer per week.
-- One `Orders` row per (Session, Menu Item) pair, with `Quantity`.
+- One `Orders` row per **student** per session — the per-student
+  granularity powers the webapp's digital-ticket lookup. `Quantity` is
+  always `1`; callers that want per-item totals (e.g. `send_orders.py`,
+  `order_constraints.py`) sum `Quantity` across rows.
 
 ## `send_orders.py` — format and queue caterer emails
 

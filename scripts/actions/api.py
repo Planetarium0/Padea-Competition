@@ -162,10 +162,10 @@ def api_reject_proposal(proposal_id: str, notes: str = "", *, db: Database) -> t
 
 @route("GET", r"^/api/session/(?P<session_id>[^/?]+)/students$")
 def api_get_session_students(session_id: str, *, db: Database) -> tuple[int, list | dict]:
-    key = f"students:{session_id}"
-    cached = _cache.get(key)
-    if cached is not None:
-        return 200, cached
+    # NOT cached. The picker filters out students whose Last Submitted == today
+    # ("one-way roster" — once they've submitted they vanish from the dropdown
+    # so a prankster can't impersonate them), and that flag changes throughout
+    # the night as students submit. A cached response would let them reappear.
     session = db.Sessions.get(session_id)
     if not session:
         return 404, {"error": f"Session {session_id!r} not found"}
@@ -173,14 +173,17 @@ def api_get_session_students(session_id: str, *, db: Database) -> tuple[int, lis
     # TypedDict but present at runtime.
     student_ids: list[str] = list(session.fields.get("Students") or [])  # type: ignore[attr-defined]
     if not student_ids:
-        _cache.set(key, [], _TTL_SESSION)
         return 200, []
     students = db.Students.all(formula=_id_formula(student_ids))
+    today_iso = date.today().isoformat()
     result = sorted(
-        [{"id": s.id, "name": s.fields.get("Student Name") or "(no name)"} for s in students],
+        [
+            {"id": s.id, "name": s.fields.get("Student Name") or "(no name)"}
+            for s in students
+            if s.fields.get("Last Submitted") != today_iso
+        ],
         key=lambda s: s["name"],
     )
-    _cache.set(key, result, _TTL_SESSION)
     return 200, result
 
 
@@ -222,9 +225,10 @@ def api_get_student(student_id: str, *, db: Database) -> tuple[int, dict]:
             "Student Name":         f.get("Student Name", ""),
             "Dietary Requirements": f.get("Dietary Requirements") or [],
             "Meal Preference":      f.get("Meal Preference") or [],
+            "Last Submitted":       f.get("Last Submitted") or "",
         },
     }
-    _cache.set(key, data)  # no TTL — busted when meal preference is updated
+    _cache.set(key, data)  # no TTL — busted on meal-preference / mark-submitted
     return 200, data
 
 
@@ -284,9 +288,10 @@ def api_get_dietary_restrictions(*, db: Database) -> tuple[int, list]:
         return 200, cached
     data = [
         {
-            "id":        r.id,
-            "name":      r.fields.get("Restriction Name", ""),
-            "supersets": r.fields.get("Supersets") or [],
+            "id":         r.id,
+            "name":       r.fields.get("Restriction Name", ""),
+            "supersets":  r.fields.get("Supersets") or [],
+            "isAllergy":  bool(r.fields.get("Is Allergy")),
         }
         for r in db.DietaryRestrictions.all()
     ]
@@ -363,6 +368,53 @@ def api_update_meal_preference(student_id: str, meal_item_id: str, *, db: Databa
         return 200, {"ok": True}
     except Exception as e:
         log.exception("Error updating meal preference for student %s", student_id)
+        return 500, {"error": str(e)}
+
+
+@route("GET", r"^/api/student/(?P<student_id>[^/?]+)/ticket$")
+def api_get_student_ticket(student_id: str, session_id: str = "", *, db: Database) -> tuple[int, dict]:
+    """Return today's finalized meal assignment for a student in a session.
+
+    The "digital ticket" — what the on-site manager looks at when handing
+    over an (unnamed) catering box. Returns {meal: null} if no Order exists
+    (the student wasn't on the order, or register_orders hasn't run yet).
+    """
+    today_iso = date.today().isoformat()
+    formula = (
+        f"AND({{Date}} = '{today_iso}', "
+        f"FIND('{student_id}', ARRAYJOIN({{Student}})) > 0"
+        f"{f', FIND({session_id!r}, ARRAYJOIN({{Session}})) > 0' if session_id else ''})"
+    )
+    matches = db.Orders.all(formula=formula)
+    if not matches:
+        return 200, {"meal": None}
+    order = matches[0]
+    item_id = (order.fields.get("Menu Item") or [None])[0]
+    if not item_id:
+        return 200, {"meal": None}
+    item = db.MenuItems.get(item_id)
+    if not item:
+        return 200, {"meal": None}
+    return 200, {
+        "meal": {
+            "id":   item.id,
+            "name": item.fields.get("Menu Item Name") or "(unnamed)",
+            "tags": item.fields.get("Dietary Tags") or [],
+        },
+    }
+
+
+@route("POST", r"^/api/student/(?P<student_id>[^/?]+)/mark-submitted$")
+def api_mark_student_submitted(student_id: str, *, db: Database) -> tuple[int, dict]:
+    # Sets Students.'Last Submitted' = today so the picker filters this student
+    # out of the dropdown for the rest of the day. Called from the webapp
+    # whenever the student successfully submits anything (rating or preference).
+    try:
+        db.Students.update(student_id, {"Last Submitted": date.today().isoformat()})
+        _cache.bust(f"student:{student_id}")
+        return 200, {"ok": True}
+    except Exception as e:
+        log.exception("Error marking student %s as submitted", student_id)
         return 500, {"error": str(e)}
 
 
