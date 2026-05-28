@@ -35,8 +35,7 @@
                 <p class="view-sub">Tap your name to continue.</p>
 
                 <div class="search-wrap">
-                    <input id="student-search" type="search" autocomplete="off"
-                        placeholder="Search your name…" />
+                    <input id="student-search" type="search" autocomplete="off" placeholder="Search your name…" />
                 </div>
 
                 <div id="picker-loading" class="loading-row">
@@ -67,7 +66,7 @@
                 </div>
 
                 <!-- Rating -->
-                <div class="card">
+                <div id="rating-card" class="card">
                     <h2 class="card-title">How was today's caterer?</h2>
                     <div id="stars" class="stars">
                         <button class="star" data-v="1" onclick="app.setRating(1)" aria-label="1 star">★</button>
@@ -78,7 +77,8 @@
                     </div>
 
                     <div id="comment-wrap" class="comment-wrap hidden">
-                        <label class="field-label" for="comment">What went wrong? <span class="muted">(optional)</span></label>
+                        <label class="field-label" for="comment">What went wrong? <span
+                                class="muted">(optional)</span></label>
                         <textarea id="comment" rows="3"
                             placeholder="e.g., late delivery, incorrect order, poor food quality"
                             oninput="app.setComment(this.value)"></textarea>
@@ -179,7 +179,6 @@
         </div>
     </div>
 
-    <script src="config.env.js"></script>
     <script src="app.js"></script>
 </body>
 

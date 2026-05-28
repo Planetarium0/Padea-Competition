@@ -27,6 +27,8 @@ Usage:
   $0 switch <proposal_record_id> [--approve] [--dry-run]
   $0 host [--port PORT]
   $0 qr [--origin URL_ORIGIN] [--base-url URL] [--session ID]
+  $0 meals qr [--origin URL_ORIGIN] [--base-url URL] [--session ID] [--first]
+  $0 meals send {parents|students} [--immediate] [--dry-run] [--first]
 
 resource can be one of:
   diet, schools, caterers, contacts, menus, sessions, students, absences, exclusions, all
@@ -129,6 +131,37 @@ if [[ "$COMMAND" == "switch" ]]; then
     fi
     echo "Executing caterer switch for proposal $PROPOSAL_ID..."
     python scripts/actions/execute_caterer_switch.py "$PROPOSAL_ID" "${@:3}"
+    exit 0
+fi
+
+# --- Meals sub-commands ---
+if [[ "$COMMAND" == "meals" ]]; then
+    SUBCOMMAND="${2:-}"
+
+    case "$SUBCOMMAND" in
+        qr)
+            echo "Generating QR codes..."
+            python scripts/actions/generate_qr.py "${@:3}"
+            ;;
+        send)
+            TARGET="${3:-}"
+            case "$TARGET" in
+                parents|students)
+                    echo "Sending meal preference links to ${TARGET}..."
+                    python scripts/actions/send_meals_links.py --target "$TARGET" "${@:4}"
+                    ;;
+                *)
+                    echo "[ERROR] Usage: $0 meals send {parents|students} [--immediate] [--dry-run]"
+                    exit 1
+                    ;;
+            esac
+            ;;
+        *)
+            echo "[ERROR] Unknown meals subcommand: ${SUBCOMMAND:-<none>}"
+            echo "Use: meals qr | meals send {parents|students}"
+            exit 1
+            ;;
+    esac
     exit 0
 fi
 

@@ -24,16 +24,6 @@
 // Constants
 // ============================================================
 
-const AT_BASE = `https://api.airtable.com/v0/${CONFIG.BASE_ID}`;
-
-const CACHE_TTL = {
-  session: 60 * 60 * 1000,         // 1h
-  student: 24 * 60 * 60 * 1000,    // 24h
-  students: 60 * 60 * 1000,         // 1h
-  menu: 60 * 60 * 1000,            // 1h — caterer menus can change during a switch transition
-  diet: 24 * 60 * 60 * 1000,       // 24h
-  feedback: 5 * 60 * 1000,          // 5m
-};
 
 // Short labels for badges. Anything not listed falls back to the full name.
 const TAG_SHORT = {
@@ -71,85 +61,42 @@ const CONSTRAINT_PHRASE = {
 };
 
 // ============================================================
-// Airtable client
+// API client
 // ============================================================
 
-function apiKey() {
-  return new URLSearchParams(location.search).get("key") || CONFIG.API_KEY;
-}
-
-async function atFetch(url, options = {}) {
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${apiKey()}`,
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...(options.headers || {}),
-    },
-  });
-  if (!res.ok) throw new Error(`Airtable ${res.status}: ${await res.text()}`);
+async function apiFetch(url, options = {}) {
+  const res = await fetch(url, options);
+  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
   return res.json();
 }
 
-async function atList(table, params = {}) {
-  const url = new URL(`${AT_BASE}/${encodeURIComponent(table)}`);
-  for (const [k, v] of Object.entries(params)) {
-    if (Array.isArray(v)) v.forEach(val => url.searchParams.append(k, val));
-    else url.searchParams.set(k, v);
-  }
-  let records = [], offset = null;
-  do {
-    if (offset) url.searchParams.set("offset", offset);
-    else url.searchParams.delete("offset");
-    const data = await atFetch(url.toString());
-    records = records.concat(data.records || []);
-    offset = data.offset;
-  } while (offset);
-  return records;
-}
-
-async function atGet(table, id) {
-  return atFetch(`${AT_BASE}/${encodeURIComponent(table)}/${id}`);
-}
-
-async function atCreate(table, fields) {
-  const data = await atFetch(`${AT_BASE}/${encodeURIComponent(table)}`, {
-    method: "POST",
-    body: JSON.stringify({ records: [{ fields }] }),
-  });
-  return data.records[0];
-}
-
-async function atUpdate(table, id, fields) {
-  return atFetch(`${AT_BASE}/${encodeURIComponent(table)}/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify({ fields }),
-  });
-}
-
 // ============================================================
-// localStorage helpers
+// Cache helpers
 // ============================================================
 
+// In-memory cache for API responses — lives only for the current page session.
+// TTL and persistence are handled server-side; the client just avoids redundant
+// requests within a single visit.
+const _memCache = Object.create(null);
+
+function cacheGet(key) {
+  return Object.prototype.hasOwnProperty.call(_memCache, key) ? _memCache[key] : null;
+}
+
+function cacheSet(key, data) {
+  _memCache[key] = data;
+}
+
+function cacheBust(key) {
+  delete _memCache[key];
+}
+
+// localStorage is used only for the student-picker shortcut (persists across visits).
 const ls = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch { } },
   remove(k) { try { localStorage.removeItem(k); } catch { } },
 };
-
-function cacheGet(key, type) {
-  const raw = ls.get(key);
-  if (!raw) return null;
-  try {
-    const { ts, data } = JSON.parse(raw);
-    if (Date.now() - ts > CACHE_TTL[type]) { ls.remove(key); return null; }
-    return data;
-  } catch { return null; }
-}
-
-function cacheSet(key, data) {
-  ls.set(key, JSON.stringify({ ts: Date.now(), data }));
-}
 
 function knownStudentKey(sessionId) { return `padea_known_student_${sessionId}`; }
 function getKnownStudent(sessionId) { return ls.get(knownStudentKey(sessionId)); }
@@ -162,17 +109,16 @@ function clearKnownStudent(sessionId) { ls.remove(knownStudentKey(sessionId)); }
 
 async function loadSession(sessionId) {
   const key = `padea_session_${sessionId}`;
-  const cached = cacheGet(key, "session");
+  const cached = cacheGet(key);
   if (cached) {
     console.log(`[padea] session (cache hit): ${cached.fields["Session ID"]}`);
     return cached;
   }
   console.log(`[padea] fetching session ${sessionId}…`);
-  const rec = await atGet("Sessions", sessionId);
+  const rec = await apiFetch(`/api/session/${sessionId}`);
   console.log(`[padea] session loaded: ${rec.fields["Session ID"]}`,
     "caterer:", rec.fields.Caterer,
-    "incoming:", rec.fields["Incoming Caterer"] || [],
-    "students:", (rec.fields.Students || []).length);
+    "incoming:", rec.fields["Incoming Caterer"] || []);
   cacheSet(key, rec);
   return rec;
 }
@@ -193,56 +139,30 @@ function isInTransition(session) {
 
 async function loadStudent(studentId) {
   const key = `padea_student_${studentId}`;
-  const cached = cacheGet(key, "student");
+  const cached = cacheGet(key);
   if (cached) return cached;
-  const rec = await atGet("Students", studentId);
+  const rec = await apiFetch(`/api/student/${studentId}`);
   cacheSet(key, rec);
   return rec;
 }
 
-async function loadStudentsForSession(sessionId, studentIds) {
+async function loadStudentsForSession(sessionId) {
   const key = `padea_students_${sessionId}`;
-  const cached = cacheGet(key, "students");
+  const cached = cacheGet(key);
   if (cached) return cached;
-  if (!studentIds || !studentIds.length) return [];
-  const formula = `OR(${studentIds.map(id => `RECORD_ID()='${id}'`).join(",")})`;
-  const recs = await atList("Students", {
-    filterByFormula: formula,
-    "fields[]": ["Student Name"],
-  });
-  const result = recs.map(r => ({
-    id: r.id,
-    name: r.fields["Student Name"] || "(no name)",
-  })).sort((a, b) => a.name.localeCompare(b.name));
+  const result = await apiFetch(`/api/session/${sessionId}/students`);
   cacheSet(key, result);
   return result;
 }
 
 async function loadMenuItems(catererId) {
   const key = `padea_menu_${catererId}`;
-  const cached = cacheGet(key, "menu");
+  const cached = cacheGet(key);
   if (cached) {
     console.log(`[padea] menu (cache hit, ${cached.length} items)`);
     return cached;
   }
-  // Fetch caterer to get its Menu Items back-link IDs, then fetch the items.
-  // We can't filter Menu Items by Caterer record ID because Airtable formulas
-  // render linked-record fields as the primary field (name), not the ID.
-  console.log(`[padea] fetching caterer ${catererId}…`);
-  const caterer = await atGet("Caterers", catererId);
-  const menuIds = caterer.fields["Menu Items"] || [];
-  console.log(
-    `[padea] caterer "${caterer.fields["Caterer Name"]}" has ${menuIds.length} menu items`,
-  );
-  if (!menuIds.length) {
-    cacheSet(key, []);
-    return [];
-  }
-  const formula = `OR(${menuIds.map(id => `RECORD_ID()='${id}'`).join(",")})`;
-  const items = await atList("Menu Items", {
-    filterByFormula: formula,
-    "fields[]": ["Menu Item Name", "Dietary Tags", "Is Variant", "Variant Of"],
-  });
+  const items = await apiFetch(`/api/caterer/${catererId}/menu`);
   console.log(`[padea] menu loaded: ${items.length} items`);
   cacheSet(key, items);
   return items;
@@ -250,16 +170,9 @@ async function loadMenuItems(catererId) {
 
 async function loadDietaryRestrictions() {
   const key = "padea_diet_restrictions";
-  const cached = cacheGet(key, "diet");
+  const cached = cacheGet(key);
   if (cached) return cached;
-  const recs = await atList("Dietary Restrictions", {
-    "fields[]": ["Restriction Name", "Supersets"],
-  });
-  const data = recs.map(r => ({
-    id: r.id,
-    name: r.fields["Restriction Name"],
-    supersets: r.fields["Supersets"] || [],
-  }));
+  const data = await apiFetch("/api/dietary-restrictions");
   console.log(`[padea] dietary restrictions loaded: ${data.length}`);
   cacheSet(key, data);
   return data;
@@ -267,7 +180,7 @@ async function loadDietaryRestrictions() {
 
 async function loadNegativeKeywords() {
   const key = "padea_neg_keywords";
-  const cached = cacheGet(key, "diet");
+  const cached = cacheGet(key);
   if (cached) return cached;
   const res = await fetch("data/dietary_keywords.json", { cache: "no-cache" });
   if (!res.ok) throw new Error(`keywords ${res.status}`);
@@ -278,23 +191,10 @@ async function loadNegativeKeywords() {
 }
 
 async function loadExistingFeedback(studentId, catererId) {
-  // Key is (student, caterer) — one review per student per caterer, across sessions.
   const key = `padea_fb_${studentId}_${catererId || ""}`;
-  const cached = cacheGet(key, "feedback");
+  const cached = cacheGet(key);
   if (cached !== null) return cached;
-  // Airtable formula filters on linked-record fields use primary-field values
-  // (names), not record IDs, so we can't filter by ID in the formula. Fetch
-  // all feedback and match by record ID client-side — the table is small.
-  const recs = await atList("Caterer Feedback", {
-    "fields[]": ["Rating", "Comment", "Student", "Caterer"],
-  });
-  const match = recs.find(r =>
-    (r.fields.Student || []).includes(studentId) &&
-    (!catererId || (r.fields.Caterer || []).includes(catererId))
-  );
-  const fb = match
-    ? { recordId: match.id, rating: match.fields.Rating || 0, comment: match.fields.Comment || "" }
-    : { recordId: null, rating: 0, comment: "" };
+  const fb = await apiFetch(`/api/feedback?student_id=${studentId}&caterer_id=${catererId || ""}`);
   cacheSet(key, fb);
   return fb;
 }
@@ -421,6 +321,7 @@ function isPastOrderCutoff(now = new Date()) {
 const state = {
   sessionId: null,
   studentId: null,
+  firstSession: false,
   session: null,
   student: null,
   menuItems: null,
@@ -462,6 +363,7 @@ const app = {
   async init() {
     const params = new URLSearchParams(location.search);
     state.sessionId = params.get("session");
+    state.firstSession = !!params.get("first");
 
     if (!state.sessionId) {
       showError("Missing session ID. Please scan a valid QR code.");
@@ -657,10 +559,7 @@ function showPickerSkeleton() {
 async function loadPickerData() {
   let students;
   try {
-    students = await loadStudentsForSession(
-      state.sessionId,
-      (state.session.fields.Students || []),
-    );
+    students = await loadStudentsForSession(state.sessionId);
   } catch (err) {
     console.error(err);
     showError("Couldn't load the student list. Please try again.");
@@ -677,6 +576,7 @@ function showFormSkeleton() {
   showView("form");
   resetFormState();
   clearOptedOutLock();
+  document.getElementById("rating-card").classList.toggle("hidden", state.firstSession);
   document.getElementById("transition-banner").classList.add("hidden");
   document.getElementById("student-name").textContent = "…";
   document.querySelectorAll("#stars .star").forEach(s => s.classList.remove("active"));
@@ -992,40 +892,38 @@ async function persistChanges() {
 
   const ops = [];
 
-  // Caterer Feedback (Student, Session, Caterer, Rating, Comment)
   if (ratingChanged) {
     // Wait for the background lookup to resolve so we never create a duplicate
-    // when the user submits faster than Airtable responds.
+    // when the user submits faster than the server responds.
     if (state.feedbackPromise) await state.feedbackPromise;
-    // Always attribute the rating to whoever cooked today's meal — that is
-    // session.Caterer, not Incoming Caterer.
-    const catererId = (state.session?.fields?.Caterer || [])[0];
-    const fields = {
-      "Student": [state.studentId],
-      "Session": [state.sessionId],
-      "Rating": state.rating,
-      "Comment": state.comment.trim(),
-      "Session Date": new Date().toISOString().slice(0, 10),
-      ...(catererId ? { "Caterer": [catererId] } : {}),
-    };
-    if (state.feedbackRecordId) {
-      ops.push(atUpdate("Caterer Feedback", state.feedbackRecordId, fields));
-    } else {
-      fields["Feedback ID"] = makeId("FB", state.studentId, catererId || state.sessionId);
-      ops.push(atCreate("Caterer Feedback", fields).then(rec => {
-        state.feedbackRecordId = rec.id;
-      }));
-    }
+    // Always attribute to session.Caterer (who cooked today), not Incoming Caterer.
+    const catererId = (state.session?.fields?.Caterer || [])[0] || "";
+    ops.push(
+      apiFetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          student_id: state.studentId,
+          session_id: state.sessionId,
+          caterer_id: catererId,
+          rating: state.rating,
+          comment: state.comment.trim(),
+          feedback_record_id: state.feedbackRecordId || null,
+        }),
+      }).then(data => { state.feedbackRecordId = data.recordId; })
+    );
   }
 
-  // Meal Preference — patch the Student record directly.
   if (mealChanged) {
-    ops.push(atUpdate("Students", state.studentId, {
-      "Meal Preference": [state.mealItemId],
-    }).then(() => {
-      // Bust the per-student cache so a fresh visit reads the new preference.
-      ls.remove(`padea_student_${state.studentId}`);
-    }));
+    ops.push(
+      apiFetch(`/api/student/${state.studentId}/meal-preference`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ meal_item_id: state.mealItemId }),
+      }).then(() => {
+        cacheBust(`padea_student_${state.studentId}`);
+      })
+    );
   }
 
   await Promise.all(ops);
@@ -1039,13 +937,13 @@ async function persistChanges() {
   }
 
   const _catererId = (state.session?.fields?.Caterer || [])[0] || "";
-  ls.remove(`padea_fb_${state.studentId}_${_catererId}`);
+  cacheBust(`padea_fb_${state.studentId}_${_catererId}`);
 }
 
 function doneMessage() {
   const parts = [];
   if (state.rating > 0) parts.push("Rating saved");
-  if (state.mealItemId) parts.push("preference saved");
+  if (state.mealItemId) parts.push("Preference saved");
   return parts.length ? parts.join(" — ") + "." : "Your response has been saved.";
 }
 
@@ -1095,10 +993,6 @@ window.confirmModalNo = () => closeConfirm();
 // ============================================================
 // Utility
 // ============================================================
-
-function makeId(prefix, studentId, sessionId) {
-  return `${prefix}-${studentId.slice(-6)}-${sessionId.slice(-6)}-${Date.now()}`;
-}
 
 function escapeHtml(s) {
   return String(s)
@@ -1174,19 +1068,19 @@ function showVariantModal(options, selectedId, maps, reqs) {
   document.getElementById("variant-modal").classList.remove("hidden");
 }
 
-window.selectVariantOption = function(itemId) {
+window.selectVariantOption = function (itemId) {
   variantModalSelected = itemId;
   document.querySelectorAll(".variant-option").forEach(el => {
     el.classList.toggle("selected", el.dataset.itemId === itemId);
   });
 };
 
-window.closeVariantModal = function() {
+window.closeVariantModal = function () {
   document.getElementById("variant-modal").classList.add("hidden");
   variantModalSelected = null;
 };
 
-window.confirmVariantModal = function() {
+window.confirmVariantModal = function () {
   const id = variantModalSelected;
   closeVariantModal();
   if (!id) return;

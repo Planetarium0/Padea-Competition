@@ -70,17 +70,36 @@ A confirmation screen with an "Edit response" link back to the form.
 
 ## Caching strategy
 
-Aggressive client-side caching via `localStorage`. Different TTLs for
-different data:
+Two-tier: server-side in-memory cache (primary) + client-side in-memory
+cache (secondary, within a single page visit).
 
-| Key | TTL |
-|---|---|
-| Session record | 1 hour |
-| Student record | 24 hours |
-| Student list for a session | 1 hour |
-| Menu items for a caterer | 24 hours |
-| Dietary Restrictions table | 24 hours |
-| Existing feedback record | 5 minutes |
+### Server-side cache (`api.py` — `_ServerCache`)
+
+All Airtable traffic goes through the Python server. The server caches
+responses in a thread-safe in-memory dict. Stale entries are evicted by
+TTL; write handlers additionally bust relevant entries immediately.
+
+| Resource | Cache key | TTL | Busted on |
+|---|---|---|---|
+| Dietary Restrictions | `"diet"` | 24 h | — |
+| Caterer menu | `"menu:{caterer_id}"` | 24 h | — |
+| Session record | `"session:{session_id}"` | 1 h | — |
+| Student list for a session | `"students:{session_id}"` | 1 h | — |
+| Student record | `"student:{student_id}"` | ∞ | meal-preference PATCH |
+| Caterer Feedback table | `"feedback_table"` | 60 s | feedback POST |
+
+The feedback table is cached as a whole (not per-student) so every student
+on the same session night benefits from the same Airtable scan.
+
+### Client-side cache (`app.js` — `_memCache`)
+
+A plain JS object. No TTLs — the server owns freshness. Prevents redundant
+API calls within a single page visit (e.g. navigating between views).
+Busted in `persistChanges` after a submit so that the next `loadStudent`
+or feedback lookup within the same visit gets current data.
+
+`localStorage` is used **only** for `padea_known_student_{sessionId}` —
+the student-picker shortcut that persists across visits.
 
 Loads happen in parallel where possible:
 

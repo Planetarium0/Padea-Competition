@@ -24,20 +24,18 @@ import argparse
 import json
 import re
 import socket
+import urllib.parse
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
 from support import Database
-from actions.api import api_approve_proposal, api_get_proposal, api_reject_proposal
+from actions.api import _routes, dispatch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 WEBAPP_DIR = PROJECT_ROOT / "webapp"
 DATA_DIR = PROJECT_ROOT / "data"
 DEFAULT_PORT = 8000
 
-_RE_PROPOSAL = re.compile(r"^/api/proposal/([^/?]+)$")
-_RE_APPROVE  = re.compile(r"^/api/proposal/([^/?]+)/approve$")
-_RE_REJECT   = re.compile(r"^/api/proposal/([^/?]+)/reject$")
 
 
 def local_ip() -> str:
@@ -60,30 +58,33 @@ class PadeaHandler(SimpleHTTPRequestHandler):
     # ------------------------------------------------------------------
 
     def do_GET(self) -> None:
-        bare = self.path.split("?", 1)[0]
-        m = _RE_PROPOSAL.match(bare)
-        if m:
-            status, body = api_get_proposal(m.group(1), Database.from_env())
-            self._send_json(status, body)
-            return
-        super().do_GET()
+        if not self._dispatch("GET"):
+            super().do_GET()
 
     def do_POST(self) -> None:
+        if not self._dispatch("POST"):
+            self._send_json(404, {"error": "Not found"})
+
+    def do_PATCH(self) -> None:
+        if not self._dispatch("PATCH"):
+            self._send_json(404, {"error": "Not found"})
+
+    def _dispatch(self, method: str) -> bool:
         bare = self.path.split("?", 1)[0]
-        m = _RE_APPROVE.match(bare)
-        if m:
-            status, body = api_approve_proposal(m.group(1), Database.from_env())
-            self._send_json(status, body)
-            return
-        m = _RE_REJECT.match(bare)
-        if m:
-            length = int(self.headers.get("Content-Length", 0))
-            data   = json.loads(self.rfile.read(length)) if length else {}
-            notes  = data.get("notes", "") if isinstance(data, dict) else ""
-            status, body = api_reject_proposal(m.group(1), notes, Database.from_env())
-            self._send_json(status, body)
-            return
-        self._send_json(404, {"error": "Not found"})
+        payload = self._read_payload(method)
+        db = Database.from_env()
+        for verb, pattern, handler in _routes:
+            if verb == method and (m := pattern.match(bare)):
+                self._send_json(*dispatch(handler, m, payload, db))
+                return True
+        return False
+
+    def _read_payload(self, method: str) -> dict:
+        if method == "GET":
+            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+            return {k: v[0] for k, v in urllib.parse.parse_qs(qs).items()}
+        length = int(self.headers.get("Content-Length", 0))
+        return json.loads(self.rfile.read(length)) if length else {}
 
     def _send_json(self, status: int, body: dict) -> None:
         encoded = json.dumps(body).encode()

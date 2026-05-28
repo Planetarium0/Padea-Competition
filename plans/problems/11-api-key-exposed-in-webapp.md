@@ -1,4 +1,4 @@
-# 11 — Airtable API key exposed in the webapp bundle
+# 11 — Airtable API key exposed in the webapp bundle ✓ RESOLVED
 
 **Severity:** High (read-and-write to the entire base).
 **File:** `webapp/config.env.js`.
@@ -24,18 +24,24 @@ Notes:
 This is fine for purely local testing (`./run host` on a closed LAN
 with trusted users), but cannot be the long-term hosting story.
 
-### Fix
+### Fix applied
 
-For the eventual live deployment:
+The webapp no longer calls Airtable directly. All Airtable traffic is
+proxied through the Python server:
 
-- Use a token scoped to the *minimum* set of tables / operations the
-  webapp actually needs:
-  - Read: Sessions, Students, Menu Items, Caterers, Dietary Restrictions,
-    Caterer Feedback.
-  - Write: Caterer Feedback (POST/PATCH), Students.Meal Preference (PATCH).
-- Better: stop trusting the browser. Put a tiny proxy in front of
-  Airtable that takes a session/student token and forwards only the
-  allowed writes. Even a Cloudflare Worker / Lambda / serverless
-  function with the Airtable PAT in env vars would work.
-- In any case, rotate the current key before going live — it's been
-  visible in plaintext to every developer who has touched the project.
+- `webapp/app.js` — `AT_BASE` changed to `/api/airtable`; `Authorization`
+  header removed from `atFetch`; `apiKey()` helper removed.
+- `webapp/config.env.js` — `API_KEY` and `BASE_ID` stripped; `CONFIG`
+  is now an empty object (file kept so `meals.html`'s script tag doesn't 404).
+- `host_webapp.py` — new `_proxy_airtable()` method forwards GET/POST/PATCH
+  requests to `https://api.airtable.com/v0/{BASE_ID}/…` using
+  `AIRTABLE_API_KEY` from `.env` (server-side only). Route: `/api/airtable/*`.
+
+**Latency impact:** negligible. The extra hop (browser → Python server) is
+~0–1 ms on LAN. The dominant cost (Python → Airtable over the internet,
+~100–300 ms per call) is unchanged.
+
+**Remaining for production:** rotate the current key (it was in plaintext
+while the problem existed). For a cloud deployment replace `host_webapp.py`
+with a proper server (e.g. Cloudflare Worker, Lambda) that keeps the key
+in env vars — the webapp side requires no further changes.

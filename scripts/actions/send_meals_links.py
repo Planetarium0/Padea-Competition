@@ -1,0 +1,269 @@
+"""
+send_meals_links.py — Email parents or students a personalised meal-preference link.
+
+Useful at the start of term when no session has taken place yet and QR codes
+have not been distributed.  Each email contains one link per session the student
+is enrolled in, pre-filled with session + student IDs so the recipient lands
+straight on the form without picking a name.
+
+Usage:
+  python scripts/actions/send_meals_links.py --target {parents|students}
+                                              [--immediate]
+                                              [--dry-run]
+
+Requires URL_ORIGIN in .env (or as an environment variable):
+  URL_ORIGIN=http://<server-ip>:8000
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+import time
+from dataclasses import dataclass
+
+from support import (
+    CatererFields,
+    Database,
+    Record,
+    SchoolFields,
+    SessionFields,
+    StudentFields,
+    log,
+)
+
+
+# ---------------------------------------------------------------------------
+# URL helpers
+# ---------------------------------------------------------------------------
+
+def meals_url(origin: str, session_id: str, student_id: str, first: bool = False) -> str:
+    suffix = "&first=1" if first else ""
+    return f"{origin.rstrip('/')}/meals.html?session={session_id}&student={student_id}{suffix}"
+
+
+# ---------------------------------------------------------------------------
+# Email formatting
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class SessionLink:
+    label: str   # e.g. "Tuesday — ACME School (Caterer Name)"
+    url:   str
+
+
+def format_parent_email(
+    parent_name:  str,
+    student_name: str,
+    links:        list[SessionLink],
+    first_session: bool = False,
+) -> tuple[str, str]:
+    greeting = (parent_name.split()[0] if parent_name else None) or "there"
+    if first_session:
+        subject = f"Padea Meals — set {student_name}'s meal preference for this term"
+        intro   = (
+            f"It's the start of term! {student_name} can now pick their meal "
+            "preference for the coming weeks."
+        )
+        cta     = "Set preference"
+        closing = "These preferences help us order meals your child will actually enjoy."
+    else:
+        subject = f"Padea Meals — update {student_name}'s meal preference"
+        intro   = (
+            f"{student_name} can rate their recent meal and update their preference "
+            "for next week using the link(s) below."
+        )
+        cta     = "Rate & update preference"
+        closing = "These preferences help us order meals your child will actually enjoy."
+    lines = [
+        f"Hi {greeting},",
+        "",
+        intro,
+        "",
+    ]
+    for link in links:
+        lines.append(f"**{link.label}**")
+        lines.append(f"[{cta}]({link.url})")
+        lines.append("")
+    lines += [closing, "", "Thanks,", "Padea"]
+    return subject, "\n".join(lines)
+
+
+def format_student_email(
+    student_name:  str,
+    links:         list[SessionLink],
+    first_session: bool = False,
+) -> tuple[str, str]:
+    greeting = (student_name.split()[0] if student_name else None) or "there"
+    if first_session:
+        subject = "Padea Meals — set your meal preference for this term"
+        intro   = "It's the start of term! You can now pick your meal preference for the coming weeks."
+        cta     = "Set preference"
+        closing = "Your preference helps us order meals you'll actually enjoy."
+    else:
+        subject = "Padea Meals — update your meal preference"
+        intro   = "You can rate your recent meal and update your preference for next week."
+        cta     = "Rate & update preference"
+        closing = "Your preference helps us order meals you'll actually enjoy."
+    lines = [
+        f"Hi {greeting},",
+        "",
+        intro,
+        "",
+    ]
+    for link in links:
+        lines.append(f"**{link.label}**")
+        lines.append(f"[{cta}]({link.url})")
+        lines.append("")
+    lines += [closing, "", "Thanks,", "Padea"]
+    return subject, "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Main pipeline
+# ---------------------------------------------------------------------------
+
+def send_links(
+    target:    str,
+    immediate: bool = False,
+    dry_run:   bool = False,
+    first:     bool = False,
+    db:        Database | None = None,
+) -> None:
+    db = db or Database.from_env()
+
+    origin = os.environ.get("URL_ORIGIN", "").rstrip("/")
+    if not origin:
+        log.error(
+            "URL_ORIGIN is not set. Add it to .env or the environment:\n"
+            "  URL_ORIGIN=http://<server-ip>:8000"
+        )
+        sys.exit(1)
+
+    if immediate:
+        log.info("Send immediately: ON")
+
+    all_students = db.Students.all()
+    session_map  = {s.id: s for s in db.Sessions.all()}
+    school_map   = {s.id: s for s in db.Schools.all()}
+    caterer_map  = {c.id: c for c in db.Caterers.all()}
+
+    if not all_students:
+        log.warning("No students found.")
+        return
+
+    from send_orders import schedule_email
+
+    sent = skipped = 0
+
+    for student in all_students:
+        sf: StudentFields = student.fields
+        student_name = sf.get("Student Name") or "(no name)"
+
+        if target == "parents":
+            to_email     = sf.get("Parent Email") or ""
+            display_name = sf.get("Parent Name") or ""
+        else:
+            to_email     = sf.get("Student Email") or ""
+            display_name = student_name
+
+        if not to_email:
+            log.warning(f"Skipping {student_name}: no {target[:-1]} email")
+            skipped += 1
+            continue
+
+        session_ids: list[str] = sf.get("Sessions") or []
+        if not session_ids:
+            log.warning(f"Skipping {student_name}: no sessions enrolled")
+            skipped += 1
+            continue
+
+        links: list[SessionLink] = []
+        for sid in session_ids:
+            sess_rec = session_map.get(sid)
+            if not sess_rec:
+                continue
+            sess_f: SessionFields = sess_rec.fields
+
+            school_id   = (sess_f.get("School") or [None])[0]
+            school_name = school_map[school_id].fields.get("School Name", "?") if school_id and school_id in school_map else "?"
+
+            caterer_id   = (sess_f.get("Caterer") or [None])[0]
+            caterer_name = caterer_map[caterer_id].fields.get("Caterer Name", "") if caterer_id and caterer_id in caterer_map else ""
+
+            day   = sess_f.get("Day", "?")
+            label = f"{day} — {school_name}"
+            if caterer_name:
+                label += f" ({caterer_name})"
+
+            links.append(SessionLink(label=label, url=meals_url(origin, sid, student.id, first=first)))
+
+        if not links:
+            log.warning(f"Skipping {student_name}: no resolvable sessions")
+            skipped += 1
+            continue
+
+        if target == "parents":
+            subject, body = format_parent_email(display_name, student_name, links, first_session=first)
+        else:
+            subject, body = format_student_email(student_name, links, first_session=first)
+
+        email_id = f"MEALS-{target[:3].upper()}-{student.id[-8:]}-{int(time.time())}"
+
+        if dry_run:
+            log.info(f"[DRY RUN] To: {to_email} ({student_name})")
+            log.info(f"           Subject: {subject}")
+            for link in links:
+                log.info(f"           {link.label}: {link.url}")
+        else:
+            schedule_email(
+                db,
+                to_email=to_email,
+                cc_email=None,
+                subject=subject,
+                body=body,
+                email_id=email_id,
+                immediate=immediate,
+            )
+            log.info(f"Queued → {to_email} ({student_name}, {len(links)} session(s))")
+
+        sent += 1
+
+    log.info(f"\nDone. {sent} email(s) {'would be ' if dry_run else ''}queued, {skipped} skipped.")
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Email parents or students a personalised meal-preference link"
+    )
+    parser.add_argument(
+        "--target",
+        choices=["parents", "students"],
+        required=True,
+        help="Who to send to",
+    )
+    parser.add_argument(
+        "--immediate",
+        action="store_true",
+        help="Flag emails for immediate sending (default: Status=Queued)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print what would be sent without writing to Airtable",
+    )
+    parser.add_argument(
+        "--first",
+        action="store_true",
+        help="Append &first=1 to each link, hiding the caterer rating in the webapp",
+    )
+    args = parser.parse_args()
+    try:
+        send_links(target=args.target, immediate=args.immediate, dry_run=args.dry_run, first=args.first)
+    except KeyboardInterrupt:
+        log.error("Quitting early due to keyboard interrupt")

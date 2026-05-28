@@ -38,14 +38,15 @@ def make_session_url(
     session_id: str,
     base_url: str | None = None,
     origin: str | None = None,
+    first: bool = False,
 ) -> str:
+    suffix = "&first=1" if first else ""
     if origin:
-        return f"{origin.rstrip('/')}/meals.html?session={session_id}"
+        return f"{origin.rstrip('/')}/meals.html?session={session_id}{suffix}"
     if base_url:
-        return f"{base_url.rstrip('/')}?session={session_id}"
-    # Local file URL
+        return f"{base_url.rstrip('/')}?session={session_id}{suffix}"
     abs_path = WEBAPP_PATH.resolve()
-    return f"file://{abs_path}?session={session_id}"
+    return f"file://{abs_path}?session={session_id}{suffix}"
 
 
 def generate_qr(url: str, output_path: Path) -> None:
@@ -74,6 +75,7 @@ def main(
     base_url: str | None = None,
     origin: str | None = None,
     filter_session: str | None = None,
+    first: bool = False,
     db: Database | None = None,
 ) -> None:
     db = db or Database.from_env()
@@ -99,7 +101,7 @@ def main(
     for sess in sessions:
         sess_label = sess.fields.get("Session ID", sess.id)
 
-        url = make_session_url(sess.id, base_url=base_url, origin=origin)
+        url = make_session_url(sess.id, base_url=base_url, origin=origin, first=first)
         safe_name = sess_label.replace(" ", "_").replace("/", "-")
         out_path = OUTPUT_DIR / f"{safe_name}.png"
 
@@ -127,6 +129,11 @@ if __name__ == "__main__":
         help="Only generate QR for this session ID or record ID",
         default=None,
     )
+    parser.add_argument(
+        "--first",
+        action="store_true",
+        help="Append &first=1 to each URL, hiding the caterer rating in the webapp",
+    )
     args = parser.parse_args()
 
-    main(base_url=args.base_url, origin=args.origin, filter_session=args.session)
+    main(base_url=args.base_url, origin=args.origin, filter_session=args.session, first=args.first)
