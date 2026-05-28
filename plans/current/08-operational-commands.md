@@ -16,20 +16,22 @@ CLAUDE_CODE_API_KEY=<...>   # or ANTHROPIC_API_KEY=<...>
 pip install pyairtable python-dotenv pandas openpyxl anthropic pypdf qrcode pillow
 ```
 
-## Schema
+## Migrate
+
+All data setup goes through `migrate`. `schema` syncs the Airtable schema
+against `data/schema.py`; the resource subcommands import source data.
 
 ```bash
-./run schema update          # idempotent — diffs schema.py against Airtable
+./run migrate schema         # idempotent — diffs schema.py against Airtable
                              # creates missing tables/fields, renames orphans
                              # to '(deleted) X' for human deletion
 ```
 
-Safe to run any time — never destroys data.
-
-## Migration
+Safe to run any time — never destroys data. Run once before the first migration,
+and again whenever `data/schema.py` changes.
 
 ```bash
-./run migrate                # full clean-slate import (all 8 migrations)
+./run migrate                # full clean-slate import (all migrations, dependency order)
 ./run migrate caterers       # single resource
 ./run migrate diet           # dietary restrictions (lookup table)
 ./run migrate contacts       # caterer_contacts.py
@@ -62,19 +64,38 @@ python scripts/actions/cache_pdf.py
 The dry run prints a per-session summary grouped by caterer. Useful
 before letting it commit to Airtable.
 
-## Verification
+## Forms
+
+`forms` covers everything to do with getting the meal preference form into
+students' and parents' hands — QR codes and direct email links.
 
 ```bash
-# Post-migration sanity check (currently has stale table names — see problems)
-python scripts/tests/verify_migration.py
+# Generate QR code PNGs (one per session) in output/qrcodes/
+./run forms qr                                   # file:// codes (host machine only)
+./run forms qr --origin http://192.168.1.5:8000  # phone-scannable (LAN)
+./run forms qr --base-url https://meals.padea.com.au  # public URL
+./run forms qr --session "Loreto College - Friday"    # single session
 
-# Post-order constraints (min-qty + session totals)
-python scripts/tests/order_constraints.py
+# Email QR codes to on-site managers
+./run forms qr send
+./run forms qr send --dry-run
+
+# Email meal preference links directly to parents or students
+./run forms send parents
+./run forms send students
+./run forms send parents --immediate   # send now rather than queuing
+./run forms send parents --dry-run
 ```
 
-> Note: `./run script verify_migration` is documented in `CLAUDE.md` but
-> doesn't actually work — `./run script` looks in `scripts/actions/`, not
-> `scripts/tests/`. Run the test scripts with `python` directly.
+## Caterer management
+
+```bash
+./run caterer evaluate              # assess rolling ratings, generate switch proposals
+./run caterer evaluate --dry-run    # print proposals without writing to Airtable
+
+./run caterer switch <proposal_id>  # execute an approved switch proposal
+./run caterer switch <proposal_id> --dry-run
+```
 
 ## Webapp
 
@@ -86,31 +107,31 @@ python scripts/tests/order_constraints.py
 Prints both `http://localhost:<port>/index.html` and a LAN URL. The LAN
 URL is what the QR codes need to encode.
 
-## QR codes
+## Verification
 
 ```bash
-# Phone-scannable codes (needed for actual on-site use)
-./run qr --origin http://192.168.1.5:8000
+# Post-migration sanity check
+python scripts/tests/verify_migration.py
 
-# Public URL (for a future live deploy)
-./run qr --base-url https://meals.padea.com.au
+# Post-order constraints (min-qty + session totals)
+python scripts/tests/order_constraints.py
 
-# Local-only (default; only useful on the host machine)
-./run qr
-
-# Just one session
-./run qr --origin http://... --session "Loreto College - Friday"
+# Full test suite
+./run test
+./run test test_register_orders
 ```
 
-Output goes to `output/qrcodes/<sanitised-session-id>.png`.
+## Quick reference
 
-## Where things live
-
-| Action | File |
+| Action | Command |
 |---|---|
 | Help | `./run help` |
-| Run any actions/ script | `./run script <name>` (e.g. `./run script generate_qr`) |
-| Single migration | `./run migrate <resource>` |
+| Sync schema | `./run migrate schema` |
+| Full migration | `./run migrate` |
+| Weekly orders | `./run orders` |
+| Host webapp | `./run host` |
+| Generate QR codes | `./run forms qr --origin <url>` |
+| Run any actions/ script | `./run script <name>` |
 | Manual REPL | `python -i -c "import sys; sys.path.insert(0,'scripts'); import support as s"` |
 
 ## Cron targets (planned, not yet automated)

@@ -130,12 +130,11 @@ when modifying behaviour.
 
 ## Operational
 
-- **`./run script <name>`** runs `scripts/actions/<name>.py`. There's no
-  way through `./run` to invoke `scripts/tests/*.py` — those have to be
-  run with `python` directly.
-- **`./run migrate`** runs every migration in `scripts/migrations/*.py`
-  alphabetically, except `dietary_restrictions.py` which is forcibly
-  bumped to first. Re-ordering filenames could break dependency order.
+- **`./run script <name>`** runs `scripts/actions/<name>.py`. Test scripts
+  under `scripts/tests/` must be run with `python` directly or via `./run test`.
+- **`./run migrate`** delegates to `scripts/migrations/migrate.py`, which
+  calls each migration in explicit dependency order — not alphabetically.
+  That file is the authoritative source of run order.
 - **PDFs need pre-extraction.** Each migration that reads a PDF expects
   the matching `.txt` in `cache/`. `cache_pdf.py` does the extraction —
   must run after a PDF changes, or the migration will use stale text.

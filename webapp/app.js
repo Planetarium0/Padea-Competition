@@ -190,6 +190,15 @@ async function loadNegativeKeywords() {
   return data;
 }
 
+async function loadCaterer(catererId) {
+  const key = `padea_caterer_${catererId}`;
+  const cached = cacheGet(key);
+  if (cached) return cached;
+  const data = await apiFetch(`/api/caterer/${catererId}`);
+  cacheSet(key, data);
+  return data;
+}
+
 async function loadExistingFeedback(studentId, catererId) {
   const key = `padea_fb_${studentId}_${catererId || ""}`;
   const cached = cacheGet(key);
@@ -236,9 +245,11 @@ function bestVariantSeverity(parentSeverity, variants, reqs, maps) {
 function buildHierarchyMaps(restrictions, negativeKeywords = {}) {
   const idToName = {};
   const nameToId = {};
+  const idToRestr = {};
   for (const r of restrictions) {
     idToName[r.id] = r.name;
     nameToId[r.name] = r.id;
+    idToRestr[r.id] = r;
   }
   // Build child map (parentId → [subset childIds]) from each restriction's
   // Supersets list (a restriction lists its less-restrictive parents).
@@ -248,7 +259,7 @@ function buildHierarchyMaps(restrictions, negativeKeywords = {}) {
       (children[parentId] ||= []).push(r.id);
     }
   }
-  // Transitive subset-closure for each restriction (including itself).
+  // Transitive subset-closure: each restriction → itself + all more-restrictive descendants.
   function descendants(id, acc = new Set()) {
     if (acc.has(id)) return acc;
     acc.add(id);
@@ -259,7 +270,21 @@ function buildHierarchyMaps(restrictions, negativeKeywords = {}) {
   for (const r of restrictions) {
     subsetClosure[r.id] = descendants(r.id);
   }
-  return { idToName, nameToId, subsetClosure, negativeKeywords };
+  // Transitive superset-closure: each restriction → itself + all less-restrictive ancestors.
+  // Used to detect definite incompatibility when an ancestor is a caterer legend tag.
+  function ancestors(id, acc = new Set()) {
+    if (acc.has(id)) return acc;
+    acc.add(id);
+    const r = idToRestr[id];
+    if (r) for (const parentId of r.supersets) ancestors(parentId, acc);
+    return acc;
+  }
+  const supersetClosure = {};
+  for (const r of restrictions) {
+    supersetClosure[r.id] = ancestors(r.id);
+  }
+  // legendTagIdSet is populated later once the caterer record is fetched.
+  return { idToName, nameToId, subsetClosure, supersetClosure, negativeKeywords, legendTagIdSet: new Set() };
 }
 
 // Returns { compatible, severity, issues } where:
@@ -270,8 +295,8 @@ function checkCompatibility(item, studentReqIds, maps) {
   if (!studentReqIds.length) return { compatible: true, severity: "ok", issues: [] };
 
   const itemTagIds = item.fields["Dietary Tags"] || [];
-  const itemTagIdSet = new Set(itemTagIds);
   const itemNameLower = (item.fields["Menu Item Name"] || "").toLowerCase();
+  const legendTagIdSet = maps.legendTagIdSet || new Set();
 
   const issues = [];
   for (const reqId of studentReqIds) {
@@ -282,9 +307,31 @@ function checkCompatibility(item, studentReqIds, maps) {
     const tagMatch = itemTagIds.some(t => closure.has(t));
     if (tagMatch) continue; // satisfied by a tag in the subset closure
 
-    // No tag confirms it. Use the name-keyword heuristic to distinguish
-    // definitely-incompatible vs ambiguous-may-contain.
     const phrase = CONSTRAINT_PHRASE[reqName] || reqName.toLowerCase();
+
+    // Legend-based definite incompatibility: if a transitive superset of this
+    // constraint is in the caterer's Dietary Legend and the item lacks any
+    // satisfying tag for that superset, the item DEFINITELY fails this constraint
+    // (the caterer would have tagged it otherwise). Converts "maybe" → "no" and
+    // also propagates downward: absent VO → not Vegetarian → not Vegan either.
+    if (legendTagIdSet.size) {
+      const ancestorIds = maps.supersetClosure[reqId] || new Set([reqId]);
+      let definitelyNo = false;
+      for (const ancestorId of ancestorIds) {
+        if (!legendTagIdSet.has(ancestorId)) continue;
+        const ancestorClosure = maps.subsetClosure[ancestorId] || new Set([ancestorId]);
+        if (!itemTagIds.some(t => ancestorClosure.has(t))) {
+          definitelyNo = true;
+          break;
+        }
+      }
+      if (definitelyNo) {
+        issues.push({ name: reqName, severity: "no", label: `Contains ${phrase}` });
+        continue;
+      }
+    }
+
+    // No legend verdict. Fall back to name-keyword heuristic.
     const kws = maps.negativeKeywords?.[reqName];
     if (kws && kws.some(k => itemNameLower.includes(k))) {
       issues.push({ name: reqName, severity: "no", label: `Contains ${phrase}` });
@@ -326,6 +373,7 @@ const state = {
   student: null,
   menuItems: null,
   menuPromise: null,
+  catererPromise: null,
   dietRestrictions: null,
   dietPromise: null,
   dietMaps: null,
@@ -423,6 +471,17 @@ const app = {
           return items;
         })
         .catch(err => { console.error(err); return []; });
+
+      // Fetch caterer legend tags and inject into dietMaps once both are ready.
+      // catererPromise resolves after dietPromise so callers need only await this one.
+      state.catererPromise = loadCaterer(catererId)
+        .then(catererData => state.dietPromise.then(() => {
+          if (state.dietMaps) {
+            state.dietMaps.legendTagIdSet = new Set(catererData.legendTagIds || []);
+            console.log(`[padea] caterer legend tags loaded: ${catererData.legendTagIds?.length || 0} tag(s)`);
+          }
+        }))
+        .catch(err => console.error("[padea] caterer legend load failed:", err));
     }
 
     if (studentId) await loadFormData(studentId);
@@ -728,10 +787,12 @@ function renderMealList() {
     ? `Filtered for: ${reqNames.join(", ")}`
     : "All available meals from your caterer.";
 
-  // Wait on both menu and dietary maps before rendering meaningfully.
+  // Wait on menu, dietary maps, and caterer legend tags before rendering.
+  // catererPromise chains on dietPromise, so awaiting it covers both.
   if (!state.menuItems || !maps) {
     loading.classList.remove("hidden");
-    Promise.all([state.menuPromise, state.dietPromise].filter(Boolean))
+    const legendOrDiet = state.catererPromise || state.dietPromise;
+    Promise.all([state.menuPromise, legendOrDiet].filter(Boolean))
       .then(() => { if (state.view === "meals") renderMealList(); });
     return;
   }

@@ -228,10 +228,11 @@ def is_student_excluded(
 # ---------------------------------------------------------------------------
 
 def assign_fallback_meal(
-    student_dietary_ids: list[str],
-    caterer_menu:        list[Record[MenuItemFields]],
-    item_counts:         dict[str, int],
-    index:               OrderingIndex,
+    student_dietary_ids:    list[str],
+    caterer_menu:           list[Record[MenuItemFields]],
+    item_counts:            dict[str, int],
+    index:                  OrderingIndex,
+    caterer_legend_tag_ids: list[str] | None = None,
 ) -> str | None:
     """Pick the best compatible meal weighted by:
       - Current batch popularity (80%)
@@ -239,7 +240,7 @@ def assign_fallback_meal(
     """
     compatible = [
         item for item in caterer_menu
-        if is_item_compatible(item.fields, student_dietary_ids, index.dietary_hierarchy)
+        if is_item_compatible(item.fields, student_dietary_ids, index.dietary_hierarchy, caterer_legend_tag_ids)
     ]
     if not compatible:
         return None
@@ -275,11 +276,12 @@ def compute_max_variety(caterer_fields: CatererFields, total_students: int) -> i
 
 
 def assign_variety_meal(
-    student_dietary_ids: list[str],
-    caterer_menu:        list[Record[MenuItemFields]],
-    item_counts:         dict[str, int],
-    index:               OrderingIndex,
-    max_items:           int | None = None,
+    student_dietary_ids:    list[str],
+    caterer_menu:           list[Record[MenuItemFields]],
+    item_counts:            dict[str, int],
+    index:                  OrderingIndex,
+    max_items:              int | None = None,
+    caterer_legend_tag_ids: list[str] | None = None,
 ) -> str | None:
     """Pick the least-ordered compatible meal to spread variety across the
     batch. Used when few students have set an explicit preference.
@@ -291,7 +293,7 @@ def assign_variety_meal(
     """
     compatible = [
         item for item in caterer_menu
-        if is_item_compatible(item.fields, student_dietary_ids, index.dietary_hierarchy)
+        if is_item_compatible(item.fields, student_dietary_ids, index.dietary_hierarchy, caterer_legend_tag_ids)
     ]
     if not compatible:
         return None
@@ -341,8 +343,9 @@ def enforce_min_qty(
     fully removed — which would displace students from their meals while still
     leaving the same violation behind.
     """
-    caterer_name = caterer_fields.get("Caterer Name", "?")
-    assignments = list(assignments)
+    caterer_name   = caterer_fields.get("Caterer Name", "?")
+    legend_tag_ids = list(caterer_fields.get("Dietary Legend Tags") or [])
+    assignments    = list(assignments)
 
     for _iteration in range(30):  # safety cap
         item_to_indices: dict[str, list[int]] = defaultdict(list)
@@ -379,7 +382,7 @@ def enforce_min_qty(
                 dietary_ids = stu_fields.get("Dietary Requirements") or []
                 has_target  = any(
                     is_item_compatible(
-                        index.menu_item_by_id.get(iid, {}), dietary_ids, index.dietary_hierarchy,
+                        index.menu_item_by_id.get(iid, {}), dietary_ids, index.dietary_hierarchy, legend_tag_ids,
                     )
                     for iid in valid_items
                 )
@@ -404,7 +407,7 @@ def enforce_min_qty(
                 compat = {
                     iid: cnt for iid, cnt in valid_items.items()
                     if is_item_compatible(
-                        index.menu_item_by_id.get(iid, {}), dietary_ids, index.dietary_hierarchy,
+                        index.menu_item_by_id.get(iid, {}), dietary_ids, index.dietary_hierarchy, legend_tag_ids,
                     )
                 }
 
@@ -621,7 +624,8 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
         enrolled = index.students_by_session.get(sess_id, [])
         log.info(f"Session '{sess_label}' ({day}): {len(enrolled)} enrolled students")
 
-        batch = caterer_batches[caterer_id]
+        batch          = caterer_batches[caterer_id]
+        legend_tag_ids = list(index.caterer_by_id.get(caterer_id, {}).get("Dietary Legend Tags") or [])
 
         for stu in enrolled:
             stu_id     = stu.id
@@ -652,7 +656,7 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
                 if pref_id in caterer_menu_ids:
                     pref_fields = index.menu_item_by_id.get(pref_id, {})
                     pref_name   = pref_fields.get("Menu Item Name", "?")
-                    if not is_item_compatible(pref_fields, dietary_ids, index.dietary_hierarchy):
+                    if not is_item_compatible(pref_fields, dietary_ids, index.dietary_hierarchy, legend_tag_ids):
                         dietary_names = resolve_dietary_names(dietary_ids, index.dietary_hierarchy)
                         log.warning(
                             f"  {stu_name}: explicit preference '{pref_name}' conflicts with "
@@ -670,10 +674,12 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
                     item_id = assign_variety_meal(
                         dietary_ids, caterer_menu, batch.item_counts, index,
                         max_items=caterer_max_variety.get(caterer_id),
+                        caterer_legend_tag_ids=legend_tag_ids,
                     )
                 else:
                     item_id = assign_fallback_meal(
                         dietary_ids, caterer_menu, batch.item_counts, index,
+                        caterer_legend_tag_ids=legend_tag_ids,
                     )
                 if item_id is None:
                     log.warning(f"  {stu_name}: no compatible meal found — skipping.")

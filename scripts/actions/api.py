@@ -228,6 +228,23 @@ def api_get_student(student_id: str, *, db: Database) -> tuple[int, dict]:
     return 200, data
 
 
+@route("GET", r"^/api/caterer/(?P<caterer_id>[^/?]+)$")
+def api_get_caterer(caterer_id: str, *, db: Database) -> tuple[int, dict]:
+    key = f"caterer:{caterer_id}"
+    cached = _cache.get(key)
+    if cached is not None:
+        return 200, cached
+    caterer = db.Caterers.get(caterer_id)
+    if not caterer:
+        return 404, {"error": f"Caterer {caterer_id!r} not found"}
+    data = {
+        "id": caterer_id,
+        "legendTagIds": caterer.fields.get("Dietary Legend Tags") or [],
+    }
+    _cache.set(key, data, _TTL_STABLE)
+    return 200, data
+
+
 @route("GET", r"^/api/caterer/(?P<caterer_id>[^/?]+)/menu$")
 def api_get_caterer_menu(caterer_id: str, *, db: Database) -> tuple[int, list | dict]:
     key = f"menu:{caterer_id}"

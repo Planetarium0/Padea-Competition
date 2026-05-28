@@ -47,7 +47,7 @@ Thursday afternoon  →   send_orders.py       (cron, eventually)
 ```
 
 Today the cron pieces are run manually via `./run orders`. The webapp is hosted
-locally (`./run host`) and reached via QR codes (`./run qr`).
+locally (`./run host`) and reached via QR codes (`./run forms qr`).
 
 ## Tech stack
 

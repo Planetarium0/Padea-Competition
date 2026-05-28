@@ -75,6 +75,7 @@ CatererFields = TypedDict(
         "Delivery Fee Structure": DeliveryFeeStructure,
         "Notes": str,
         "Able to Serve Schools": list[str],
+        "Dietary Legend Tags": list[str],
     },
     total=False,
 )

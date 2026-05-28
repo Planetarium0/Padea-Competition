@@ -1,9 +1,8 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 # ------------------------------------------------------------
-# run – simple command‑line shortcut for Padea operations
+# run – command-line shortcut for Padea operations
 # ------------------------------------------------------------
 
-# Directory containing migration scripts (relative to repository root)
 MIGRATION_DIR="scripts/migrations"
 SCRIPTS_DIR="scripts"
 
@@ -11,29 +10,26 @@ SCRIPTS_DIR="scripts"
 # and the project root (so `data.*` resolves) importable.
 export PYTHONPATH=$PYTHONPATH:"$PWD":"$PWD"/"$SCRIPTS_DIR"
 
-# Helper to show usage
-function usage() {
+usage() {
     cat <<EOF
 Usage:
-  $0 migrate [resource]
-  $0 schema update
-  $0 script [name]
-  $0 test [name]
-  $0 orders
-  $0 orders generate [--dry-run]
-  $0 orders preview
-  $0 orders send
-  $0 evaluate [--dry-run]
-  $0 switch <proposal_record_id> [--approve] [--dry-run]
+  $0 migrate [resource|schema]
+  $0 orders [generate [--dry-run]|preview|send]
+  $0 forms qr [--origin URL] [--base-url URL] [--session ID] [--first]
+  $0 forms qr send [--immediate] [--dry-run] [--first]
+  $0 forms send {parents|students} [--immediate] [--dry-run] [--first]
+  $0 caterer evaluate [--dry-run]
+  $0 caterer switch <proposal_id> [--approve] [--dry-run]
   $0 host [--port PORT]
-  $0 qr [--origin URL_ORIGIN] [--base-url URL] [--session ID]
-  $0 meals qr [--origin URL_ORIGIN] [--base-url URL] [--session ID] [--first]
-  $0 meals send {parents|students} [--immediate] [--dry-run] [--first]
+  $0 test [name]
+  $0 script [name]
 
-resource can be one of:
+migrate resources:
   diet, schools, caterers, contacts, menus, sessions, students, absences, exclusions, all
 
-If no resource is supplied, all migrations are run in dependency order.
+  migrate schema — sync Airtable schema against schema.py (idempotent, run before first migration)
+
+If no resource is supplied to migrate, all migrations run in dependency order.
 EOF
 }
 
@@ -51,149 +47,10 @@ declare -A RES_MAP=(
     [all]="all"
 )
 
-# ------------------------------------------------------------
-# Parse arguments
-COMMAND="${1:-}"
-RESOURCE="${2:-}"
-
-if [[ -z "$COMMAND" || "$COMMAND" == "help" ]]; then
-    usage
-    exit 0
-fi
-
-if [[ "$COMMAND" == "test" ]]; then
-    if [[ -z "$RESOURCE" ]]; then
-        python scripts/tests/run_all.py
-    else
-        python "scripts/tests/$RESOURCE.py"
-    fi
-    exit 0
-fi
-
-if [[ "$COMMAND" == "script" ]]; then
-    echo "Running script"
-    python "scripts/actions/$RESOURCE.py"
-    exit 0
-fi
-
-if [[ "$COMMAND" == "schema" ]]; then
-    echo "updating schema"
-    python "scripts/actions/update_schema.py"
-    exit 0
-fi
-
-# --- Orders command ---
-if [[ "$COMMAND" == "orders" ]]; then
-    SUBCOMMAND="${2:-}"
-    shift 2 2>/dev/null || true
-
-    case "$SUBCOMMAND" in
-        "")
-            echo "Generating orders..."
-            python scripts/actions/register_orders.py
-            echo "Logging order emails..."
-            python scripts/actions/send_orders.py
-            ;;
-        generate)
-            echo "Generating orders..."
-            python scripts/actions/register_orders.py "$@"
-            ;;
-        preview)
-            echo "Previewing order emails..."
-            python scripts/actions/send_orders.py --preview
-            ;;
-        send)
-            echo "Logging order emails..."
-            python scripts/actions/send_orders.py
-            ;;
-        *)
-            echo "[ERROR] Unknown orders subcommand: $SUBCOMMAND"
-            echo "Use: orders generate|preview|send"
-            exit 1
-            ;;
-    esac
-    exit 0
-fi
-
-# --- Caterer evaluation ---
-if [[ "$COMMAND" == "evaluate" ]]; then
-    echo "Evaluating caterer ratings..."
-    python scripts/actions/evaluate_caterers.py "${@:2}"
-    exit 0
-fi
-
-# --- Caterer switch execution ---
-if [[ "$COMMAND" == "switch" ]]; then
-    PROPOSAL_ID="${2:-}"
-    if [[ -z "$PROPOSAL_ID" ]]; then
-        echo "[ERROR] Usage: $0 switch <proposal_record_id> [--dry-run]"
-        exit 1
-    fi
-    echo "Executing caterer switch for proposal $PROPOSAL_ID..."
-    python scripts/actions/execute_caterer_switch.py "$PROPOSAL_ID" "${@:3}"
-    exit 0
-fi
-
-# --- Meals sub-commands ---
-if [[ "$COMMAND" == "meals" ]]; then
-    SUBCOMMAND="${2:-}"
-
-    case "$SUBCOMMAND" in
-        qr)
-            echo "Generating QR codes..."
-            python scripts/actions/generate_qr.py "${@:3}"
-            ;;
-        send)
-            TARGET="${3:-}"
-            case "$TARGET" in
-                parents|students)
-                    echo "Sending meal preference links to ${TARGET}..."
-                    python scripts/actions/send_meals_links.py --target "$TARGET" "${@:4}"
-                    ;;
-                *)
-                    echo "[ERROR] Usage: $0 meals send {parents|students} [--immediate] [--dry-run]"
-                    exit 1
-                    ;;
-            esac
-            ;;
-        *)
-            echo "[ERROR] Unknown meals subcommand: ${SUBCOMMAND:-<none>}"
-            echo "Use: meals qr | meals send {parents|students}"
-            exit 1
-            ;;
-    esac
-    exit 0
-fi
-
-# --- Webapp host ---
-if [[ "$COMMAND" == "host" ]]; then
-    python scripts/actions/host_webapp.py "${@:2}"
-    exit 0
-fi
-
-# --- QR code generation ---
-if [[ "$COMMAND" == "qr" ]]; then
-    echo "Generating QR codes..."
-    python scripts/actions/generate_qr.py "${@:2}"
-    exit 0
-fi
-
-# --- Migration ---
-if [[ "$COMMAND" != "migrate" ]]; then
-    usage
-    exit 1
-fi
-
-# If no resource supplied, default to "all"
-if [[ -z "$RESOURCE" ]]; then
-    RESOURCE="all"
-fi
-
-# ------------------------------------------------------------
-# Run a single migration script
 run_one() {
     local script_path="$1"
-    local name="$(basename "$script_path" .py)"
+    local name
+    name="$(basename "$script_path" .py)"
     echo "Migrating $name"
     python "$script_path"
     local status=$?
@@ -203,26 +60,152 @@ run_one() {
 }
 
 # ------------------------------------------------------------
-# Main execution
-if [[ "$RESOURCE" == "all" ]]; then
-    echo "Migrating all resources (dependency order)..."
-    python "$MIGRATION_DIR/migrate.py"
-else
-    script_file="${RES_MAP[$RESOURCE]}"
-    if [[ -z "$script_file" ]]; then
-        echo "[ERROR] Unknown resource: $RESOURCE"
-        usage
-        exit 1
-    fi
+COMMAND="${1:-}"
 
-    script_path="$MIGRATION_DIR/$script_file"
-    if [[ ! -f "$script_path" ]]; then
-        echo "[ERROR] Migration script not found: $script_path"
-        exit 1
-    fi
-
-    run_one "$script_path"
+if [[ -z "$COMMAND" || "$COMMAND" == "help" ]]; then
+    usage
+    exit 0
 fi
 
-exit 0
+case "$COMMAND" in
 
+    migrate)
+        RESOURCE="${2:-all}"
+        case "$RESOURCE" in
+            schema)
+                echo "Updating schema..."
+                python "scripts/actions/update_schema.py"
+                ;;
+            all)
+                echo "Migrating all resources (dependency order)..."
+                python "$MIGRATION_DIR/migrate.py"
+                ;;
+            *)
+                script_file="${RES_MAP[$RESOURCE]}"
+                if [[ -z "$script_file" ]]; then
+                    echo "[ERROR] Unknown resource: $RESOURCE"
+                    usage
+                    exit 1
+                fi
+                script_path="$MIGRATION_DIR/$script_file"
+                if [[ ! -f "$script_path" ]]; then
+                    echo "[ERROR] Migration script not found: $script_path"
+                    exit 1
+                fi
+                run_one "$script_path"
+                ;;
+        esac
+        ;;
+
+    orders)
+        SUBCOMMAND="${2:-}"
+        shift 2 2>/dev/null || true
+        case "$SUBCOMMAND" in
+            "")
+                echo "Generating orders..."
+                python scripts/actions/register_orders.py
+                echo "Logging order emails..."
+                python scripts/actions/send_orders.py
+                ;;
+            generate)
+                echo "Generating orders..."
+                python scripts/actions/register_orders.py "$@"
+                ;;
+            preview)
+                echo "Previewing order emails..."
+                python scripts/actions/send_orders.py --preview
+                ;;
+            send)
+                echo "Logging order emails..."
+                python scripts/actions/send_orders.py
+                ;;
+            *)
+                echo "[ERROR] Unknown orders subcommand: $SUBCOMMAND"
+                echo "Use: orders [generate [--dry-run]|preview|send]"
+                exit 1
+                ;;
+        esac
+        ;;
+
+    forms)
+        SUBCOMMAND="${2:-}"
+        case "$SUBCOMMAND" in
+            qr)
+                if [[ "${3:-}" == "send" ]]; then
+                    echo "Sending QR codes to site managers..."
+                    python scripts/actions/send_qr_emails.py "${@:4}"
+                else
+                    echo "Generating QR codes..."
+                    python scripts/actions/generate_qr.py "${@:3}"
+                fi
+                ;;
+            send)
+                TARGET="${3:-}"
+                case "$TARGET" in
+                    parents|students)
+                        echo "Sending meal preference links to ${TARGET}..."
+                        python scripts/actions/send_meals_links.py --target "$TARGET" "${@:4}"
+                        ;;
+                    *)
+                        echo "[ERROR] Usage: $0 forms send {parents|students} [--immediate] [--dry-run]"
+                        exit 1
+                        ;;
+                esac
+                ;;
+            *)
+                echo "[ERROR] Unknown forms subcommand: ${SUBCOMMAND:-<none>}"
+                echo "Use: forms qr [send] | forms send {parents|students}"
+                exit 1
+                ;;
+        esac
+        ;;
+
+    caterer)
+        SUBCOMMAND="${2:-}"
+        case "$SUBCOMMAND" in
+            evaluate)
+                echo "Evaluating caterer ratings..."
+                python scripts/actions/evaluate_caterers.py "${@:3}"
+                ;;
+            switch)
+                PROPOSAL_ID="${3:-}"
+                if [[ -z "$PROPOSAL_ID" ]]; then
+                    echo "[ERROR] Usage: $0 caterer switch <proposal_record_id> [--approve] [--dry-run]"
+                    exit 1
+                fi
+                echo "Executing caterer switch for proposal $PROPOSAL_ID..."
+                python scripts/actions/execute_caterer_switch.py "$PROPOSAL_ID" "${@:4}"
+                ;;
+            *)
+                echo "[ERROR] Unknown caterer subcommand: ${SUBCOMMAND:-<none>}"
+                echo "Use: caterer evaluate | caterer switch <proposal_id>"
+                exit 1
+                ;;
+        esac
+        ;;
+
+    host)
+        python scripts/actions/host_webapp.py "${@:2}"
+        ;;
+
+    test)
+        if [[ -z "${2:-}" ]]; then
+            python scripts/tests/run_all.py
+        else
+            python "scripts/tests/$2.py"
+        fi
+        ;;
+
+    script)
+        python "scripts/actions/${2:-}.py"
+        ;;
+
+    *)
+        echo "[ERROR] Unknown command: $COMMAND"
+        usage
+        exit 1
+        ;;
+
+esac
+
+exit 0

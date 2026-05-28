@@ -19,17 +19,17 @@ The current state of the project is stored in `plans/current/00-overview.md`.
 ## Commands
 
 ```bash
+# Initialize / sync Airtable schema (idempotent — run before first migration)
+./run migrate schema
+
 # Migrate all resources
 ./run migrate
 
 # Migrate a single resource (schools, diet, caterers, contacts, menus, sessions, students, absences, exclusions)
 ./run migrate caterers
 
-# Initialize / sync Airtable schema (idempotent — run before first migration)
-./run schema update
-
 # Verify post-migration record counts and relational integrity
-./run script verify_migration
+python scripts/tests/verify_migration.py
 ```
 
 ## Environment setup

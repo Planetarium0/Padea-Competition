@@ -52,6 +52,10 @@ class DietaryHierarchy:
     id_to_name: dict[str, str] = field(default_factory=dict)
     name_to_id: dict[str, str] = field(default_factory=dict)
     subset_closure: dict[str, set[str]] = field(default_factory=dict)
+    # superset_closure[X] = X ∪ all transitive supersets (less-restrictive ancestors).
+    # Used to detect definite incompatibility when a caterer's Dietary Legend
+    # explicitly tracks an ancestor restriction and the item is missing it.
+    superset_closure: dict[str, set[str]] = field(default_factory=dict)
 
 
 def build_hierarchy(
@@ -62,6 +66,7 @@ def build_hierarchy(
     id_to_name: dict[str, str] = {}
     name_to_id: dict[str, str] = {}
     children: dict[str, list[str]] = {}  # parent_id -> [subset child ids]
+    parents: dict[str, list[str]] = {}   # rid -> [parent/superset ids]
 
     for r in restrictions:
         rid = r.id
@@ -69,7 +74,9 @@ def build_hierarchy(
         id_to_name[rid] = name
         if name:
             name_to_id[name] = rid
-        for parent_id in (r.fields.get("Supersets") or []):
+        supersets = list(r.fields.get("Supersets") or [])
+        parents[rid] = supersets
+        for parent_id in supersets:
             children.setdefault(parent_id, []).append(rid)
 
     def descendants(rid: str, acc: set[str]) -> set[str]:
@@ -80,11 +87,21 @@ def build_hierarchy(
             descendants(c, acc)
         return acc
 
+    def ancestors(rid: str, acc: set[str]) -> set[str]:
+        if rid in acc:
+            return acc
+        acc.add(rid)
+        for p in parents.get(rid, []):
+            ancestors(p, acc)
+        return acc
+
     subset_closure = {r.id: descendants(r.id, set()) for r in restrictions}
+    superset_closure = {r.id: ancestors(r.id, set()) for r in restrictions}
     return DietaryHierarchy(
         id_to_name=id_to_name,
         name_to_id=name_to_id,
         subset_closure=subset_closure,
+        superset_closure=superset_closure,
     )
 
 
@@ -108,6 +125,7 @@ def is_item_compatible(
     item_fields: MenuItemFields,
     student_dietary_ids: Iterable[str] | None,
     hierarchy: DietaryHierarchy,
+    caterer_legend_tag_ids: Iterable[str] | None = None,
 ) -> bool:
     """Check that a menu item can be assigned to a student with the given
     Dietary Requirement IDs. Algorithm (matches the webapp):
@@ -116,7 +134,12 @@ def is_item_compatible(
       2. For each constraint, satisfied if any of the item's Dietary Tags
          is in the constraint's subset-closure (e.g. a Vegan-tagged item
          satisfies Vegetarian, Pescatarian, No Red Meat, ...).
-      3. Otherwise fall back to NEGATIVE_KEYWORDS against the item *name*.
+      3. If the caterer's Dietary Legend explicitly tracks a transitive
+         superset of the constraint (e.g. VO → Vegetarian covers Vegan too)
+         and the item lacks any satisfying tag for that superset, the item
+         is DEFINITELY incompatible — not merely "may contain". This
+         converts "maybe" to "no" for legend-tracked restrictions.
+      4. Otherwise fall back to NEGATIVE_KEYWORDS against the item *name*.
          A keyword match means "definitely contains" -> False. No keyword
          match means "may contain" — treated as compatible here for the
          same lenient behaviour the webapp groups under the "maybe" badge.
@@ -127,6 +150,7 @@ def is_item_compatible(
 
     item_tag_ids = set(item_fields.get("Dietary Tags") or [])
     item_name_lower = item_fields.get("Menu Item Name", "").lower()
+    legend_ids = set(caterer_legend_tag_ids or [])
 
     for req_id in dietary_ids:
         req_name = hierarchy.id_to_name.get(req_id, "")
@@ -135,6 +159,15 @@ def is_item_compatible(
         closure = hierarchy.subset_closure.get(req_id, {req_id})
         if item_tag_ids & closure:
             continue
+
+        if legend_ids:
+            for ancestor_id in hierarchy.superset_closure.get(req_id, {req_id}):
+                if ancestor_id not in legend_ids:
+                    continue
+                ancestor_closure = hierarchy.subset_closure.get(ancestor_id, {ancestor_id})
+                if not (item_tag_ids & ancestor_closure):
+                    return False
+
         for kw in NEGATIVE_KEYWORDS.get(req_name, ()):
             if kw in item_name_lower:
                 return False

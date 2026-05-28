@@ -60,7 +60,6 @@ logged as errors (no LLM call).
 ## Verification
 
 ```bash
-./run script verify_migration   # (but see operational-commands — path bug)
 python scripts/tests/verify_migration.py
 ```
 

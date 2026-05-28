@@ -9,6 +9,28 @@ from typing import Any
 
 from support import Database, MenuItemFields, log, ask_llm
 
+# Codes that may appear in a caterer's Dietary Legend, mapped to the
+# standard Dietary Restriction name they correspond to. VO means a
+# vegetarian *variant* exists — its absence means definitively not vegetarian.
+_LEGEND_CODE_TO_RESTRICTION: dict[str, str] = {
+    "GF": "Gluten Free",
+    "DF": "Dairy Free",
+    "NF": "Nut Free",
+    "VO": "Vegetarian",
+}
+
+
+def _detect_legend_codes(text: str, first_header_pos: int) -> list[str]:
+    """Return restriction names found in the Dietary Legend preamble."""
+    preamble = text[:first_header_pos]
+    if "dietary legend" not in preamble.lower():
+        return []
+    return [
+        restriction
+        for code, restriction in _LEGEND_CODE_TO_RESTRICTION.items()
+        if re.search(rf"\b{code}\b", preamble)
+    ]
+
 
 def _parse_menus_heuristic(text: str) -> list[dict[str, Any]]:
     log.info("Using local heuristic menu parser...")
@@ -147,6 +169,15 @@ Raw Menu Text:
         log.error("No Dietary Restrictions found. Run dietary_restrictions migration first.")
         sys.exit(1)
 
+    # Detect the dietary legend from the preamble (before the first caterer header).
+    header_pattern_simple = r"[^\n(]+\s*Menu\s*\(\$"
+    first_header = re.search(header_pattern_simple, raw_text)
+    first_header_pos = first_header.start() if first_header else len(raw_text)
+    legend_restriction_names = _detect_legend_codes(raw_text, first_header_pos)
+    legend_tag_ids = [diet_name_to_id[n] for n in legend_restriction_names if n in diet_name_to_id]
+    if legend_tag_ids:
+        log.info(f"Detected dietary legend restrictions: {legend_restriction_names}")
+
     # (item_fields, has_vo, base_tag_ids) — tracked so we can build variants after insertion.
     pending_items: list[tuple[MenuItemFields, bool, list[str]]] = []
     caterer_updates: list[dict[str, Any]] = []
@@ -161,11 +192,14 @@ Raw Menu Text:
         price = float(menu["Price per Item"])
         if not menu["Price Includes GST"]:
             price = round(price * 1.10, 2)
-        caterer_updates.append({"id": caterer_id, "fields": {
+        update_fields: dict[str, Any] = {
             "Delivery Fee":           menu["Delivery Fee"],
             "Delivery Fee Structure": menu["Delivery Fee Structure"],
             "Price per Item":         price,
-        }})
+        }
+        if legend_tag_ids:
+            update_fields["Dietary Legend Tags"] = legend_tag_ids
+        caterer_updates.append({"id": caterer_id, "fields": update_fields})
 
         for item in menu["Items"]:
             tag_ids: list[str] = []

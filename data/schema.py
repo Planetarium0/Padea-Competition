@@ -72,6 +72,15 @@ TABLES_SCHEMA: dict[str, dict[str, Any]] = {
                 "name": "Able to Serve Schools",
                 "type": "multipleRecordLinks",
                 "link_target": "Schools"
+            },
+            {
+                # Dietary restrictions that this caterer's menu explicitly tracks
+                # for every item (i.e. the codes listed in their Dietary Legend).
+                # Absence of a tag for a legend-tracked restriction means the item
+                # DEFINITELY does not satisfy that restriction — not merely "maybe".
+                "name": "Dietary Legend Tags",
+                "type": "multipleRecordLinks",
+                "link_target": "Dietary Restrictions"
             }
             # Menu Items back-link is auto-created by Menu Items.'Caterer'
         ]

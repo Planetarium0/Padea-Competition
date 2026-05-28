@@ -172,11 +172,11 @@ before launching to production.
 Currently local-only:
 
 ```bash
-./run host                # serves webapp/ on 0.0.0.0:8000
-./run qr --origin http://<lan-ip>:8000   # makes phone-scannable QR codes
+./run host                                        # serves webapp/ on 0.0.0.0:8000
+./run forms qr --origin http://<lan-ip>:8000      # makes phone-scannable QR codes
 ```
 
-The default `./run qr` (no `--origin`) emits `file://` QR codes that
+The default `./run forms qr` (no `--origin`) emits `file://` QR codes that
 only work on the host machine. For a phone, `--origin` is required.
 
 ## Brand
