@@ -21,12 +21,26 @@ After starting, generate matching QR codes with:
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import re
 import socket
 import urllib.parse
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
+
+try:
+    import qrcode
+    from qrcode.image.styledpil import StyledPilImage
+    from qrcode.image.styles.moduledrawers.pil import RoundedModuleDrawer
+    _QR_STYLED = True
+except ImportError:
+    try:
+        import qrcode  # type: ignore[no-redef]
+        _QR_STYLED = False
+    except ImportError:
+        qrcode = None  # type: ignore[assignment]
+        _QR_STYLED = False
 
 from support import Database
 from actions.api import _routes, dispatch
@@ -58,6 +72,11 @@ class PadeaHandler(SimpleHTTPRequestHandler):
     # ------------------------------------------------------------------
 
     def do_GET(self) -> None:
+        bare = self.path.split("?", 1)[0]
+        m = re.match(r"^/qr/([^/?]+)$", bare)
+        if m:
+            self._handle_qr(m.group(1))
+            return
         if not self._dispatch("GET"):
             super().do_GET()
 
@@ -68,6 +87,37 @@ class PadeaHandler(SimpleHTTPRequestHandler):
     def do_PATCH(self) -> None:
         if not self._dispatch("PATCH"):
             self._send_json(404, {"error": "Not found"})
+
+    def _handle_qr(self, session_id: str) -> None:
+        if qrcode is None:
+            self._send_json(500, {"error": "qrcode library not installed"})
+            return
+        host = self.headers.get("Host", "localhost")
+        url = f"http://{host}/meals.html?session={session_id}"
+        qr = qrcode.QRCode(
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=12,
+            border=4,
+        )
+        qr.add_data(url)
+        qr.make(fit=True)
+        if _QR_STYLED:
+            img = qr.make_image(
+                image_factory=StyledPilImage,
+                module_drawer=RoundedModuleDrawer(),
+            )
+        else:
+            img = qr.make_image(fill_color="black", back_color="white")
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        png_bytes = buf.getvalue()
+        self.send_response(200)
+        self.send_header("Content-Type", "image/png")
+        self.send_header("Content-Length", str(len(png_bytes)))
+        self.send_header("Cache-Control", "public, max-age=3600")
+        self.end_headers()
+        self.wfile.write(png_bytes)
 
     def _dispatch(self, method: str) -> bool:
         bare = self.path.split("?", 1)[0]
@@ -128,7 +178,7 @@ def main(port: int = DEFAULT_PORT) -> None:
     print("Press Ctrl+C to stop.")
     print()
 
-    server = HTTPServer(("0.0.0.0", port), PadeaHandler)
+    server = ThreadingHTTPServer(("0.0.0.0", port), PadeaHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

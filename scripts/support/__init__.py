@@ -1,6 +1,6 @@
 """Package initialization for the support module."""
 
-from .database import Database, Record, Table
+from .database import Database, Record, Table, load_substitutions, resolve_manager_id
 from .records import (
     AbsenceFields,
     CatererFeedbackFields,
@@ -11,6 +11,7 @@ from .records import (
     DietaryRestrictionFields,
     EmailStatus,
     ExclusionFields,
+    ManagerSubstitutionFields,
     MenuItemFields,
     OnSiteManagerFields,
     OrderFields,
@@ -36,6 +37,7 @@ __all__ = [
     "DietaryRestrictionFields",
     "EmailStatus",
     "ExclusionFields",
+    "ManagerSubstitutionFields",
     "MenuItemFields",
     "OnSiteManagerFields",
     "OrderFields",
@@ -51,5 +53,7 @@ __all__ = [
     "WeeklyOrderFields",
     "YearLevel",
     "ask_llm",
+    "load_substitutions",
     "log",
+    "resolve_manager_id",
 ]

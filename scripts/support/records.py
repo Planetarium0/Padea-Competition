@@ -99,7 +99,6 @@ DietaryRestrictionFields = TypedDict(
         "Restriction Name": str,
         "Supersets": list[str],
         "Subsets": list[str],
-        "Is Allergy": bool,
     },
     total=False,
 )
@@ -222,6 +221,17 @@ ScheduledEmailFields = TypedDict(
     total=False,
 )
 
+ManagerSubstitutionFields = TypedDict(
+    "ManagerSubstitutionFields",
+    {
+        "Substitution ID": str,
+        "Session": list[str],
+        "Date": str,
+        "Substitute Manager": list[str],
+    },
+    total=False,
+)
+
 CatererSwitchProposalFields = TypedDict(
     "CatererSwitchProposalFields",
     {
@@ -261,5 +271,6 @@ __all__ = [
     "WeeklyOrderFields",
     "OrderFields",
     "ScheduledEmailFields",
+    "ManagerSubstitutionFields",
     "CatererSwitchProposalFields",
 ]

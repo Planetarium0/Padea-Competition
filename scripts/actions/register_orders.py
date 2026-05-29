@@ -50,7 +50,6 @@ from support.compatibility import (
     has_opted_out,
     is_item_compatible,
     resolve_dietary_names,
-    violates_allergy,
 )
 
 
@@ -657,29 +656,16 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
                 if pref_id in caterer_menu_ids:
                     pref_fields = index.menu_item_by_id.get(pref_id, {})
                     pref_name   = pref_fields.get("Menu Item Name", "?")
-                    allergy_hits = violates_allergy(
-                        pref_fields, dietary_ids, index.dietary_hierarchy, legend_tag_ids,
-                    )
-                    if allergy_hits:
-                        # Allergy-grade conflict — refuse the override. Force-swap
-                        # to a compatible fallback below. Logged at WARNING with
-                        # the offending restrictions so the admin sees it.
-                        allergy_names = [
-                            index.dietary_hierarchy.id_to_name.get(rid, rid)
-                            for rid in allergy_hits
-                        ]
+                    if not is_item_compatible(pref_fields, dietary_ids, index.dietary_hierarchy, legend_tag_ids):
+                        # Definite incompatibility — refuse the override and
+                        # force-swap to a compatible fallback below.
+                        dietary_names = resolve_dietary_names(dietary_ids, index.dietary_hierarchy)
                         log.warning(
                             f"  {stu_name}: REFUSING explicit preference '{pref_name}' — "
-                            f"violates registered allergy: {allergy_names}. "
+                            f"definitely incompatible with dietary {dietary_names}. "
                             "Forcing dietary-safe fallback."
                         )
                     else:
-                        if not is_item_compatible(pref_fields, dietary_ids, index.dietary_hierarchy, legend_tag_ids):
-                            dietary_names = resolve_dietary_names(dietary_ids, index.dietary_hierarchy)
-                            log.warning(
-                                f"  {stu_name}: explicit preference '{pref_name}' conflicts with "
-                                f"dietary {dietary_names} — honouring explicit choice (lifestyle)."
-                            )
                         item_id     = pref_id
                         is_explicit = True
                 else:
@@ -779,29 +765,32 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
 
         wo_airtable_id = created_wo[0].id
 
-        # One Order row per student assignment. Quantity is always 1 — callers
-        # that want per-item totals (send_orders.py, order_constraints.py) sum
-        # Quantity, which is equivalent to counting rows. The per-student
-        # granularity is what powers the webapp's digital-ticket lookup.
-        order_records: list[dict[str, Any]] = []
+        # One Order row per (session, item) pair — all students sharing that
+        # meal are linked in the Student field. Quantity = number of students.
+        # send_orders.py sums Quantity; the ticket API uses FIND in ARRAYJOIN
+        # to locate a student's row, both of which work with this shape.
+        grouped: dict[tuple[str, str], list[str]] = defaultdict(list)
         for a in batch.assignments:
-            sess_fields  = index.session_by_id.get(a.session_id, {})
+            grouped[(a.session_id, a.item_id)].append(a.student_id)
+
+        order_records: list[dict[str, Any]] = []
+        for (sess_id, item_id), student_ids in grouped.items():
+            sess_fields  = index.session_by_id.get(sess_id, {})
             day          = sess_fields.get("Day", "")
             session_date = week_dates.get(day, next_monday)
-            sess_label   = sess_fields.get("Session ID", a.session_id)
-            item_name    = index.menu_item_by_id.get(a.item_id, {}).get("Menu Item Name", "?")
-            stu_name     = index.student_by_id.get(a.student_id, {}).get("Student Name", a.student_id)
+            sess_label   = sess_fields.get("Session ID", sess_id)
+            item_name    = index.menu_item_by_id.get(item_id, {}).get("Menu Item Name", "?")
             order_records.append({
-                "Order ID":     f"{sess_label} — {stu_name} — {item_name} — {week_label}",
+                "Order ID":     f"{sess_label} — {item_name} — {week_label}",
                 "Weekly Order": [wo_airtable_id],
-                "Menu Item":    [a.item_id],
-                "Session":      [a.session_id],
-                "Student":      [a.student_id],
+                "Menu Item":    [item_id],
+                "Session":      [sess_id],
+                "Student":      student_ids,
                 "Date":         session_date.isoformat(),
-                "Quantity":     1,
+                "Quantity":     len(student_ids),
             })
 
-        log.info(f"  Creating {len(order_records)} Order records...")
+        log.info(f"  Creating {len(order_records)} Order records ({total_meals} meals)...")
         db.Orders.create(order_records)
 
     log.info("\nOrder registration complete!")

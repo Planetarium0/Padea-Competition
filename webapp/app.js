@@ -265,12 +265,10 @@ function buildHierarchyMaps(restrictions, negativeKeywords = {}) {
   const idToName = {};
   const nameToId = {};
   const idToRestr = {};
-  const allergyIds = new Set();
   for (const r of restrictions) {
     idToName[r.id] = r.name;
     nameToId[r.name] = r.id;
     idToRestr[r.id] = r;
-    if (r.isAllergy) allergyIds.add(r.id);
   }
   // Build child map (parentId → [subset childIds]) from each restriction's
   // Supersets list (a restriction lists its less-restrictive parents).
@@ -307,22 +305,20 @@ function buildHierarchyMaps(restrictions, negativeKeywords = {}) {
   // legendTagIdSet is populated later once the caterer record is fetched.
   return {
     idToName, nameToId, subsetClosure, supersetClosure,
-    negativeKeywords, allergyIds, legendTagIdSet: new Set(),
+    negativeKeywords, legendTagIdSet: new Set(),
   };
 }
 
-// Returns { compatible, severity, issues, allergyBlocked } where:
-//   compatible      — true if all constraints satisfied by tags
-//   severity        — "ok" | "maybe" | "no"
-//   issues          — array of { name, severity, label, isAllergy } per unmet constraint
-//   allergyBlocked  — true if any issue is severity "no" against a registered allergy
+// Returns { compatible, severity, issues } where:
+//   compatible  — true if all constraints satisfied by tags
+//   severity    — "ok" | "maybe" | "no"
+//   issues      — array of { name, severity, label } per unmet constraint
 function checkCompatibility(item, studentReqIds, maps) {
-  if (!studentReqIds.length) return { compatible: true, severity: "ok", issues: [], allergyBlocked: false };
+  if (!studentReqIds.length) return { compatible: true, severity: "ok", issues: [] };
 
   const itemTagIds = item.fields["Dietary Tags"] || [];
   const itemNameLower = (item.fields["Menu Item Name"] || "").toLowerCase();
   const legendTagIdSet = maps.legendTagIdSet || new Set();
-  const allergyIds = maps.allergyIds || new Set();
 
   const issues = [];
   for (const reqId of studentReqIds) {
@@ -334,7 +330,6 @@ function checkCompatibility(item, studentReqIds, maps) {
     if (tagMatch) continue; // satisfied by a tag in the subset closure
 
     const phrase = CONSTRAINT_PHRASE[reqName] || reqName.toLowerCase();
-    const isAllergy = allergyIds.has(reqId);
 
     // Legend-based definite incompatibility: if a transitive superset of this
     // constraint is in the caterer's Dietary Legend and the item lacks any
@@ -353,7 +348,7 @@ function checkCompatibility(item, studentReqIds, maps) {
         }
       }
       if (definitelyNo) {
-        issues.push({ name: reqName, severity: "no", label: `Contains ${phrase}`, isAllergy });
+        issues.push({ name: reqName, severity: "no", label: `Contains ${phrase}` });
         continue;
       }
     }
@@ -361,16 +356,15 @@ function checkCompatibility(item, studentReqIds, maps) {
     // No legend verdict. Fall back to name-keyword heuristic.
     const kws = maps.negativeKeywords?.[reqName];
     if (kws && kws.some(k => itemNameLower.includes(k))) {
-      issues.push({ name: reqName, severity: "no", label: `Contains ${phrase}`, isAllergy });
+      issues.push({ name: reqName, severity: "no", label: `Contains ${phrase}` });
     } else {
-      issues.push({ name: reqName, severity: "maybe", label: `May contain ${phrase}`, isAllergy });
+      issues.push({ name: reqName, severity: "maybe", label: `May contain ${phrase}` });
     }
   }
 
-  if (!issues.length) return { compatible: true, severity: "ok", issues, allergyBlocked: false };
+  if (!issues.length) return { compatible: true, severity: "ok", issues };
   const severity = issues.some(i => i.severity === "no") ? "no" : "maybe";
-  const allergyBlocked = issues.some(i => i.severity === "no" && i.isAllergy);
-  return { compatible: false, severity, issues, allergyBlocked };
+  return { compatible: false, severity, issues };
 }
 
 function hasOptedOut(student, maps) {
@@ -418,6 +412,8 @@ const state = {
   feedbackRecordId: null,
   feedbackPromise: null,
 
+  isResubmission: false,
+
   view: "loading",
 };
 
@@ -446,12 +442,16 @@ const app = {
       return;
     }
 
-    // One-way device lockout — once this device has submitted for this
-    // (session, day), refuse re-entry until the day rolls over.
+    // Device lockout — once submitted, lock the picker so no other student
+    // can be selected, but let the same student edit their own preference.
     if (getSubmittedFlag(state.sessionId)) {
-      renderCutoffFootnote();
-      showSubmittedLock();
-      return;
+      const lockedStudent = getKnownStudent(state.sessionId);
+      if (!lockedStudent) {
+        renderCutoffFootnote();
+        showSubmittedLock();
+        return;
+      }
+      state.isResubmission = true;
     }
 
     // Decide the view before any network so the first paint is correct.
@@ -532,6 +532,7 @@ const app = {
   },
 
   async changeStudent() {
+    if (getSubmittedFlag(state.sessionId)) return;
     clearKnownStudent(state.sessionId);
     resetFormState();
     showPickerSkeleton();
@@ -598,19 +599,14 @@ const app = {
     const item = state.menuItems.find(i => i.id === itemId);
     if (!item || !state.dietMaps) return;
     const reqs = state.student.fields["Dietary Requirements"] || [];
-    const { severity, issues, allergyBlocked } = checkCompatibility(item, reqs, state.dietMaps);
+    const { severity, issues } = checkCompatibility(item, reqs, state.dietMaps);
     const name = item.fields["Menu Item Name"] || "this meal";
 
-    // Allergy-grade hits are non-negotiable — show the lockout dialog
-    // instead of the lifestyle override.
-    if (allergyBlocked) {
-      const allergyNames = issues
-        .filter(i => i.severity === "no" && i.isAllergy)
-        .map(i => i.name)
-        .join(", ");
+    if (severity === "no") {
+      // Definite incompatibility — non-negotiable hard block.
       openConfirm({
         title: "Option blocked",
-        body: `"${name}" is not safe for your registered allergy (${allergyNames}). Talk to the on-site manager for manual overrides.`,
+        body: `"${name}" doesn't match your dietary requirements: ${issues.map(i => i.label).join(", ")}. Talk to the on-site manager for manual overrides.`,
         confirmLabel: "OK",
         onConfirm: () => closeConfirm(),
         hideCancel: true,
@@ -618,15 +614,13 @@ const app = {
       return;
     }
 
+    // Uncertain ("maybe") — let the student override with confirmation.
     const phrases = issues
       .map(i => CONSTRAINT_PHRASE[i.name] || i.name.toLowerCase())
       .join(", ");
-    const body = severity === "no"
-      ? `"${name}" doesn't match your dietary requirements: ${issues.map(i => i.label).join(", ")}.`
-      : `We don't know if "${name}" contains ${phrases}.`;
     openConfirm({
       title: "Are you sure?",
-      body,
+      body: `We don't know if "${name}" contains ${phrases}.`,
       confirmLabel: "Choose it anyway",
       onConfirm: () => {
         closeConfirm();
@@ -695,19 +689,7 @@ function renderTicket(ticket, student) {
     return `<span class="tag">${escapeHtml(TAG_SHORT[name] || name)}</span>`;
   }).join("");
 
-  // Highlight any allergy restrictions registered on the student — the
-  // on-site manager uses this to prioritise hand-off of allergy-safe boxes.
-  const allergyBanner = document.getElementById("ticket-allergy-banner");
-  const reqs = student?.fields["Dietary Requirements"] || [];
-  const allergyNames = maps
-    ? reqs.filter(rid => maps.allergyIds?.has(rid)).map(rid => maps.idToName[rid]).filter(Boolean)
-    : [];
-  if (allergyNames.length) {
-    allergyBanner.textContent = `⚠️ ${allergyNames.join(", ").toUpperCase()} TICKET`;
-    allergyBanner.classList.remove("hidden");
-  } else {
-    allergyBanner.classList.add("hidden");
-  }
+  document.getElementById("ticket-allergy-banner").classList.add("hidden");
   el.classList.remove("hidden");
 }
 
@@ -731,6 +713,7 @@ function showFormSkeleton() {
   showView("form");
   resetFormState();
   clearOptedOutLock();
+  document.getElementById("change-student-btn").classList.toggle("hidden", !!getSubmittedFlag(state.sessionId));
   document.getElementById("rating-card").classList.toggle("hidden", state.firstSession);
   document.getElementById("transition-banner").classList.add("hidden");
   document.getElementById("student-name").textContent = "…";
@@ -939,12 +922,11 @@ function renderMealList() {
       variants.some(v => v.id === state.mealItemId);
 
     const sev = result.severity;
-    // If any option (parent or a variant) is allergy-safe, the row isn't blocked.
-    const allergySafeOption = (hasVariants ? [item, ...variants] : [item]).some(o => {
-      const r = checkCompatibility(o, reqs, maps);
-      return !r.allergyBlocked;
+    // Row is blocked only when every option (parent + variants) is definitively
+    // incompatible (severity "no") — no safe or uncertain alternative exists.
+    const blocked = (hasVariants ? [item, ...variants] : [item]).every(o => {
+      return checkCompatibility(o, reqs, maps).severity === "no";
     });
-    const blocked = !allergySafeOption;
 
     // Items with variants always open the picker, never select directly.
     const onclick = hasVariants
@@ -958,11 +940,7 @@ function renderMealList() {
       ? bestVariantSeverity(sev, variants, reqs, maps)
       : sev;
     const reasonText = blocked
-      ? result.issues
-          .filter(i => i.severity === "no" && i.isAllergy)
-          .map(i => `Not safe — registered allergy: ${i.name}`)
-          .join(" · ")
-        || result.issues.map(i => i.label).join(" · ")
+      ? result.issues.map(i => i.label).join(" · ")
       : (!hasVariants || effectiveSev === "no") && result.issues.length
         ? result.issues.map(i => i.label).join(" · ")
         : "";
@@ -1120,10 +1098,11 @@ async function persistChanges() {
 }
 
 function doneMessage() {
+  const verb = state.isResubmission ? "updated" : "saved";
   const parts = [];
-  if (state.rating > 0) parts.push("Rating saved");
-  if (state.mealItemId) parts.push("Preference saved");
-  return parts.length ? parts.join(" — ") + "." : "Your response has been saved.";
+  if (state.rating > 0) parts.push(`Rating ${verb}`);
+  if (state.mealItemId) parts.push(`Preference ${verb}`);
+  return parts.length ? parts.join(" — ") + "." : `Your response has been ${verb}.`;
 }
 
 // ============================================================
@@ -1216,9 +1195,10 @@ function showVariantModal(options, selectedId, maps, reqs) {
 
   const optionsEl = document.getElementById("variant-options");
   optionsEl.innerHTML = options.map(item => {
-    const { severity, issues, allergyBlocked } = maps
+    const { severity, issues } = maps
       ? checkCompatibility(item, reqs, maps)
-      : { severity: "ok", issues: [], allergyBlocked: false };
+      : { severity: "ok", issues: [] };
+    const isBlocked = severity === "no";
     const name = item.fields["Menu Item Name"] || "—";
     const tagIds = item.fields["Dietary Tags"] || [];
     const tagsHtml = tagIds.map(tid => {
@@ -1226,24 +1206,19 @@ function showVariantModal(options, selectedId, maps, reqs) {
       if (!tName) return "";
       return `<span class="tag">${escapeHtml(TAG_SHORT[tName] || tName)}</span>`;
     }).join("");
-    const reasonText = allergyBlocked
-      ? issues
-          .filter(i => i.severity === "no" && i.isAllergy)
-          .map(i => `Not safe — registered allergy: ${i.name}`)
-          .join(" · ")
-      : issues.map(i => i.label).join(" · ");
+    const reasonText = issues.map(i => i.label).join(" · ");
     const reasonHtml = reasonText
-      ? `<div class="meal-reason meal-reason-${allergyBlocked ? "blocked" : severity}">${escapeHtml(reasonText)}</div>`
+      ? `<div class="meal-reason meal-reason-${isBlocked ? "blocked" : severity}">${escapeHtml(reasonText)}</div>`
       : "";
     const isSelected = item.id === selectedId;
     const klass = [
       "variant-option",
       isSelected ? "selected" : "",
-      allergyBlocked ? "blocked" : "",
+      isBlocked ? "blocked" : "",
       severity === "no" ? "incompatible" : severity === "maybe" ? "maybe" : "",
     ].filter(Boolean).join(" ");
     return `
-      <div class="${klass}" data-item-id="${item.id}" data-blocked="${allergyBlocked ? '1' : ''}" onclick="selectVariantOption('${item.id}')">
+      <div class="${klass}" data-item-id="${item.id}" data-blocked="${isBlocked ? '1' : ''}" onclick="selectVariantOption('${item.id}')">
         <div class="meal-radio"></div>
         <div class="meal-content">
           <div class="meal-name">${escapeHtml(name)}</div>
@@ -1259,7 +1234,7 @@ function showVariantModal(options, selectedId, maps, reqs) {
 window.selectVariantOption = function (itemId) {
   const el = document.querySelector(`.variant-option[data-item-id="${itemId}"]`);
   if (el && el.dataset.blocked === "1") {
-    toast("Option blocked — registered allergy. Talk to the on-site manager.");
+    toast("Option blocked due to dietary requirement. Talk to the on-site manager.");
     return;
   }
   variantModalSelected = itemId;

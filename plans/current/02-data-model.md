@@ -3,7 +3,7 @@
 Single source of truth: `data/schema.py` (`TABLES_SCHEMA`).
 `scripts/actions/update_schema.py` keeps the Airtable base in sync with it.
 
-## Tables (13)
+## Tables (14)
 
 ```
 Schools ──< Sessions >── Caterers ──< Menu Items >── Dietary Restrictions
@@ -32,6 +32,24 @@ Extracted from `sessions.xlsx`. Deduplicated by name.
 
 - **Manager Name** (primary)
 - **Mobile**
+- **Email**
+
+### Manager Substitutions
+One record per one-off substitution. When a substitute covers a session on a
+specific date, the coordinator creates a record here; scripts resolve the
+*effective* manager by checking this table first before falling back to the
+session's permanent On-Site Manager.
+
+- **Substitution ID** (primary, format: `"<Session ID> - <YYYY-MM-DD>"`)
+- **Session** → `Sessions`
+- **Date** — the date of the one-off substitution
+- **Substitute Manager** → `On-Site Managers`
+
+`send_orders.py` calls `load_substitutions` + `resolve_manager_id` (in
+`support/database.py`) to pick the right contact for each session's order
+email. `evaluate_caterers.py` and `send_qr_emails.py` always use the
+permanent manager (alerts are long-term; QR emails go out before substitutes
+are known).
 
 ### Caterers
 Four records. Pricing and contact fields populated in three passes:

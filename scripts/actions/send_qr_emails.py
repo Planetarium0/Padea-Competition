@@ -43,9 +43,14 @@ def session_url(origin: str, session_id: str, first: bool = False) -> str:
     return f"{origin.rstrip('/')}/meals.html?session={session_id}{suffix}"
 
 
+
 def qr_image_url(data: str, size: int = 250) -> str:
     """URL that generates a QR code PNG via the qrserver.com public API."""
     return f"https://api.qrserver.com/v1/create-qr-code/?size={size}x{size}&data={url_quote(data)}"
+
+
+def manage_url(origin: str, manager_id: str) -> str:
+    return f"{origin.rstrip('/')}/manage.html?manager={manager_id}"
 
 
 @dataclass(frozen=True)
@@ -61,6 +66,8 @@ class SessionEntry:
 def format_manager_email(
     manager_name: str,
     entries:      list[SessionEntry],
+    manager_id:   str,
+    origin:       str,
 ) -> tuple[str, str]:
     first   = (manager_name.split()[0] if manager_name else None) or "there"
     subject = "Padea Meals — QR codes for this term's sessions"
@@ -75,12 +82,23 @@ def format_manager_email(
         lines += [
             f"## {entry.label}",
             "",
-            # f"![QR Code]({qr_image_url(entry.url)})",
-            # "",
+            f'<a href="{entry.url}"><img src="{qr_image_url(entry.url)}" alt="QR Code" width="250" height="250" /></a>',
+            "",
             f"[Link]({entry.url})",
             "",
         ]
-    lines += ["Thanks,", "Padea"]
+    mgr_url = manage_url(origin, manager_id)
+    lines += [
+        "---",
+        "",
+        f"**Student management:** Use this link to update dietary requirements or override meal "
+        f"assignments for any student across all your sessions:",
+        "",
+        f"[Manage your students →]({mgr_url})",
+        "",
+        "Thanks,",
+        "Padea",
+    ]
     return subject, "\n".join(lines)
 
 
@@ -155,7 +173,7 @@ def send_qr_emails(
 
         entries.sort(key=lambda e: _DAY_ORDER.get(e.label.split(" — ")[0], 99))
 
-        subject, body = format_manager_email(mgr_name, entries)
+        subject, body = format_manager_email(mgr_name, entries, mgr_id, origin)
         email_id      = f"MEALS-QR-{mgr_id[-8:]}-{int(time.time())}"
 
         if dry_run:

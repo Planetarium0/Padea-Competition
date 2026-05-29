@@ -24,6 +24,7 @@ import test_evaluate_caterers
 import test_execute_caterer_switch
 import test_register_orders
 import test_send_orders
+import test_substitutions
 
 
 def suite() -> unittest.TestSuite:
@@ -33,6 +34,7 @@ def suite() -> unittest.TestSuite:
         test_api,
         test_register_orders,
         test_send_orders,
+        test_substitutions,
         test_evaluate_caterers,
         test_execute_caterer_switch,
     ):

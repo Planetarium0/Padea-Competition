@@ -124,13 +124,6 @@ TABLES_SCHEMA: dict[str, dict[str, Any]] = {
                 "link_target": "Dietary Restrictions",
                 "inverse_name": "Subsets",
             },
-            # Medical-grade allergy flag. True for restrictions that are a
-            # health/legal hazard if violated (Nut Free, Gluten Free, ...).
-            # The webapp hard-blocks incompatible picks; the order generator
-            # refuses to honour explicit overrides that violate an allergy.
-            # Lifestyle preferences (Vegetarian, Halal, No Beef, ...) remain
-            # soft — student can override with a confirmation.
-            {"name": "Is Allergy", "type": "checkbox", "options": {"icon": "check", "color": "redBright"}}
         ]
     },
     "Students": {
@@ -320,12 +313,10 @@ TABLES_SCHEMA: dict[str, dict[str, Any]] = {
         ]
     },
     "Orders": {
-        # Per-student-per-session record of the finalized meal assignment for
-        # a given week. One row per (Student, Session, Date) — Quantity is
-        # always 1 and is kept only so caterer-facing aggregations
-        # (send_orders.py, order_constraints.py) can sum it without caring
-        # whether the row is per-student or pre-aggregated. The Student link
-        # backs the webapp's "digital ticket" lookup.
+        # One row per (Session, MenuItem) pair for a given week. All students
+        # assigned that meal are linked via the Student field; Quantity = len
+        # of that list. The Student link backs the webapp's ticket lookup via
+        # FIND/ARRAYJOIN, and send_orders.py sums Quantity for item counts.
         "primary": {"name": "Order ID", "type": "singleLineText"},
         "fields": [
             {
@@ -387,6 +378,25 @@ TABLES_SCHEMA: dict[str, dict[str, Any]] = {
                 "link_target": "Caterer Switch Proposals"
             },
             {"name": "Send Date", "type": "date", "options": {"dateFormat": {"name": "iso"}}}
+        ]
+    },
+    "Manager Substitutions": {
+        # One record per one-off substitution: on this date, this substitute
+        # covers this session instead of the regular on-site manager.
+        # Substitution ID format: "<Session ID> - <YYYY-MM-DD>"
+        "primary": {"name": "Substitution ID", "type": "singleLineText"},
+        "fields": [
+            {
+                "name": "Session",
+                "type": "multipleRecordLinks",
+                "link_target": "Sessions"
+            },
+            {"name": "Date", "type": "date", "options": {"dateFormat": {"name": "iso"}}},
+            {
+                "name": "Substitute Manager",
+                "type": "multipleRecordLinks",
+                "link_target": "On-Site Managers"
+            }
         ]
     },
     "Caterer Switch Proposals": {

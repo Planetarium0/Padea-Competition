@@ -82,6 +82,8 @@ _TTL_FEEDBACK =     60.0   # 60 s — full feedback table (also bust on write)
 
 _routes: list[tuple[str, re.Pattern[str], Any]] = []
 
+_DAY_ORDER = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4}
+
 
 def route(method: str, pattern: str):
     """Register the decorated function as a handler for *method* + *pattern*."""
@@ -288,10 +290,9 @@ def api_get_dietary_restrictions(*, db: Database) -> tuple[int, list]:
         return 200, cached
     data = [
         {
-            "id":         r.id,
-            "name":       r.fields.get("Restriction Name", ""),
-            "supersets":  r.fields.get("Supersets") or [],
-            "isAllergy":  bool(r.fields.get("Is Allergy")),
+            "id":        r.id,
+            "name":      r.fields.get("Restriction Name", ""),
+            "supersets": r.fields.get("Supersets") or [],
         }
         for r in db.DietaryRestrictions.all()
     ]
@@ -415,6 +416,116 @@ def api_mark_student_submitted(student_id: str, *, db: Database) -> tuple[int, d
         return 200, {"ok": True}
     except Exception as e:
         log.exception("Error marking student %s as submitted", student_id)
+        return 500, {"error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# Manage-page endpoints
+# ---------------------------------------------------------------------------
+
+@route("GET", r"^/api/manager/(?P<manager_id>[^/?]+)/sessions$")
+def api_get_manager_sessions(manager_id: str, *, db: Database) -> tuple[int, list | dict]:
+    all_sessions = db.Sessions.all(
+        formula=f"FIND('{manager_id}', ARRAYJOIN({{On-Site Manager}})) > 0"
+    )
+    school_map = {s.id: s for s in db.Schools.all()}
+    result = []
+    for sess in all_sessions:
+        f = sess.fields
+        school_id   = (f.get("School") or [None])[0]
+        school_name = (
+            school_map[school_id].fields.get("School Name", "?")
+            if school_id and school_id in school_map else "?"
+        )
+        day = f.get("Day", "?")
+        result.append({
+            "id":                 sess.id,
+            "label":              f"{day} — {school_name}",
+            "day":                day,
+            "catererIds":         f.get("Caterer") or [],
+            "incomingCatererIds": f.get("Incoming Caterer") or [],
+        })
+    result.sort(key=lambda s: _DAY_ORDER.get(s["day"], 99))
+    return 200, result
+
+
+@route("GET", r"^/api/session/(?P<session_id>[^/?]+)/students-all$")
+def api_get_session_students_all(session_id: str, *, db: Database) -> tuple[int, list | dict]:
+    """All students in a session with no Last-Submitted filter — used by the manager page."""
+    session = db.Sessions.get(session_id)
+    if not session:
+        return 404, {"error": f"Session {session_id!r} not found"}
+    student_ids: list[str] = list(session.fields.get("Students") or [])
+    if not student_ids:
+        return 200, []
+    students = db.Students.all(formula=_id_formula(student_ids))
+    return 200, sorted(
+        [{"id": s.id, "name": s.fields.get("Student Name") or "(no name)"} for s in students],
+        key=lambda s: s["name"],
+    )
+
+
+@route("PATCH", r"^/api/student/(?P<student_id>[^/?]+)/dietary-requirements$")
+def api_update_dietary_requirements(
+    student_id: str, restriction_ids: list, *, db: Database
+) -> tuple[int, dict]:
+    try:
+        db.Students.update(student_id, {"Dietary Requirements": list(restriction_ids)})
+        _cache.bust(f"student:{student_id}")
+        return 200, {"ok": True}
+    except Exception as e:
+        log.exception("Error updating dietary requirements for student %s", student_id)
+        return 500, {"error": str(e)}
+
+
+@route("PATCH", r"^/api/student/(?P<student_id>[^/?]+)/order-override$")
+def api_override_order(
+    student_id: str, session_id: str, new_meal_item_id: str, *, db: Database
+) -> tuple[int, dict]:
+    today_iso = date.today().isoformat()
+    # Fetch all Orders for this session today, then filter in Python so
+    # record-ID comparisons against linked fields are always reliable.
+    formula = (
+        f"AND({{Date}} = '{today_iso}', "
+        f"FIND('{session_id}', ARRAYJOIN({{Session}})) > 0)"
+    )
+    try:
+        all_orders   = db.Orders.all(formula=formula)
+        current_order = next(
+            (o for o in all_orders if student_id in (o.fields.get("Student") or [])), None
+        )
+        target_order = next(
+            (o for o in all_orders if new_meal_item_id in (o.fields.get("Menu Item") or [])), None
+        )
+
+        if current_order:
+            current_item_id = (current_order.fields.get("Menu Item") or [None])[0]
+            if current_item_id == new_meal_item_id:
+                return 200, {"ok": True, "changed": False}
+            remaining = [s for s in (current_order.fields.get("Student") or []) if s != student_id]
+            if remaining:
+                db.Orders.update(current_order.id, {"Student": remaining, "Quantity": len(remaining)})
+            else:
+                db.Orders.delete(current_order.id)
+
+        if target_order:
+            students = list(target_order.fields.get("Student") or [])
+            if student_id not in students:
+                students.append(student_id)
+            db.Orders.update(target_order.id, {"Student": students, "Quantity": len(students)})
+        else:
+            order_id = f"OVR-{student_id[-6:]}-{session_id[-6:]}-{int(time.time())}"
+            db.Orders.create([{
+                "Order ID":  order_id,
+                "Menu Item": [new_meal_item_id],
+                "Session":   [session_id],
+                "Student":   [student_id],
+                "Date":      today_iso,
+                "Quantity":  1,
+            }])
+        return 200, {"ok": True, "changed": True}
+    except Exception as e:
+        log.exception("Error overriding order for student %s in session %s", student_id, session_id)
         return 500, {"error": str(e)}
 
 

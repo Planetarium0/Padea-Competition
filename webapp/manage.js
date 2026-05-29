@@ -1,0 +1,855 @@
+/**
+ * manage.js — Student dietary & meal management.
+ *
+ * URL modes:
+ *   ?manager=<id>  — on-site manager: sees all their sessions, can update
+ *                    dietary requirements, meal preference, and today's order.
+ *   ?student=<id>  — parent / guardian: can update dietary requirements only.
+ *
+ * No login or submission lockout — this page is access-controlled by the
+ * obscurity of the link (manager ID or student ID embedded in the URL).
+ */
+
+"use strict";
+
+// ── URL params ────────────────────────────────────────────────────────────────
+const _p = new URLSearchParams(location.search);
+const MANAGER_ID = _p.get("manager");
+const STUDENT_ID = _p.get("student");
+const IS_MANAGER = !!MANAGER_ID;
+
+// ── Constants (kept in sync with app.js) ──────────────────────────────────────
+const TAG_SHORT = {
+  "Gluten Free": "GF", "Dairy Free": "DF", "Nut Free": "NF",
+  "Vegetarian": "Veg", "Vegan": "Vegan", "Halal": "Halal",
+  "Kosher": "Kosher", "Pescatarian": "Pesc",
+};
+
+const CONSTRAINT_PHRASE = {
+  "Gluten Free": "gluten", "Dairy Free": "dairy", "Nut Free": "nuts",
+  "Vegetarian": "meat", "Vegan": "animal products", "Pescatarian": "non-fish meat",
+  "Halal": "non-halal ingredients", "Kosher": "non-kosher ingredients",
+  "No Beef": "beef", "No Pork": "pork", "No Lamb": "lamb",
+  "No Fish": "fish", "No Shellfish": "shellfish", "No Seafood": "seafood",
+  "No Red Meat": "red meat",
+};
+
+// Display order for the dietary checkboxes.
+const DIET_DISPLAY_ORDER = [
+  "Gluten Free", "Dairy Free", "Nut Free",
+  "Vegan", "Vegetarian", "Pescatarian",
+  "Halal", "Kosher",
+  "No Red Meat", "No Beef", "No Pork", "No Lamb",
+  "No Seafood", "No Fish", "No Shellfish",
+  "Opted out of Catering",
+];
+
+const OPTED_OUT_NAME = "Opted out of Catering";
+const ALL_VIEWS = ["session-picker", "student-picker", "edit", "meals", "done", "error"];
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let sessions        = [];           // [{id, label, day, catererIds, incomingCatererIds}]
+let selectedSession = null;
+let studentList     = [];           // [{id, name}] for current session
+let filteredStudents = [];
+
+let studentId   = STUDENT_ID || null;
+let studentName = "";
+let allRestrictions = [];           // [{id, name, supersets}]
+let initialDietIds  = new Set();
+let checkedDietIds  = new Set();
+
+let menuItems   = [];               // [{id, fields}]
+let variantMap  = {};               // parentId → [variantItem, ...]
+let legendTagIds = [];
+let dietMaps    = null;             // built once restrictions + neg-keywords are loaded
+
+let mealPickerTarget     = null;    // "preference" | "override"
+let initialPrefItemId    = null;
+let selectedPrefItemId   = null;
+let todayOrderItemId     = null;    // current assigned meal for today
+let selectedOverrideItemId = null;
+let hasExistingOrder     = false;
+
+let variantModalSelected = null;
+let confirmCallback      = null;
+
+// ── In-memory cache (per page load) ──────────────────────────────────────────
+const _cache = Object.create(null);
+const cacheGet = k => Object.prototype.hasOwnProperty.call(_cache, k) ? _cache[k] : null;
+const cacheSet = (k, v) => { _cache[k] = v; };
+
+// ── API ───────────────────────────────────────────────────────────────────────
+async function apiFetch(url, opts = {}) {
+  const res = await fetch(url, opts);
+  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+// ── Utility ───────────────────────────────────────────────────────────────────
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function eqSets(a, b) {
+  if (a.size !== b.size) return false;
+  for (const v of a) if (!b.has(v)) return false;
+  return true;
+}
+
+// ── Views ─────────────────────────────────────────────────────────────────────
+function showView(name) {
+  for (const v of ALL_VIEWS) {
+    document.getElementById(`view-${v}`).classList.toggle("hidden", v !== name);
+  }
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let _toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.remove("hidden");
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.add("hidden"), 2800);
+}
+
+// ── Error banner ──────────────────────────────────────────────────────────────
+function showError(msg) {
+  document.getElementById("error-text").textContent = msg;
+  document.getElementById("error-banner").classList.remove("hidden");
+}
+
+// ── Dietary hierarchy (mirrors app.js exactly) ────────────────────────────────
+function buildHierarchyMaps(restrictions, negativeKeywords = {}) {
+  const idToName = {}, nameToId = {}, idToRestr = {};
+  for (const r of restrictions) {
+    idToName[r.id] = r.name;
+    nameToId[r.name] = r.id;
+    idToRestr[r.id] = r;
+  }
+  const children = {};
+  for (const r of restrictions)
+    for (const pid of r.supersets) (children[pid] ||= []).push(r.id);
+
+  function descendants(id, acc = new Set()) {
+    if (acc.has(id)) return acc;
+    acc.add(id);
+    for (const c of children[id] || []) descendants(c, acc);
+    return acc;
+  }
+  function ancestors(id, acc = new Set()) {
+    if (acc.has(id)) return acc;
+    acc.add(id);
+    const r = idToRestr[id];
+    if (r) for (const pid of r.supersets) ancestors(pid, acc);
+    return acc;
+  }
+  const subsetClosure = {}, supersetClosure = {};
+  for (const r of restrictions) {
+    subsetClosure[r.id]   = descendants(r.id);
+    supersetClosure[r.id] = ancestors(r.id);
+  }
+  return { idToName, nameToId, subsetClosure, supersetClosure, negativeKeywords, legendTagIdSet: new Set() };
+}
+
+function checkCompatibility(item, studentReqIds, maps) {
+  if (!studentReqIds.length) return { compatible: true, severity: "ok", issues: [] };
+  const itemTagIds    = item.fields["Dietary Tags"] || [];
+  const itemNameLower = (item.fields["Menu Item Name"] || "").toLowerCase();
+  const legendTagIdSet = maps.legendTagIdSet || new Set();
+  const issues = [];
+  for (const reqId of studentReqIds) {
+    const reqName = maps.idToName[reqId];
+    if (!reqName || reqName === OPTED_OUT_NAME) continue;
+    const closure = maps.subsetClosure[reqId] || new Set([reqId]);
+    if (itemTagIds.some(t => closure.has(t))) continue;
+    const phrase = CONSTRAINT_PHRASE[reqName] || reqName.toLowerCase();
+    if (legendTagIdSet.size) {
+      const ancestorIds = maps.supersetClosure[reqId] || new Set([reqId]);
+      let definitelyNo = false;
+      for (const aid of ancestorIds) {
+        if (!legendTagIdSet.has(aid)) continue;
+        const ac = maps.subsetClosure[aid] || new Set([aid]);
+        if (!itemTagIds.some(t => ac.has(t))) { definitelyNo = true; break; }
+      }
+      if (definitelyNo) { issues.push({ name: reqName, severity: "no", label: `Contains ${phrase}` }); continue; }
+    }
+    const kws = maps.negativeKeywords?.[reqName];
+    if (kws && kws.some(k => itemNameLower.includes(k)))
+      issues.push({ name: reqName, severity: "no",    label: `Contains ${phrase}` });
+    else
+      issues.push({ name: reqName, severity: "maybe", label: `May contain ${phrase}` });
+  }
+  if (!issues.length) return { compatible: true, severity: "ok", issues };
+  return { compatible: false, severity: issues.some(i => i.severity === "no") ? "no" : "maybe", issues };
+}
+
+function buildVariantMap(items) {
+  const map = {};
+  for (const item of items)
+    if (item.fields["Is Variant"]) {
+      const pid = (item.fields["Variant Of"] || [])[0];
+      if (pid) (map[pid] ||= []).push(item);
+    }
+  return map;
+}
+
+function bestVariantSeverity(parentSev, variants, reqs, maps) {
+  if (!maps || !reqs.length || !variants.length) return parentSev;
+  let best = parentSev;
+  for (const v of variants) {
+    const { severity } = checkCompatibility(v, reqs, maps);
+    if (severity === "ok") return "ok";
+    if (severity === "maybe" && best === "no") best = "maybe";
+  }
+  return best;
+}
+
+// ── Data loaders ──────────────────────────────────────────────────────────────
+let _restrictionsP = null;
+let _negKwP        = null;
+
+function loadRestrictions() {
+  if (_restrictionsP) return _restrictionsP;
+  _restrictionsP = apiFetch("/api/dietary-restrictions").then(data => {
+    allRestrictions = data;
+    return data;
+  });
+  return _restrictionsP;
+}
+
+function loadNegativeKeywords() {
+  if (_negKwP) return _negKwP;
+  _negKwP = fetch("/data/dietary_keywords.json", { cache: "no-cache" })
+    .then(r => r.json())
+    .then(d => d.negative_keywords || {})
+    .catch(() => ({}));
+  return _negKwP;
+}
+
+async function ensureDietMaps() {
+  if (dietMaps) return dietMaps;
+  const [rs, kws] = await Promise.all([loadRestrictions(), loadNegativeKeywords()]);
+  dietMaps = buildHierarchyMaps(rs, kws);
+  return dietMaps;
+}
+
+// ── Initialisation ────────────────────────────────────────────────────────────
+async function init() {
+  if (!MANAGER_ID && !STUDENT_ID) { showView("error"); return; }
+
+  // Start loading restrictions immediately — needed in both modes.
+  loadRestrictions();
+
+  if (IS_MANAGER) {
+    document.getElementById("topbar-label").textContent = "Manager";
+    showView("session-picker");
+    await loadManagerSessions();
+  } else {
+    await loadEditForm(STUDENT_ID, false);
+  }
+}
+
+// ── Manager: session list ─────────────────────────────────────────────────────
+async function loadManagerSessions() {
+  try {
+    sessions = await apiFetch(`/api/manager/${MANAGER_ID}/sessions`);
+  } catch {
+    showError("Could not load your sessions. Check your link or try again.");
+    return;
+  }
+  const loading = document.getElementById("session-loading");
+  const list    = document.getElementById("session-list");
+  const empty   = document.getElementById("session-empty");
+  loading.classList.add("hidden");
+  if (!sessions.length) { empty.classList.remove("hidden"); return; }
+  list.innerHTML = sessions.map(s =>
+    `<li onclick="mgr.selectSession(${JSON.stringify(s.id)})">${escapeHtml(s.label)}</li>`
+  ).join("");
+  list.classList.remove("hidden");
+}
+
+async function selectSession(sessId) {
+  selectedSession = sessions.find(s => s.id === sessId);
+  document.getElementById("session-picker-title").textContent =
+    selectedSession ? selectedSession.label : "Students";
+  document.getElementById("student-search").value = "";
+  showView("student-picker");
+
+  const loading = document.getElementById("student-loading");
+  const list    = document.getElementById("student-list");
+  const empty   = document.getElementById("student-empty");
+  loading.classList.remove("hidden");
+  list.classList.add("hidden");
+  empty.classList.add("hidden");
+
+  try {
+    studentList = await apiFetch(`/api/session/${sessId}/students-all`);
+  } catch {
+    showError("Could not load students for this session.");
+    loading.classList.add("hidden");
+    return;
+  }
+  loading.classList.add("hidden");
+  filteredStudents = studentList;
+  renderStudentList();
+}
+
+function backToSessions() { showView("session-picker"); }
+
+function filterStudents(query) {
+  const q = query.trim().toLowerCase();
+  filteredStudents = q ? studentList.filter(s => s.name.toLowerCase().includes(q)) : studentList;
+  renderStudentList();
+}
+
+function renderStudentList() {
+  const list  = document.getElementById("student-list");
+  const empty = document.getElementById("student-empty");
+  if (!filteredStudents.length) {
+    list.classList.add("hidden");
+    empty.classList.remove("hidden");
+    empty.textContent = studentList.length ? "No matching student." : "No students in this session.";
+    return;
+  }
+  empty.classList.add("hidden");
+  list.innerHTML = filteredStudents.map(s =>
+    `<li onclick="mgr.selectStudent(${JSON.stringify(s.id)}, ${JSON.stringify(s.name)})">${escapeHtml(s.name)}</li>`
+  ).join("");
+  list.classList.remove("hidden");
+}
+
+async function selectStudent(sId, name) {
+  studentId   = sId;
+  studentName = name;
+  await loadEditForm(sId, true);
+}
+
+function changeStudent() {
+  studentId              = null;
+  selectedPrefItemId     = null;
+  selectedOverrideItemId = null;
+  hasExistingOrder       = false;
+  todayOrderItemId       = null;
+  document.getElementById("student-search").value = "";
+  filteredStudents = studentList;
+  renderStudentList();
+  showView("student-picker");
+}
+
+// ── Edit form ─────────────────────────────────────────────────────────────────
+async function loadEditForm(sId, isManager) {
+  showView("edit");
+
+  // Reset per-student state.
+  initialDietIds         = new Set();
+  checkedDietIds         = new Set();
+  initialPrefItemId      = null;
+  selectedPrefItemId     = null;
+  todayOrderItemId       = null;
+  selectedOverrideItemId = null;
+  hasExistingOrder       = false;
+
+  document.getElementById("diet-loading").classList.remove("hidden");
+  document.getElementById("diet-list").classList.add("hidden");
+  document.getElementById("pref-card").classList.add("hidden");
+  document.getElementById("order-card").classList.add("hidden");
+  document.getElementById("save-btn").disabled = true;
+
+  if (isManager) {
+    document.getElementById("identity-row").classList.remove("hidden");
+    document.getElementById("edit-student-name").textContent = studentName || sId;
+  } else {
+    document.getElementById("identity-row").classList.add("hidden");
+  }
+
+  try {
+    const [studentData] = await Promise.all([
+      apiFetch(`/api/student/${sId}`),
+      loadRestrictions(),
+    ]);
+
+    studentName = studentData.fields["Student Name"] || sId;
+    if (isManager) {
+      document.getElementById("edit-student-name").textContent = studentName;
+    } else {
+      document.getElementById("topbar-label").textContent = studentName;
+    }
+
+    const dietIds = studentData.fields["Dietary Requirements"] || [];
+    initialDietIds = new Set(dietIds);
+    checkedDietIds = new Set(dietIds);
+    renderDietList();
+
+    if (isManager) {
+      const prefIds = studentData.fields["Meal Preference"] || [];
+      initialPrefItemId  = prefIds[0] || null;
+      selectedPrefItemId = initialPrefItemId;
+
+      const catId = (selectedSession.incomingCatererIds[0] || selectedSession.catererIds[0]) || null;
+      if (catId) {
+        document.getElementById("pref-card").classList.remove("hidden");
+        loadMenu(catId);     // async — updates trigger label when done
+      }
+      loadTodayOrder(sId, selectedSession.id);   // async — shows card when order exists
+    }
+  } catch (e) {
+    showError(`Could not load student data: ${e.message}`);
+  }
+}
+
+// ── Dietary checkboxes ────────────────────────────────────────────────────────
+function renderDietList() {
+  document.getElementById("diet-loading").classList.add("hidden");
+  const container = document.getElementById("diet-list");
+  container.classList.remove("hidden");
+
+  const sorted = [...allRestrictions].sort((a, b) => {
+    const ai = DIET_DISPLAY_ORDER.indexOf(a.name);
+    const bi = DIET_DISPLAY_ORDER.indexOf(b.name);
+    if (ai === -1 && bi === -1) return a.name.localeCompare(b.name);
+    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+  });
+
+  container.innerHTML = sorted.map(r => {
+    const checked   = checkedDietIds.has(r.id) ? "checked" : "";
+    const optedOut  = r.name === OPTED_OUT_NAME ? " diet-item--opted-out" : "";
+    return `<label class="diet-item${optedOut}">
+      <input type="checkbox" class="diet-checkbox"
+             data-id="${escapeHtml(r.id)}" data-name="${escapeHtml(r.name)}"
+             ${checked} onchange="mgr.toggleDiet(this)" />
+      <span class="diet-name">${escapeHtml(r.name)}</span>
+    </label>`;
+  }).join("");
+}
+
+function toggleDiet(checkbox) {
+  const id   = checkbox.dataset.id;
+  const name = checkbox.dataset.name;
+  if (checkbox.checked) checkedDietIds.add(id);
+  else                  checkedDietIds.delete(id);
+
+  if (name === OPTED_OUT_NAME && IS_MANAGER) {
+    const optedOut = checkbox.checked;
+    document.getElementById("pref-card").classList.toggle(
+      "hidden", optedOut || !selectedSession || !(selectedSession.incomingCatererIds[0] || selectedSession.catererIds[0])
+    );
+    document.getElementById("order-card").classList.toggle("hidden", optedOut || !hasExistingOrder);
+  }
+  updateSaveBtn();
+}
+
+// ── Menu loading ──────────────────────────────────────────────────────────────
+async function loadMenu(catId) {
+  setPrefTrigger("Loading menu…", "");
+  document.getElementById("pref-trigger").disabled = true;
+  try {
+    const cached = cacheGet(`menu:${catId}`);
+    let items, catData;
+    if (cached) {
+      ({ items, catData } = cached);
+    } else {
+      [items, catData] = await Promise.all([
+        apiFetch(`/api/caterer/${catId}/menu`),
+        apiFetch(`/api/caterer/${catId}`),
+      ]);
+      cacheSet(`menu:${catId}`, { items, catData });
+    }
+    menuItems    = items;
+    variantMap   = buildVariantMap(items);
+    legendTagIds = catData.legendTagIds || [];
+
+    const maps = await ensureDietMaps();
+    maps.legendTagIdSet = new Set(legendTagIds);
+
+    document.getElementById("pref-trigger").disabled = false;
+    updatePrefTrigger();
+  } catch {
+    setPrefTrigger("Could not load menu", "");
+  }
+}
+
+function setPrefTrigger(label, name) {
+  document.getElementById("pref-trigger-label").textContent = label;
+  document.getElementById("pref-trigger-name").textContent  = name;
+}
+
+function updatePrefTrigger() {
+  if (!selectedPrefItemId) { setPrefTrigger("Tap to choose a meal", ""); return; }
+  const item = menuItems.find(m => m.id === selectedPrefItemId);
+  item
+    ? setPrefTrigger("Currently selected", item.fields["Menu Item Name"] || "—")
+    : setPrefTrigger("Tap to choose a meal", "");
+}
+
+function setOrderTrigger(label, name) {
+  document.getElementById("order-trigger-label").textContent = label;
+  document.getElementById("order-trigger-name").textContent  = name;
+}
+
+function updateOrderTrigger() {
+  if (!selectedOverrideItemId) { setOrderTrigger("Choose a different meal…", ""); return; }
+  const item = menuItems.find(m => m.id === selectedOverrideItemId);
+  setOrderTrigger("Override to", item ? item.fields["Menu Item Name"] || "—" : "—");
+}
+
+// ── Today's order ─────────────────────────────────────────────────────────────
+async function loadTodayOrder(sId, sessId) {
+  try {
+    const ticket = await apiFetch(`/api/student/${sId}/ticket?session_id=${sessId}`);
+    if (!ticket.meal) return;
+    hasExistingOrder = true;
+    todayOrderItemId = ticket.meal.id;
+
+    const isOptedOut = [...checkedDietIds].some(id => {
+      const r = allRestrictions.find(r => r.id === id);
+      return r && r.name === OPTED_OUT_NAME;
+    });
+    if (isOptedOut) return;
+
+    document.getElementById("order-meal-name").textContent = ticket.meal.name;
+    document.getElementById("order-meal-tags").innerHTML = (ticket.meal.tags || []).map(tid => {
+      const name = allRestrictions.find(r => r.id === tid)?.name;
+      return name ? `<span class="tag">${escapeHtml(TAG_SHORT[name] || name)}</span>` : "";
+    }).join("");
+    document.getElementById("order-card").classList.remove("hidden");
+  } catch {
+    // No order today — keep card hidden.
+  }
+}
+
+// ── Meal picker ───────────────────────────────────────────────────────────────
+function openMealPicker(target) {
+  mealPickerTarget = target;
+  document.getElementById("meals-sub").textContent = target === "override"
+    ? "Select a different meal for today's session."
+    : "Select next week's meal preference.";
+  showView("meals");
+  renderMealList();
+}
+
+function closeMealPicker() { showView("edit"); }
+
+function renderMealList() {
+  const ul      = document.getElementById("meals-list");
+  const loading = document.getElementById("meals-loading");
+  const empty   = document.getElementById("meals-empty");
+
+  if (!menuItems.length || !dietMaps) {
+    loading.classList.remove("hidden");
+    ul.classList.add("hidden");
+    empty.classList.add("hidden");
+    // Retry once data arrives.
+    Promise.all([_restrictionsP, _negKwP].filter(Boolean)).then(
+      () => { if (document.getElementById("view-meals").classList.contains("hidden")) return; renderMealList(); }
+    );
+    return;
+  }
+  loading.classList.add("hidden");
+
+  const activeDietIds = [...checkedDietIds].filter(id => {
+    const r = allRestrictions.find(r => r.id === id);
+    return r && r.name !== OPTED_OUT_NAME;
+  });
+
+  const currentId = mealPickerTarget === "override"
+    ? (selectedOverrideItemId || todayOrderItemId)
+    : selectedPrefItemId;
+
+  const displayItems = menuItems.filter(i => !i.fields["Is Variant"]);
+  const compat = [], maybe = [], incompat = [];
+
+  for (const item of displayItems) {
+    const r       = checkCompatibility(item, activeDietIds, dietMaps);
+    const variants = variantMap[item.id] || [];
+    const eff     = bestVariantSeverity(r.severity, variants, activeDietIds, dietMaps);
+    if      (eff === "ok")    compat.push({ item, result: r });
+    else if (eff === "maybe") maybe.push({ item, result: r });
+    else                      incompat.push({ item, result: r });
+  }
+
+  function renderRow({ item, result }) {
+    const name     = item.fields["Menu Item Name"] || "—";
+    const tagIds   = item.fields["Dietary Tags"] || [];
+    const tagsHtml = tagIds.map(tid => {
+      const tName = dietMaps.idToName[tid];
+      return tName ? `<span class="tag">${escapeHtml(TAG_SHORT[tName] || tName)}</span>` : "";
+    }).join("");
+
+    const variants    = variantMap[item.id] || [];
+    const hasVariants = variants.length > 0;
+    const selected    = item.id === currentId || variants.some(v => v.id === currentId);
+    const blocked     = (hasVariants ? [item, ...variants] : [item]).every(
+      o => checkCompatibility(o, activeDietIds, dietMaps).severity === "no"
+    );
+    const sev = result.severity;
+    const eff = hasVariants ? bestVariantSeverity(sev, variants, activeDietIds, dietMaps) : sev;
+
+    const reasonText = (blocked || (!hasVariants && result.issues.length))
+      ? result.issues.map(i => i.label).join(" · ") : "";
+    const reasonHtml = reasonText
+      ? `<div class="meal-reason meal-reason-${blocked ? "blocked" : sev}">${escapeHtml(reasonText)}</div>` : "";
+    const variantNote = hasVariants && !blocked
+      ? (sev !== "ok" && eff !== "no" ? "Dietary variant available" : "Options available") : "";
+    const variantNoteHtml = variantNote
+      ? `<div class="meal-variant-note">${variantNote}</div>` : "";
+
+    // Managers can pick anything, but get a confirmation modal for conflicts.
+    const onclick = hasVariants
+      ? `mgr.openVariantPicker(${JSON.stringify(item.id)})`
+      : `mgr.selectMeal(${JSON.stringify(item.id)}, ${JSON.stringify(sev)})`;
+
+    const klass = ["meal-item",
+      selected  ? "selected"     : "",
+      blocked   ? "blocked"      : "",
+      eff === "no"    ? "incompatible" : "",
+      eff === "maybe" ? "maybe"        : "",
+    ].filter(Boolean).join(" ");
+
+    return `<li class="${klass}" onclick="${onclick}">
+      <div class="meal-radio"></div>
+      <div class="meal-content">
+        <div class="meal-name">${escapeHtml(name)}</div>
+        ${reasonHtml}${variantNoteHtml}
+        <div class="meal-tags">${tagsHtml}</div>
+      </div>
+    </li>`;
+  }
+
+  let html = compat.map(renderRow).join("");
+  if (maybe.length)   html += `<li class="meal-divider">Possibly compatible</li>` + maybe.map(renderRow).join("");
+  if (incompat.length) html += `<li class="meal-divider">Doesn't match student's requirements</li>` + incompat.map(renderRow).join("");
+
+  if (!html) {
+    ul.classList.add("hidden");
+    empty.classList.remove("hidden");
+    empty.textContent = "No meals found for this caterer.";
+    return;
+  }
+  ul.innerHTML = html;
+  ul.classList.remove("hidden");
+  empty.classList.add("hidden");
+}
+
+function selectMeal(itemId, severity) {
+  if (severity === "no") {
+    openConfirm({
+      title: "Override dietary restriction?",
+      body: "This meal doesn't match the student's requirements. Assign it anyway?",
+      confirmLabel: "Assign anyway",
+      onConfirm: () => { closeConfirm(); commitMealSelection(itemId); },
+    });
+    return;
+  }
+  if (severity === "maybe") {
+    openConfirm({
+      title: "Possible conflict",
+      body: "This meal may not match the student's requirements. Assign it anyway?",
+      confirmLabel: "Assign anyway",
+      onConfirm: () => { closeConfirm(); commitMealSelection(itemId); },
+    });
+    return;
+  }
+  commitMealSelection(itemId);
+}
+
+function commitMealSelection(itemId) {
+  if (mealPickerTarget === "preference") {
+    selectedPrefItemId = itemId;
+    updatePrefTrigger();
+  } else {
+    selectedOverrideItemId = itemId;
+    updateOrderTrigger();
+  }
+  updateSaveBtn();
+  showView("edit");
+}
+
+// ── Variant picker ────────────────────────────────────────────────────────────
+function openVariantPicker(parentId) {
+  const parent   = menuItems.find(i => i.id === parentId);
+  if (!parent) return;
+  const variants    = variantMap[parentId] || [];
+  const allOptions  = [parent, ...variants];
+  const activeDietIds = [...checkedDietIds].filter(id => {
+    const r = allRestrictions.find(r => r.id === id);
+    return r && r.name !== OPTED_OUT_NAME;
+  });
+  const currentId = mealPickerTarget === "override"
+    ? (selectedOverrideItemId || todayOrderItemId) : selectedPrefItemId;
+
+  let selectedId = allOptions.some(o => o.id === currentId) ? currentId : parentId;
+  if (dietMaps && activeDietIds.length && !allOptions.some(o => o.id === currentId)) {
+    const compatible = allOptions.filter(
+      o => checkCompatibility(o, activeDietIds, dietMaps).severity === "ok"
+    );
+    if (compatible.length === 1) selectedId = compatible[0].id;
+  }
+  variantModalSelected = selectedId;
+
+  document.getElementById("variant-options").innerHTML = allOptions.map(item => {
+    const { severity, issues } = dietMaps
+      ? checkCompatibility(item, activeDietIds, dietMaps)
+      : { severity: "ok", issues: [] };
+    const name     = item.fields["Menu Item Name"] || "—";
+    const tagIds   = item.fields["Dietary Tags"] || [];
+    const tagsHtml = tagIds.map(tid => {
+      const tName = dietMaps?.idToName[tid];
+      return tName ? `<span class="tag">${escapeHtml(TAG_SHORT[tName] || tName)}</span>` : "";
+    }).join("");
+    const reasonHtml = issues.length
+      ? `<div class="meal-reason meal-reason-${severity}">${escapeHtml(issues.map(i => i.label).join(" · "))}</div>` : "";
+    const isSelected = item.id === selectedId;
+    const klass = ["variant-option",
+      isSelected        ? "selected"     : "",
+      severity === "no" ? "incompatible" : severity === "maybe" ? "maybe" : "",
+    ].filter(Boolean).join(" ");
+    return `<div class="${klass}" data-item-id="${item.id}"
+                 onclick="mgr.selectVariantOption(${JSON.stringify(item.id)})">
+      <div class="meal-radio"></div>
+      <div class="meal-content">
+        <div class="meal-name">${escapeHtml(name)}</div>
+        ${reasonHtml}
+        <div class="meal-tags">${tagsHtml}</div>
+      </div>
+    </div>`;
+  }).join("");
+
+  document.getElementById("variant-modal").classList.remove("hidden");
+}
+
+function selectVariantOption(itemId) {
+  variantModalSelected = itemId;
+  document.querySelectorAll(".variant-option").forEach(el => {
+    el.classList.toggle("selected", el.dataset.itemId === itemId);
+  });
+}
+
+function closeVariantModal() {
+  document.getElementById("variant-modal").classList.add("hidden");
+  variantModalSelected = null;
+}
+
+function confirmVariantModal() {
+  const id = variantModalSelected;
+  closeVariantModal();
+  if (!id) return;
+  const item = menuItems.find(i => i.id === id);
+  const activeDietIds = [...checkedDietIds].filter(idv => {
+    const r = allRestrictions.find(r => r.id === idv);
+    return r && r.name !== OPTED_OUT_NAME;
+  });
+  if (item && dietMaps && activeDietIds.length) {
+    const { severity } = checkCompatibility(item, activeDietIds, dietMaps);
+    if (severity !== "ok") { selectMeal(id, severity); return; }
+  }
+  commitMealSelection(id);
+}
+
+// ── Confirm modal ─────────────────────────────────────────────────────────────
+function openConfirm({ title, body, confirmLabel, onConfirm }) {
+  document.getElementById("confirm-title").textContent = title;
+  document.getElementById("confirm-body").textContent  = body;
+  document.getElementById("confirm-yes").textContent   = confirmLabel || "OK";
+  confirmCallback = onConfirm;
+  document.getElementById("confirm-modal").classList.remove("hidden");
+}
+
+function closeConfirm() {
+  document.getElementById("confirm-modal").classList.add("hidden");
+  confirmCallback = null;
+}
+
+// ── Dirty check & save button ─────────────────────────────────────────────────
+function isDirty() {
+  if (!eqSets(initialDietIds, checkedDietIds)) return true;
+  if (IS_MANAGER) {
+    if (selectedPrefItemId !== initialPrefItemId) return true;
+    if (selectedOverrideItemId && selectedOverrideItemId !== todayOrderItemId) return true;
+  }
+  return false;
+}
+
+function updateSaveBtn() {
+  document.getElementById("save-btn").disabled = !isDirty();
+}
+
+// ── Save ──────────────────────────────────────────────────────────────────────
+async function save() {
+  const btn = document.getElementById("save-btn");
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+
+  const ops = [];
+
+  if (!eqSets(initialDietIds, checkedDietIds)) {
+    ops.push(apiFetch(`/api/student/${studentId}/dietary-requirements`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ restriction_ids: [...checkedDietIds] }),
+    }));
+  }
+
+  if (IS_MANAGER && selectedPrefItemId !== initialPrefItemId && selectedPrefItemId) {
+    ops.push(apiFetch(`/api/student/${studentId}/meal-preference`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ meal_item_id: selectedPrefItemId }),
+    }));
+  }
+
+  if (IS_MANAGER && selectedOverrideItemId && selectedOverrideItemId !== todayOrderItemId) {
+    ops.push(apiFetch(`/api/student/${studentId}/order-override`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id:       selectedSession.id,
+        new_meal_item_id: selectedOverrideItemId,
+      }),
+    }));
+  }
+
+  try {
+    await Promise.all(ops);
+    initialDietIds     = new Set(checkedDietIds);
+    initialPrefItemId  = selectedPrefItemId;
+    if (selectedOverrideItemId) {
+      todayOrderItemId       = selectedOverrideItemId;
+      selectedOverrideItemId = null;
+    }
+    document.getElementById("done-msg").textContent = "Changes saved successfully.";
+    document.getElementById("edit-another-btn").classList.toggle("hidden", !IS_MANAGER);
+    showView("done");
+  } catch (e) {
+    showError(`Save failed: ${e.message}`);
+    btn.disabled = false;
+    btn.textContent = "Save changes";
+  }
+}
+
+function editAnother() {
+  studentId              = null;
+  selectedPrefItemId     = null;
+  selectedOverrideItemId = null;
+  hasExistingOrder       = false;
+  todayOrderItemId       = null;
+  document.getElementById("student-search").value = "";
+  filteredStudents = studentList;
+  renderStudentList();
+  showView("student-picker");
+}
+
+// ── Public interface (called from onclick attributes) ─────────────────────────
+const mgr = {
+  selectSession, backToSessions, filterStudents, selectStudent, changeStudent,
+  openMealPicker, closeMealPicker, selectMeal, commitMealSelection,
+  openVariantPicker, selectVariantOption, closeVariantModal, confirmVariantModal,
+  toggleDiet, save, editAnother,
+  confirmNo()  { closeConfirm(); },
+  confirmYes() { const cb = confirmCallback; closeConfirm(); if (cb) cb(); },
+};
+
+init();

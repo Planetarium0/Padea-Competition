@@ -526,19 +526,31 @@ def format_proposal_email(
     num_raters:     int,
     effective_week: date,
     proposal_url:   str | None,
+    forced:         bool = False,
 ) -> str:
     action_line = (
         f"[Review, approve, or reject this proposal]({proposal_url})"
         if proposal_url else
         "Open **Caterer Switch Proposals** in Airtable to approve or reject."
     )
+    if forced:
+        trigger_block = (
+            f"This proposal was manually created by a coordinator, "
+            f"bypassing the automated rating check."
+        )
+    else:
+        trigger_block = (
+            f"The automated rating check has flagged **{outgoing_name}** for "
+            f"session **{session_name}**.\n\n"
+            f"**Rolling average:** {avg_rating:.1f}/5 "
+            f"over the last {num_sessions} sessions\n"
+            f"**Sampled from:** {num_raters} students"
+        )
     return (
         f"Hi,\n\n"
-        f"The automated rating check has flagged **{outgoing_name}** for "
-        f"session **{session_name}**.\n\n"
-        f"**Rolling average:** {avg_rating:.1f}/5 "
-        f"over the last {num_sessions} sessions\n"
-        f"**Sampled from:** {num_raters} students\n\n"
+        f"{trigger_block}\n\n"
+        f"**Session:** {session_name}\n"
+        f"**Outgoing caterer:** {outgoing_name}\n"
         f"**Proposed replacement:** {incoming_name}\n\n"
         f"**Effective week:** {effective_week.strftime('%-d %B %Y')}\n\n"
         f"{action_line}\n\n"
@@ -608,6 +620,7 @@ def create_proposal_and_email(
     recipient_email:     str | None,
     dry_run:             bool,
     immediate:           bool,
+    forced:              bool = False,
 ) -> None:
     today = date.today()
     proposal_id = (
@@ -620,13 +633,14 @@ def create_proposal_and_email(
         "Session":          [session_id],
         "Outgoing Caterer": [outgoing_caterer_id],
         "Incoming Caterer": [incoming_caterer_id],
-        "Avg Rating":       round(avg_rating, 2),
-        "Sessions Sampled": num_sessions,
-        "Unique Raters":    num_raters,
         "Proposed On":      today.isoformat(),
         "Effective Week":   effective_week.isoformat(),
         "Status":           "Pending",
     }
+    if not forced:
+        proposal_fields["Avg Rating"]       = round(avg_rating, 2)
+        proposal_fields["Sessions Sampled"] = num_sessions
+        proposal_fields["Unique Raters"]    = num_raters
 
     subject = f"[Padea] Caterer switch proposed — {session_name}"
 
@@ -636,7 +650,7 @@ def create_proposal_and_email(
         format_proposal_email(
             session_name, outgoing_name, incoming_name,
             avg_rating, num_sessions, num_raters,
-            effective_week, fake_url,
+            effective_week, fake_url, forced=forced,
         )
         log.info(f"[DRY RUN] Would create proposal: {proposal_id}")
         log.info(f"[DRY RUN] Would queue email to {recipient_email}: {subject}")
@@ -661,7 +675,7 @@ def create_proposal_and_email(
         body = format_proposal_email(
             session_name, outgoing_name, incoming_name,
             avg_rating, num_sessions, num_raters,
-            effective_week, proposal_url,
+            effective_week, proposal_url, forced=forced,
         )
 
         if recipient_email:
@@ -954,6 +968,7 @@ def force_proposal(
         recipient_email=recipient,
         dry_run=dry_run,
         immediate=immediate,
+        forced=True,
     )
 
 

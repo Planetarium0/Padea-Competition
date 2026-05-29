@@ -114,4 +114,5 @@ class MockDatabase:
         self.WeeklyOrders:           MockTable = MockTable()
         self.Orders:                 MockTable = MockTable()
         self.ScheduledEmails:        MockTable = MockTable()
+        self.ManagerSubstitutions:   MockTable = MockTable()
         self.CatererSwitchProposals: MockTable = MockTable()

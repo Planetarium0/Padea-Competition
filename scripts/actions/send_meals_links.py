@@ -43,6 +43,10 @@ def meals_url(origin: str, session_id: str, student_id: str, first: bool = False
     return f"{origin.rstrip('/')}/meals.html?session={session_id}&student={student_id}{suffix}"
 
 
+def manage_url(origin: str, student_id: str) -> str:
+    return f"{origin.rstrip('/')}/manage.html?student={student_id}"
+
+
 # ---------------------------------------------------------------------------
 # Email formatting
 # ---------------------------------------------------------------------------
@@ -54,9 +58,10 @@ class SessionLink:
 
 
 def format_parent_email(
-    parent_name:  str,
-    student_name: str,
-    links:        list[SessionLink],
+    parent_name:   str,
+    student_name:  str,
+    links:         list[SessionLink],
+    diet_url:      str,
     first_session: bool = False,
 ) -> tuple[str, str]:
     greeting = (parent_name.split()[0] if parent_name else None) or "there"
@@ -81,6 +86,9 @@ def format_parent_email(
         "",
         intro,
         "",
+        f"**Dietary requirements:** If {student_name} has any dietary requirements we should know about, "
+        f"please update them here: [{student_name}'s dietary requirements →]({diet_url})",
+        "",
     ]
     for link in links:
         lines.append(f"**{link.label}**")
@@ -93,6 +101,7 @@ def format_parent_email(
 def format_student_email(
     student_name:  str,
     links:         list[SessionLink],
+    diet_url:      str,
     first_session: bool = False,
 ) -> tuple[str, str]:
     greeting = (student_name.split()[0] if student_name else None) or "there"
@@ -110,6 +119,9 @@ def format_student_email(
         f"Hi {greeting},",
         "",
         intro,
+        "",
+        f"**Dietary requirements:** Need to update your dietary requirements? "
+        f"[Update them here →]({diet_url})",
         "",
     ]
     for link in links:
@@ -204,10 +216,11 @@ def send_links(
             skipped += 1
             continue
 
+        diet_link = manage_url(origin, student.id)
         if target == "parents":
-            subject, body = format_parent_email(display_name, student_name, links, first_session=first)
+            subject, body = format_parent_email(display_name, student_name, links, diet_link, first_session=first)
         else:
-            subject, body = format_student_email(student_name, links, first_session=first)
+            subject, body = format_student_email(student_name, links, diet_link, first_session=first)
 
         email_id = f"MEALS-{target[:3].upper()}-{student.id[-8:]}-{int(time.time())}"
 

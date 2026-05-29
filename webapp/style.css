@@ -475,31 +475,16 @@ textarea:focus {
   color: var(--text);
 }
 
-/* Allergy hard-block — overrides .incompatible / .maybe styling above. */
+/* Hard-blocked items (every option definitively incompatible) — same muted
+   treatment as .incompatible, just non-interactive. */
 .meal-item.blocked {
-  background: #FBE9EC;
-  border-color: var(--primary);
-  opacity: 1;
-  cursor: not-allowed;
+  background: #F4F0EE;
+  opacity: 0.75;
+  cursor: default;
 }
 
 .meal-item.blocked .meal-name {
-  color: var(--primary-dark);
-  text-decoration: line-through;
-}
-
-.meal-item.blocked .meal-radio {
-  border-color: var(--primary);
-  background: var(--primary);
-  position: relative;
-}
-
-.meal-item.blocked .meal-radio::after {
-  content: '⊘';
-  color: white;
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1;
+  color: var(--text-muted);
 }
 
 .meal-reason {
@@ -517,8 +502,7 @@ textarea:focus {
 }
 
 .meal-reason-blocked {
-  color: var(--primary-dark);
-  font-weight: 600;
+  color: var(--primary);
 }
 
 .meal-divider {
@@ -780,15 +764,13 @@ textarea:focus {
 .variant-option.incompatible.selected .meal-name { color: var(--text); }
 
 .variant-option.blocked {
-  background: #FBE9EC;
-  border-color: var(--primary);
-  opacity: 1;
-  cursor: not-allowed;
+  background: #F4F0EE;
+  opacity: 0.75;
+  cursor: default;
 }
 
 .variant-option.blocked .meal-name {
-  color: var(--primary-dark);
-  text-decoration: line-through;
+  color: var(--text-muted);
 }
 
 .variant-option .meal-radio { /* inherits base .meal-radio */ }
@@ -883,4 +865,76 @@ textarea:focus {
 
 .btn-primary:active {
   background: var(--primary-dark);
+}
+
+/* ============================================================
+   Manage page — dietary list + order-override card
+   ============================================================ */
+.card-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: -8px 0 14px;
+  line-height: 1.45;
+}
+
+.diet-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.diet-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 2px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.diet-item:last-child {
+  border-bottom: none;
+}
+
+.diet-item--opted-out {
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 2px solid var(--border-strong);
+  border-bottom: none;
+  color: var(--text-muted);
+}
+
+.diet-item input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.diet-name {
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.order-current {
+  background: var(--muted-bg);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+
+.order-current-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.order-meal-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--primary-dark);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
 }

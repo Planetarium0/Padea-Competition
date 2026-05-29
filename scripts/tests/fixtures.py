@@ -55,6 +55,10 @@ STU_NOBEEF_ID  = "stuNoBf1"
 
 # Managers
 MANAGER_A_ID = "mgrAlph1"
+MANAGER_B_ID = "mgrBeta1"
+
+# Manager substitutions
+SUB_MON_ID = "subMon01"
 
 
 # ---------------------------------------------------------------------------
@@ -243,6 +247,25 @@ def manager_alpha() -> Record:
         "Manager Name": "Carol Manager",
         "Mobile":       "0412345678",
         "Email":        "carol@alpha.edu.au",
+    })
+
+
+def manager_beta() -> Record:
+    """Substitute manager used in substitution tests."""
+    return Record(id=MANAGER_B_ID, fields={
+        "Manager Name": "Dave Substitute",
+        "Mobile":       "0499999999",
+        "Email":        "dave@beta.edu.au",
+    })
+
+
+def substitution_monday(date_str: str = "2026-06-02") -> Record:
+    """One-off substitution: Dave covers the Monday session on date_str."""
+    return Record(id=SUB_MON_ID, fields={
+        "Substitution ID": f"Alpha Academy - Monday - {date_str}",
+        "Session":          [SESSION_MON_ID],
+        "Date":             date_str,
+        "Substitute Manager": [MANAGER_B_ID],
     })
 
 

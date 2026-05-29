@@ -47,23 +47,6 @@ DIETARY_HIERARCHY: list[tuple[str, list[str]]] = [
     ("Opted out of Catering", []),
 ]
 
-# Restrictions that are medical allergies — a violation is a health/legal
-# hazard, not a lifestyle preference. The webapp hard-blocks incompatible
-# picks for these, and register_orders.py refuses to honour explicit
-# overrides that violate them.
-#
-# Kept narrow to the most clearly-medical defaults. The operator can flag
-# additional restrictions as allergies directly in Airtable; nothing in the
-# pipeline depends on this set after migration. (Notably: No Fish / No
-# Shellfish are ambiguous because Kosher students also declare No Shellfish
-# religiously, so they stay lifestyle by default.)
-ALLERGY_RESTRICTIONS: set[str] = {
-    "Nut Free",
-    "Gluten Free",
-    "Dairy Free",
-}
-
-
 def all_restriction_names() -> list[str]:
     """Flat list of all restriction names, including those only referenced
     as supersets — so the migration can create every record before linking."""

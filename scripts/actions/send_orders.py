@@ -27,7 +27,9 @@ from support import (
     SchoolFields,
     SessionFields,
     WeeklyOrderFields,
+    load_substitutions,
     log,
+    resolve_manager_id,
 )
 
 
@@ -40,11 +42,12 @@ class SessionContext:
     """Session fields enriched with the school + on-site manager details
     needed by the email template."""
 
-    fields:          SessionFields
-    school_name:     str
-    manager_name:    str | None
-    manager_mobile:  str | None
-    manager_email:   str | None
+    fields:            SessionFields
+    school_name:       str
+    manager_name:      str | None
+    manager_mobile:    str | None
+    manager_email:     str | None
+    manager_is_sub:    bool = False
 
 
 @dataclass(frozen=True)
@@ -157,8 +160,12 @@ def load_order_details(
     ]
     log.info(f"  Found {len(individual_orders)} individual order records")
 
-    # Aggregate: session_id → item_id → count
+    # Load any substitutions covering the order week in one round-trip.
+    substitutions = load_substitutions(db, week_start, friday) if week_start else {}
+
+    # Aggregate: session_id → item_id → count; also capture a date per session.
     session_item_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    session_dates: dict[str, str] = {}
     all_session_ids: set[str] = set()
     all_item_ids: set[str] = set()
 
@@ -170,6 +177,8 @@ def load_order_details(
             session_item_counts[sess_id][item_id] += quantity
             all_session_ids.add(sess_id)
             all_item_ids.add(item_id)
+            if sess_id not in session_dates and order.fields.get("Date"):
+                session_dates[sess_id] = order.fields["Date"]
 
     session_map: dict[str, SessionContext] = {}
     for sid in all_session_ids:
@@ -180,16 +189,17 @@ def load_order_details(
         school_name = "?"
         manager_name: str | None = None
         manager_mobile: str | None = None
+        manager_email: str | None = None
 
         school_links = sf.get("School") or []
         if school_links:
             s_rec: Record[SchoolFields] | None = db.Schools.get(school_links[0])
             if s_rec:
                 school_name = s_rec.fields.get("School Name", "?")
-        manager_email: str | None = None
-        mgr_links = sf.get("On-Site Manager") or []
-        if mgr_links:
-            m_rec: Record[OnSiteManagerFields] | None = db.OnSiteManagers.get(mgr_links[0])
+
+        mgr_id, is_sub = resolve_manager_id(sid, sf, session_dates.get(sid), substitutions)
+        if mgr_id:
+            m_rec: Record[OnSiteManagerFields] | None = db.OnSiteManagers.get(mgr_id)
             if m_rec:
                 manager_name   = m_rec.fields.get("Manager Name")
                 manager_mobile = m_rec.fields.get("Mobile")
@@ -201,6 +211,7 @@ def load_order_details(
             manager_name=manager_name,
             manager_mobile=manager_mobile,
             manager_email=manager_email,
+            manager_is_sub=is_sub,
         )
 
     item_map: dict[str, MenuItemFields] = {}
@@ -267,6 +278,8 @@ def format_email_body(
 
         deliver_by = subtract_minutes(dinner_time)
 
+        manager_is_sub = sess.manager_is_sub
+
         block = [f"## {day} — {school_name}"]
         block.append(f"**Deliver by:** {deliver_by}")
         if building:
@@ -275,7 +288,8 @@ def format_email_body(
             mgr = manager_name
             if manager_mobile:
                 mgr += f" ({manager_mobile})"
-            block.append(f"**On-site manager:** {mgr}")
+            label = "On-site manager (substitute)" if manager_is_sub else "On-site manager"
+            block.append(f"**{label}:** {mgr}")
 
         block.append("")
         session_total = 0

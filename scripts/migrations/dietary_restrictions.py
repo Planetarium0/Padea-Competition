@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from support import Database, DietaryRestrictionFields, log
-from data.dietary_data import ALLERGY_RESTRICTIONS, DIETARY_HIERARCHY, all_restriction_names
+from data.dietary_data import DIETARY_HIERARCHY, all_restriction_names
 
 
 def run(db: Database | None = None) -> None:
@@ -9,12 +9,12 @@ def run(db: Database | None = None) -> None:
     log.info("Migrating Dietary Restrictions → Airtable")
     db.DietaryRestrictions.clear()
 
-    # Pass 1: create every restriction with just its name + Is Allergy flag so
-    # every record exists before we try to link Supersets in pass 2.
+    # Pass 1: create every restriction by name so every record exists before
+    # we try to link Supersets in pass 2.
     names = all_restriction_names()
     log.info(f"Creating {len(names)} Dietary Restriction records...")
     seed_records: list[DietaryRestrictionFields] = [
-        {"Restriction Name": n, "Is Allergy": n in ALLERGY_RESTRICTIONS}
+        {"Restriction Name": n}
         for n in names
     ]
     db.DietaryRestrictions.create(seed_records)

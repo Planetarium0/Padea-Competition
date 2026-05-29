@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#A51C30" />
+    <title>Padea — Student Management</title>
+    <meta name="description" content="Update student dietary requirements and meal preferences." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+    <div id="app">
+
+        <header class="topbar">
+            <div class="brand">Padea</div>
+            <div id="topbar-label" class="session-label"></div>
+        </header>
+
+        <div id="error-banner" class="error-banner hidden">
+            <span id="error-text"></span>
+        </div>
+
+        <main id="main">
+
+            <!-- ============================================================
+                  Session picker — manager mode only
+                  ============================================================ -->
+            <section id="view-session-picker" class="view hidden">
+                <h1 class="view-title">Your sessions</h1>
+                <p class="view-sub">Select a session to manage its students.</p>
+                <div id="session-loading" class="loading-row">
+                    <div class="spinner"></div>
+                    <span>Loading sessions…</span>
+                </div>
+                <ul id="session-list" class="student-list hidden"></ul>
+                <div id="session-empty" class="empty hidden">No sessions found.</div>
+            </section>
+
+            <!-- ============================================================
+                  Student picker — manager mode only
+                  ============================================================ -->
+            <section id="view-student-picker" class="view hidden">
+                <div class="meals-header">
+                    <button class="link-btn" onclick="mgr.backToSessions()">‹ Sessions</button>
+                    <h2 class="meals-title" id="session-picker-title">Students</h2>
+                    <div style="width:80px"></div>
+                </div>
+                <div class="search-wrap">
+                    <input id="student-search" type="search" autocomplete="off"
+                           placeholder="Search by name…"
+                           oninput="mgr.filterStudents(this.value)" />
+                </div>
+                <div id="student-loading" class="loading-row hidden">
+                    <div class="spinner"></div>
+                    <span>Loading students…</span>
+                </div>
+                <ul id="student-list" class="student-list hidden"></ul>
+                <div id="student-empty" class="empty hidden">No matching student.</div>
+            </section>
+
+            <!-- ============================================================
+                  Edit form — both modes
+                  ============================================================ -->
+            <section id="view-edit" class="view hidden">
+
+                <div id="identity-row" class="identity-row hidden">
+                    <div>
+                        <div class="hi-label">Editing</div>
+                        <div id="edit-student-name" class="hi-name">—</div>
+                    </div>
+                    <button class="link-btn" onclick="mgr.changeStudent()">Change</button>
+                </div>
+
+                <!-- Dietary requirements (both modes) -->
+                <div class="card">
+                    <h2 class="card-title">Dietary requirements</h2>
+                    <p class="card-sub">Check all restrictions that apply. Changes take effect on future automated orders.</p>
+                    <div id="diet-loading" class="loading-row">
+                        <div class="spinner"></div>
+                        <span>Loading…</span>
+                    </div>
+                    <div id="diet-list" class="diet-list hidden"></div>
+                </div>
+
+                <!-- Meal preference — manager mode only -->
+                <div id="pref-card" class="card hidden">
+                    <h2 class="card-title">Next week's meal preference</h2>
+                    <p class="card-sub">Override the student's preference for next week's order.</p>
+                    <button id="pref-trigger" class="meal-trigger"
+                            onclick="mgr.openMealPicker('preference')">
+                        <div class="meal-trigger-content">
+                            <div id="pref-trigger-label" class="muted">Loading menu…</div>
+                            <div id="pref-trigger-name" class="meal-trigger-name"></div>
+                        </div>
+                        <span class="chev">›</span>
+                    </button>
+                </div>
+
+                <!-- Today's order override — manager mode, shown only when an order exists today -->
+                <div id="order-card" class="card hidden">
+                    <h2 class="card-title">Today's assigned meal</h2>
+                    <p class="card-sub">Change which meal this student receives at today's session.</p>
+                    <div class="order-current">
+                        <div class="order-current-label">Currently assigned</div>
+                        <div id="order-meal-name" class="order-meal-name">—</div>
+                        <div id="order-meal-tags" class="meal-tags"></div>
+                    </div>
+                    <button id="order-trigger" class="meal-trigger" style="margin-top:12px"
+                            onclick="mgr.openMealPicker('override')">
+                        <div class="meal-trigger-content">
+                            <div id="order-trigger-label" class="muted">Choose a different meal…</div>
+                            <div id="order-trigger-name" class="meal-trigger-name"></div>
+                        </div>
+                        <span class="chev">›</span>
+                    </button>
+                </div>
+
+                <button id="save-btn" class="submit-btn" onclick="mgr.save()" disabled>
+                    Save changes
+                </button>
+
+                <p class="footnote">
+                    Dietary changes apply to future orders. Today's meal override only affects this session's digital ticket.
+                </p>
+
+            </section>
+
+            <!-- ============================================================
+                  Meal picker — manager mode only
+                  ============================================================ -->
+            <section id="view-meals" class="view hidden">
+                <div class="meals-header">
+                    <button class="link-btn" onclick="mgr.closeMealPicker()">‹ Back</button>
+                    <h2 class="meals-title">Choose a meal</h2>
+                    <div style="width:64px"></div>
+                </div>
+                <p id="meals-sub" class="view-sub"></p>
+                <div id="meals-loading" class="loading-row hidden">
+                    <div class="spinner"></div>
+                    <span>Loading menu…</span>
+                </div>
+                <ul id="meals-list" class="meals-list hidden"></ul>
+                <div id="meals-empty" class="empty hidden"></div>
+            </section>
+
+            <!-- ============================================================
+                  Done
+                  ============================================================ -->
+            <section id="view-done" class="view hidden">
+                <div class="done-wrap">
+                    <div class="check-circle">✓</div>
+                    <h1 class="view-title">Saved</h1>
+                    <p id="done-msg" class="view-sub">Changes have been saved.</p>
+                    <button id="edit-another-btn" class="link-btn hidden"
+                            style="margin-top:1.5rem;font-size:1rem"
+                            onclick="mgr.editAnother()">Edit another student</button>
+                </div>
+            </section>
+
+            <!-- ============================================================
+                  Error — bad URL params
+                  ============================================================ -->
+            <section id="view-error" class="view hidden">
+                <div class="done-wrap">
+                    <div class="check-circle" style="background:#888">?</div>
+                    <h1 class="view-title">Invalid link</h1>
+                    <p class="view-sub">This link doesn't appear to be valid. Please use the link from your Padea email.</p>
+                </div>
+            </section>
+
+        </main>
+
+        <div id="toast" class="toast hidden"></div>
+
+        <!-- Confirm modal -->
+        <div id="confirm-modal" class="modal hidden"
+             onclick="if(event.target===this) mgr.confirmNo()">
+            <div class="modal-card">
+                <h3 id="confirm-title" class="modal-title"></h3>
+                <p id="confirm-body" class="modal-body"></p>
+                <div class="modal-actions">
+                    <button id="confirm-no" class="btn-ghost" onclick="mgr.confirmNo()">Cancel</button>
+                    <button id="confirm-yes" class="btn-primary" onclick="mgr.confirmYes()">OK</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Variant picker modal -->
+        <div id="variant-modal" class="modal hidden"
+             onclick="if(event.target===this) mgr.closeVariantModal()">
+            <div class="modal-card">
+                <h3 class="modal-title">Choose your option</h3>
+                <div id="variant-options" class="variant-options"></div>
+                <div class="modal-actions">
+                    <button class="btn-ghost" onclick="mgr.closeVariantModal()">Cancel</button>
+                    <button class="btn-primary" onclick="mgr.confirmVariantModal()">Select</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    <script src="manage.js"></script>
+</body>
+
+</html>

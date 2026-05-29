@@ -33,6 +33,7 @@ from .records import (
     CatererSwitchProposalFields,
     DietaryRestrictionFields,
     ExclusionFields,
+    ManagerSubstitutionFields,
     MenuItemFields,
     OnSiteManagerFields,
     OrderFields,
@@ -273,8 +274,65 @@ class Database:
         return self._table("Scheduled Emails")
 
     @property
+    def ManagerSubstitutions(self) -> Table[ManagerSubstitutionFields]:
+        return self._table("Manager Substitutions")
+
+    @property
     def CatererSwitchProposals(self) -> Table[CatererSwitchProposalFields]:
         return self._table("Caterer Switch Proposals")
 
 
-__all__ = ["Database", "Record", "Table"]
+# ---------------------------------------------------------------------------
+# Manager resolution helpers
+# ---------------------------------------------------------------------------
+
+def load_substitutions(
+    db: "Database",
+    date_from: str,
+    date_to: str,
+) -> dict[tuple[str, str], str]:
+    """Return a (session_record_id, date) → substitute_manager_record_id mapping.
+
+    Queries Manager Substitutions for the given inclusive date range so callers
+    can resolve effective managers for an entire week in one round-trip.
+    """
+    subs = db.ManagerSubstitutions.all(
+        formula=f"AND({{Date}} >= '{date_from}', {{Date}} <= '{date_to}')"
+    )
+    result: dict[tuple[str, str], str] = {}
+    for sub in subs:
+        sess_links = sub.fields.get("Session") or []
+        date       = sub.fields.get("Date")
+        mgr_id     = (sub.fields.get("Substitute Manager") or [None])[0]
+        if sess_links and date and mgr_id:
+            result[(sess_links[0], date)] = mgr_id
+    return result
+
+
+def resolve_manager_id(
+    session_id:    str,
+    session_fields: SessionFields,
+    date_str:      str | None,
+    substitutions: dict[tuple[str, str], str],
+) -> tuple[str | None, bool]:
+    """Return the effective on-site manager record ID and whether it is a substitute.
+
+    Checks *substitutions* (keyed by (session_id, date)) first.  Falls back to
+    the session's permanent On-Site Manager link.  Returns (None, False) when
+    no manager is set at all.
+    """
+    if date_str:
+        sub_id = substitutions.get((session_id, date_str))
+        if sub_id:
+            return sub_id, True
+    mgr_links = session_fields.get("On-Site Manager") or []
+    return (mgr_links[0] if mgr_links else None), False
+
+
+__all__ = [
+    "Database",
+    "Record",
+    "Table",
+    "load_substitutions",
+    "resolve_manager_id",
+]
