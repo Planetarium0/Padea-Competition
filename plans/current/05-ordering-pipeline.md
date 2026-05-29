@@ -11,30 +11,36 @@ Run target: **Wednesday 8 PM**, for the *following* Mon–Fri week.
 
 - `Sessions` for next week — matched by `Day` field (sessions recur weekly).
 - `Students` linked to each Session — minus absent / excluded / opted-out.
-- `Caterers` — for min-qty constraints, pricing, delivery fee structure.
+- `Caterers` — for min-qty constraints, pricing, delivery fee structure,
+  and `Dietary Legend Tags`.
 - `Menu Items` — by caterer.
 - `Absences`, `Exclusions` — for filtering.
-- `Caterer Feedback` — for the average-rating side effect (loaded but not
-  currently used by the assignment logic).
+- `Caterer Feedback` — loaded but currently unused inside
+  `register_orders.py`. The rating loop lives in `evaluate_caterers.py`.
 
 ### Algorithm
 
 ```
-1. Compute next week's Mon–Fri dates from today.
-2. Clear any Orders + Weekly Orders dated in that range (idempotent).
-3. Pre-scan to count eligible students and explicit preferences per caterer.
+1. Flip any pending caterer switches: for every Session with
+   Incoming Caterer set, Caterer ← Incoming Caterer, then clear Incoming
+   Caterer. Mark the matching Approved Caterer Switch Proposal as Executed.
+2. Compute next week's Mon–Fri dates from today.
+3. Clear any Orders + Weekly Orders dated in that range (idempotent).
+4. Pre-scan to count eligible students and explicit preferences per caterer.
    - Pick fallback mode for each caterer:
        explicit_count >= 10  →  POPULARITY mode
        explicit_count <  10  →  VARIETY    mode (with item-cap)
-4. For each Session next week:
+5. For each Session next week:
      For each enrolled student:
        skip if absent / excluded / opted out
        if Meal Preference is set AND on this caterer's menu:
-         use it (mark is_explicit=True) — honour even if it conflicts with diet
+         if it's *definitely* incompatible → refuse, fallback (warn)
+         else                                 → honour (mark is_explicit=True)
        else:
          fallback assign by mode
-5. Enforce min-qty per caterer (proportional swap, see below).
-6. Write Weekly Orders (one per caterer) and aggregated Orders rows.
+6. Enforce min-qty per caterer (proportional dissolve, see below).
+7. Group assignments by (session, item); write one Weekly Order per
+   caterer and one Order row per (session, item) with the student list.
 ```
 
 ### Two fallback modes
@@ -73,35 +79,34 @@ After all assignments, the script:
 
 ### Per-meal dietary checks during fallback
 
-`is_item_compatible` (in `register_orders.py`) checks:
+`is_item_compatible` (in `support/compatibility.py`, shared with the webapp):
 
 - **Opted out**: never compatible.
-- **Positive tag** (Gluten Free, Dairy Free, Nut Free, Vegetarian, Halal):
-  item must have the exact tag.
-- **Negative keyword** (No Beef, No Pork, …): item *name* must not contain
-  any of a bunch of substrings (e.g. "No Beef" excludes anything with
-  "beef" or "bulgogi" in the name).
+- **Subset closure**: an item satisfies a constraint if any of its
+  `Dietary Tags` is in the constraint's subset closure (e.g. Vegan
+  satisfies Vegetarian, No Red Meat, No Beef, …).
+- **Dietary legend hard block**: if the caterer's `Dietary Legend Tags`
+  includes a transitive superset of the constraint, the item *must* carry
+  a satisfying tag for that superset — otherwise it's a definite "no".
+- **Negative keyword fallback**: item *name* must not contain any of the
+  registered substrings for the constraint (e.g. "No Beef" excludes
+  anything with "beef" or "bulgogi" in the name).
 
-> Note: this compatibility check uses a static `POSITIVE_DIETARY_TAGS`
-> dict and does **not** consult the dietary hierarchy. The webapp does;
-> these two compatibility implementations are out of sync. See problems.
+> Webapp and order generator now share `support/compatibility.py` (the
+> Python side) and `data/dietary_keywords.json` (the keyword fallback).
+> They also share the live `Dietary Restrictions` table for the closure
+> calculation — both sides agree by construction.
 
 ### Explicit preference override
 
 If a student's `Meal Preference` is set and the item is on the session's
-caterer's menu, the script uses it — even if the item conflicts with a
-**lifestyle** dietary restriction (Vegetarian, Halal, …). A warning is
-logged; the student's choice is treated as an informed override.
+caterer's menu, the script consults `is_item_compatible`:
 
-**Allergies are not overridable.** If the explicit preference violates a
-restriction flagged `Is Allergy = True` (Nut Free, Gluten Free, Dairy
-Free by default), the script:
-
-1. Refuses to honour the preference.
-2. Logs a severe warning naming the offending allergy.
-3. Falls through to the dietary-safe fallback as if no preference was set.
-
-See `06-dietary-system.md → Medical allergies — hard block`.
+- **Compatible** (including "maybe") → use it; the student's own judgement
+  is trusted.
+- **Definitely incompatible** (closure missed, legend missed, or keyword
+  match) → refuse, log a warning naming the offending restrictions, and
+  fall through to the dietary-safe fallback as if no preference was set.
 
 Note: explicit preferences receive no special protection during min-qty
 enforcement. If the preferred item falls below the per-item minimum, the
@@ -110,16 +115,18 @@ the swap target is dietary compatibility.
 
 ### Idempotency
 
-`clear_existing_orders` deletes all Orders and Weekly Orders whose Date /
-Week Start falls in next week's window. Re-runs are safe.
+`clear_existing_orders` deletes all Orders **and** all Weekly Orders whose
+Date / Week Start falls in next week's window. There is no `Status` field
+on Weekly Orders — re-runs always wipe and rebuild.
 
 ### Outputs
 
 - One `Weekly Orders` row per caterer per week.
-- One `Orders` row per **student** per session — the per-student
-  granularity powers the webapp's digital-ticket lookup. `Quantity` is
-  always `1`; callers that want per-item totals (e.g. `send_orders.py`,
-  `order_constraints.py`) sum `Quantity` across rows.
+- One `Orders` row per **(Session, Menu Item)** pair, with all students
+  assigned that meal linked in the `Student` field. `Quantity =
+  len(Student)`. `send_orders.py` sums `Quantity` to get per-item totals;
+  the webapp's digital-ticket lookup uses `FIND` in `ARRAYJOIN({Student})`
+  to find the row belonging to a given student.
 
 ## `send_orders.py` — format and queue caterer emails
 
@@ -129,18 +136,24 @@ Run target: **Thursday 3 PM**, the day after `register_orders.py`.
 
 1. Reads every `Weekly Orders` row with `Week Start >= today`.
 2. For each: fetches the caterer, the linked Sessions (with school +
-   on-site manager details), and aggregates the Orders rows.
+   on-site manager details, applying `Manager Substitutions` for the
+   exact date), and aggregates the Orders rows.
 3. Formats a Markdown email body, one section per delivery (sorted by
    Session ID alphabetically — which roughly orders Mon→Fri because
    Session IDs start with school names).
-4. Writes a record to `Scheduled Emails` with `Status='Queued'`.
+4. Writes a record to `Scheduled Emails` with `Status='Queued'` and
+   `Send Date=None`.
+
+> There is currently no idempotency guard: re-running queues another
+> copy of every email for every Weekly Order in the date window.
 
 ### What gets *actually* sent
 
 The Python script **does not call any SMTP/HTTP email API**. Send is
 deferred to an **Airtable automation** that watches the `Scheduled
 Emails` table for `Status='Queued'` records, sends the actual mail
-via Airtable's email integration, and updates the row's status.
+via Airtable's email integration, and updates the row's status + Send
+Date.
 
 This split keeps email credentials out of the codebase.
 
@@ -158,6 +171,7 @@ Here is the meal order for **<Caterer>** for the week of **<date>**:
 **Deliver by:** <Dinner Time minus 10 min>
 **Building:** <Building>
 **On-site manager:** <Name> (<Mobile>)
+   ↑ labelled "(substitute)" when Manager Substitutions matched
 
 - <Item A> ×4
 - <Item B> ×3
@@ -175,15 +189,20 @@ Thanks,
 Padea
 ```
 
-### CC behaviour
+### Recipients
 
-If `Caterer.Chef Wants CC` is true, the chef's email is added to the
-record's `CC` field. Otherwise no CC.
+- **To**: `Caterer.Contact Email`.
+- **CC**: starts empty, then adds `Caterer.Chef Email` if `Chef Wants CC`
+  is true (unless it equals the contact email), then adds every on-site
+  manager email that appears across the order's sessions, de-duplicated.
+  This is wider than just "the chef" — it copies every manager whose
+  session is in the order.
 
 ### Send Date
 
-Set to `Week Start` (Monday of the target week) — flagged as a TODO in
-the source. Should probably be earlier (e.g. Thursday of the prior week).
+Set to `None` at queue time. The Airtable automation fills it in when
+the message actually goes out, so the field doubles as a "did this send"
+audit trail.
 
 ## Constraint verification
 
@@ -201,4 +220,6 @@ Checks two invariants:
    `Quantity` across a session equals enrolled minus absent minus
    excluded minus opted-out.
 
-Returns non-zero on any failure.
+Returns non-zero on any failure. It imports `OrderingData`, `OrderingIndex`,
+`_find_min_qty`, `get_next_week_dates`, and `is_student_excluded` straight
+from `register_orders.py`, so the two halves stay in lock-step.

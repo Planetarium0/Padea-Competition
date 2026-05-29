@@ -1,8 +1,8 @@
 # 19 — Missing `__init__.py` in script subdirectories
 
 **Severity:** Low (works today via namespace packages; fragile).
-**Directories:** `data/`, `scripts/migrations/`, `scripts/actions/`,
-`scripts/tests/`. (Only `scripts/support/` has one.)
+**Directories:** `scripts/migrations/`, `scripts/actions/`,
+`scripts/tests/`. (`scripts/support/` and `data/` have one.)
 
 Imports like `from data.dietary_data import DIETARY_HIERARCHY`
 (`scripts/migrations/dietary_restrictions.py`) work because Python 3.3+

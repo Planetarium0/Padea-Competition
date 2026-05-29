@@ -1,7 +1,7 @@
 # Action Script Tests
 
-Unit and integration tests for the four action scripts. Tests run
-entirely in memory — no Airtable connection required.
+Unit and integration tests for the action scripts. Tests run entirely in
+memory — no Airtable connection required.
 
 ## Running tests
 
@@ -14,6 +14,9 @@ entirely in memory — no Airtable connection required.
 ./run test test_send_orders
 ./run test test_evaluate_caterers
 ./run test test_execute_caterer_switch
+./run test test_api
+./run test test_manage_api
+./run test test_substitutions
 ```
 
 Or directly with Python from the project root:
@@ -26,50 +29,60 @@ PYTHONPATH=$PWD:$PWD/scripts python scripts/tests/run_all.py
 
 ```
 scripts/tests/
-  mock_db.py                 — MockTable / MockDatabase (in-memory Airtable)
-  fixtures.py                — Record factory helpers and stable ID constants
-  test_register_orders.py    — 30 tests
-  test_send_orders.py        — 12 tests
-  test_evaluate_caterers.py  — 24 tests
-  test_execute_caterer_switch.py — 9 tests
-  run_all.py                 — test runner (discovers all four modules)
-  order_constraints.py       — post-migration integration check (needs live DB)
+  mock_db.py                       — MockTable / MockDatabase (in-memory Airtable)
+  fixtures.py                      — Record factory helpers and stable ID constants
+  test_register_orders.py          — register_orders.py pipeline
+  test_send_orders.py              — send_orders.py formatting + queueing
+  test_evaluate_caterers.py        — rolling stats, candidate scoring, dedup
+  test_execute_caterer_switch.py   — switch execution + dry-run safety
+  test_api.py                      — webapp API endpoints (meals form)
+  test_manage_api.py               — manage-page endpoints + order overrides
+  test_substitutions.py            — Manager Substitutions resolution
+  run_all.py                       — test runner (discovers all modules)
+  order_constraints.py             — post-migration integration check (needs live DB)
 ```
 
 ## What is tested
 
 ### `register_orders.py`
-| Test class | Scenarios |
-|---|---|
-| `TestIsStudentExcluded` | No exclusions; all year levels; matching year; wrong year; wrong date |
-| `TestAssignFallbackMeal` | No restrictions; vegetarian blocked from meat items; no compatible meal returns `None`; popularity weighting |
-| `TestAssignVarietyMeal` | Picks least-ordered item; `max_items` cap prevents new items; dietary exception overrides cap |
-| `TestComputeMaxVariety` | Enough students for 4-item constraint; fallback when insufficient; divide-by-3 fallback; higher `n` preferred |
-| `TestEnforceMinQty` | No violations; below-threshold non-explicit swapped; explicit preference never swapped |
-| `TestFlipIncomingCaterers` | Session with pending switch gets flipped; dry-run makes no writes; no pending switches |
-| `TestRegisterOrdersPipeline` | 2 students → 2 meals; opted-out skipped; absent skipped; explicit preference respected; vegetarian never gets meat; dry-run writes nothing |
+Covers `is_student_excluded`, fallback assignment (popularity + variety),
+`compute_max_variety`, `enforce_min_qty`, the caterer-switch flip, and
+the end-to-end pipeline including absences, exclusions, opt-outs,
+explicit preferences, and dry-run safety.
 
 ### `send_orders.py`
-| Test class | Scenarios |
-|---|---|
-| `TestSubtractMinutes` | 12h format; 24h format; compact format; crossing the hour; invalid string; `None`; custom offset |
-| `TestFormatEmailBody` | Per-trip fee; per-school-per-trip (2 deliveries × fee); manager contact included; building included; deliver-by 10 min before dinner |
-| `TestScheduleEmail` | Weekly order link + Queued status; switch proposal link + Send Immediately + CC |
+Covers the time helpers (`subtract_minutes`), email-body formatting per
+fee structure / building / manager, and `schedule_email` for both
+order emails and switch-proposal emails.
 
 ### `evaluate_caterers.py`
-| Test class | Scenarios |
-|---|---|
-| `TestGetRollingStats` | Below `MIN_SESSIONS` → `None`; enough data returns correct average; rolling window excludes oldest sessions; unique student counts |
-| `TestCatererCoversAllStudents` | All covered; vegan blocked by meat-only menu; opted-out skipped; no menu items; vegan tag satisfies vegetarian |
-| `TestScoreCandidate` | Blended school+overall score; overall-only when no school history; defaults to 3.0 with no history |
-| `TestHasActiveProposal` | Pending/Approved/Executed block; Rejected does not; different school does not |
-| `TestWasRejectedThisTerm` | Rejected after term start; rejected on start day; rejected before term start (not suppressed); Pending not treated as rejected; different caterer not matched |
-| `TestGetTermStart` | During T1; exactly on start; during T2; before all terms |
+Covers `get_rolling_stats` (window size, unique counts),
+`caterer_covers_all_students` (dietary coverage hard filter),
+`score_candidate` (school + overall blend), and the term/proposal
+dedup helpers (`has_active_proposal`, `was_rejected_this_term`,
+`get_term_start`).
 
 ### `execute_caterer_switch.py`
-| Test class | Scenarios |
-|---|---|
-| `TestExecuteCatererSwitch` | Sets Incoming Caterer on all school sessions; updates Serves Schools; updates Able to Serve; clears student Meal Preference; marks proposal Executed; non-Approved → `SystemExit(1)`; missing proposal → `SystemExit(1)`; dry-run writes nothing; sessions at other schools untouched |
+Covers proposal status gating (only `Approved` / `Pending` w/ `--approve`),
+`Sessions.Incoming Caterer` being set, `Students.Meal Preference` being
+cleared, the proposal being marked `Approved` (the order run then promotes
+it to `Executed`), and dry-run safety.
+
+### `test_api.py`
+Endpoint behaviour for the meals form: session/student lookups,
+dietary-restriction fetch, feedback upsert (PATCH vs POST), meal-preference
+PATCH, mark-submitted, the picker's `Last Submitted` filter, the digital
+ticket endpoint, and cache busting.
+
+### `test_manage_api.py`
+Endpoints used by `manage.html`: `/api/manager/<id>/sessions`,
+`/api/session/<id>/students-all`, the dietary-requirements PATCH, and the
+order-override flow (current row update vs delete vs new `OVR-` row).
+
+### `test_substitutions.py`
+`load_substitutions` and `resolve_manager_id` — including week-window
+range queries, substitution-vs-permanent precedence, and the
+`manager_is_sub` flag that surfaces in the order email.
 
 ## Test infrastructure
 
@@ -79,19 +92,21 @@ scripts/tests/
 - `batch_update_calls: list[list[dict]]` — each `.batch_update()` call
 - `deleted_ids: list[str]` — IDs passed to `.delete()` / `.batch_delete()`
 
-**`MockDatabase`** — instantiates a fresh `MockTable` for each of the 14 Airtable tables.
+**`MockDatabase`** — instantiates a fresh `MockTable` for each of the 14
+Airtable tables in `data/schema.py`.
 
 **`fixtures.py`** — canonical test IDs and factory functions for Records.
 All dietary, caterer, menu, session, and student records are available as
 `fixtures.dietary_records()`, `fixtures.caterer_a()`, etc. Stable string IDs
-(e.g. `CATERER_A_ID = "cAlpha001"`) are re-exported so test assertions stay readable.
+(e.g. `CATERER_A_ID = "cAlpha001"`) are re-exported so test assertions stay
+readable.
 
 ## Adding tests
 
 1. Add a new `test_*` method to an existing class, or a new `class Test*`
    in the relevant module.
-2. Use `fixtures.py` factories for Record construction; add new fixtures there
-   if needed.
+2. Use `fixtures.py` factories for Record construction; add new fixtures
+   there if needed.
 3. Use `MockDatabase` for anything that calls Airtable; use
    `_make_index()` / `types.SimpleNamespace` for pure-function tests that
    only need a partial index.

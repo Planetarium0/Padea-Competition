@@ -8,7 +8,7 @@ self-contained.
 |---|---|---|
 | 00 | overview.md | This file — high-level map of the project |
 | 01 | business-context.md | Padea the business and the specific bottleneck being fixed |
-| 02 | data-model.md | The Airtable schema (13 tables) and key relationships |
+| 02 | data-model.md | The Airtable schema (14 tables) and key relationships |
 | 03 | migration-pipeline.md | One-shot import of spreadsheets and PDFs → Airtable |
 | 04 | webapp.md | Student-facing QR-code form: rating + next-week meal preference |
 | 05 | ordering-pipeline.md | Weekly cron: turn preferences into caterer orders + emails |

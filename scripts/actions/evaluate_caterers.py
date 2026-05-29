@@ -55,7 +55,7 @@ from support.compatibility import (
 SWITCH_THRESHOLD = 2.5  # propose a caterer switch
 WATCH_THRESHOLD  = 3.0  # warn coordinator only (no proposal)
 # disable MIN_SESSIONS for now
-MIN_SESSIONS     = 0    # minimum distinct sessions with feedback to fire SWITCH
+MIN_SESSIONS     = 2    # minimum distinct sessions with feedback to fire SWITCH
 MIN_RATERS       = 4    # minimum unique students rating in the window for SWITCH
 ROLLING_WINDOW   = 4    # most-recent N sessions to average over
 

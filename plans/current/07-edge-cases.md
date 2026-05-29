@@ -16,6 +16,11 @@ when modifying behaviour.
   date form: `"<Student> - <School> - <YYYY-MM-DD>"`.
 - **A session with no caterer** is skipped by the order generator with
   a warning. Likewise a session whose caterer has no menu items.
+- **Pending caterer switch.** If a session's `Incoming Caterer` is set,
+  `register_orders.py` flips `Caterer ← Incoming Caterer` at the start of
+  the run, clears `Incoming Caterer`, and marks the matching Caterer
+  Switch Proposal `Executed`. From that point on the order is built
+  against the new caterer's menu.
 
 ## Students
 
@@ -29,6 +34,10 @@ when modifying behaviour.
   Levels` of `["All"]` cancels everyone; a specific list cancels only
   those year levels. Year level is stored as a number, year-level
   exclusion choices are strings — comparison converts via `str(int(yr))`.
+- **`Last Submitted` is the day-locked roster gate.** Once a student
+  has submitted once today, they vanish from the picker for the rest of
+  the day. Manager workflow: clear `Last Submitted` (or wait until
+  tomorrow) to let the student submit again.
 
 ## Absences
 
@@ -55,16 +64,17 @@ when modifying behaviour.
   number of delivery destinations that week).
 - **Big Mom = contact + chef.** Kenko Sushi House's single staff member.
   Heuristic parser misses the contact name (LLM gets it right).
-- **GST.** Caterers quote either inclusive or exclusive of GST. The
-  system stores the boolean but **does not convert** during order
-  totalling — `Total Cost = Total Meals × Price per Item + Delivery`,
-  using the raw `Price per Item` regardless of GST flag. (See
-  `plans/gst.md` — the question of whether to normalise prices to a
-  consistent basis is open.)
+- **GST.** `Price per Item` is stored as a final, GST-inclusive number.
+  The migration multiplies the raw quote by 1.10 at import time if the
+  source said "excluding GST", so downstream callers don't need a flag.
 - **Min Qty 4/5/6 Items.** Per-item minimum, not total minimum. If you
   order 5 distinct items from a caterer with `Min Qty 5 Items = 3`,
   each of those 5 items needs ≥ 3 portions, i.e. ≥ 15 total. Many
   caterers have looser minimums for ordering fewer distinct items.
+- **Dietary Legend Tags.** When a caterer's menu has a published legend
+  (GF / DF / NF / VO), the matching restriction IDs are linked here.
+  Absence of a tag for a legend-tracked restriction is treated as
+  definitive — see `06-dietary-system.md`.
 
 ## Order generation
 
@@ -77,19 +87,23 @@ when modifying behaviour.
 - **Min-qty swap is proportional.** When dissolving a violating item,
   the swap-target distribution mirrors current popularity — so a 10/5/3
   caterer order tends to drift toward 10s.
-- **Explicit preferences are never swapped.** If the only violators
-  are explicit, the constraint stays violated and a warning is logged.
+- **Explicit preferences are not protected from min-qty swaps.** A
+  preferred-but-violating item is dissolved like any other; the student
+  is just moved to a dietarily compatible target.
 - **Caterer with no menu items is skipped** with a warning.
 - **Student with no compatible meal is skipped** (stats: `no_meal`).
   No fallback to "give them anything" — they get no order.
-- **Existing Sent orders are preserved.** `clear_existing_orders` only
-  drops `Draft` Weekly Orders for the target week — the audit trail
-  is intact for re-runs.
+- **Idempotency.** `clear_existing_orders` drops *all* Orders and Weekly
+  Orders dated in the target week before rebuilding — there is no
+  per-row Status field, so re-runs always wipe the slate clean.
 
 ## Webapp
 
 - **Session ID required.** Without the `?session=` param, the page
   shows an error banner.
+- **Entry point is `meals.html`** (not `index.html`). The same
+  `host_webapp.py` server also serves `manage.html` and
+  `switch-proposal.html`.
 - **localStorage student persistence is per-session.** Key is
   `padea_known_student_<sessionId>` — switching sessions on the same
   device shows the picker again.
@@ -100,38 +114,43 @@ when modifying behaviour.
 - **Explicit override via confirmation modal.** Tapping an
   incompatible meal triggers a confirm modal. After confirming, the
   pick is treated identically to a compatible one downstream.
-- **API key in URL.** `?key=` overrides `CONFIG.API_KEY`. Convenient
-  for development; remove before printing QR codes.
+- **No API key in the browser.** All Airtable traffic goes through
+  `/api/...` on the Python server. The old `?key=` URL override is gone.
 
 ## Email pipeline
 
 - **Send happens outside Python.** The Airtable automation does the
-  actual email send; `send_orders.py` only queues it. There's no
-  retry logic in Python — that lives in the Airtable workflow.
-- **`Sent` status is misleading.** `send_orders.py` flips Weekly
-  Orders to `Sent` after queueing, not after delivery. A queued-but-
-  -failed email leaves the Weekly Order marked `Sent` and the
-  Scheduled Email marked `Failed`. Inspecting status requires looking
-  at both tables.
+  actual email send; `send_orders.py` (and the other senders) only
+  queue rows in `Scheduled Emails`. There's no retry logic in Python
+  — that lives in the Airtable workflow.
+- **No queueing idempotency.** Running `./run orders send` (or
+  `evaluate_caterers.py` etc.) twice in a row will queue duplicate
+  emails. Status / send-tracking is currently a manual concern.
+- **CC includes more than the chef.** `send_orders.py` CCs the chef
+  (if `Chef Wants CC`), then every on-site manager email across the
+  sessions in that order, de-duplicated.
 - **Email body uses an Airtable-subset of Markdown** — no tables, no
-  raw HTML. Format helper restricts to headings, bold, lists.
+  raw HTML. Format helper restricts to headings, bold, lists. The QR
+  emails are an exception: `send_qr_emails.py` embeds inline `<img>`
+  tags pointing to `api.qrserver.com`.
 - **"Deliver by" = Dinner Time minus 10 minutes.** Hard-coded. If a
   caterer needs more buffer, the per-session dinner time has to be
   pushed earlier.
 
 ## Verification scripts
 
-- `verify_migration.py` (post-migration) **does not check** the
-  Dietary Restrictions, Weekly Orders, Orders, or Scheduled Emails
-  tables. It still checks for a `Meal Feedback` table that no longer
-  exists (the table is now `Caterer Feedback`).
-- `order_constraints.py` re-implements `build_lookups` separately from
-  `register_orders.py`. Drift between them would silently break tests.
+- The old `verify_migration.py` has been retired (it lives under `old/`
+  and isn't wired up anywhere). Post-migration sanity is now mostly
+  covered by the unit-test suite under `scripts/tests/` — see
+  `testing.md`.
+- `order_constraints.py` reuses `register_orders.py`'s data loaders
+  (`OrderingData`, `OrderingIndex`, `_find_min_qty`,
+  `get_next_week_dates`, `is_student_excluded`), so drift is unlikely.
 
 ## Operational
 
 - **`./run script <name>`** runs `scripts/actions/<name>.py`. Test scripts
-  under `scripts/tests/` must be run with `python` directly or via `./run test`.
+  under `scripts/tests/` are not action scripts; run them with `./run test`.
 - **`./run migrate`** delegates to `scripts/migrations/migrate.py`, which
   calls each migration in explicit dependency order — not alphabetically.
   That file is the authoritative source of run order.

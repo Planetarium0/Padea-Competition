@@ -1,4 +1,5 @@
 .env
+.old
 *.env.*
 scratch
 __pycache__/

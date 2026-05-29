@@ -66,17 +66,25 @@ severity level drives the interaction:
 
 ## Compatibility check (order generator)
 
-`scripts/support/compatibility.py → is_item_compatible`, used by both
-`register_orders.py` and `order_constraints.py`.
+`scripts/support/compatibility.py → is_item_compatible`, used by
+`register_orders.py`, `evaluate_caterers.py`, and `order_constraints.py`.
 
 Same algorithm as the webapp:
 
 1. Subset-closure satisfied → ok. (`build_hierarchy` over the live
    `Dietary Restrictions` records gives the same closure the webapp computes.)
-2. Otherwise fall back to the shared `NEGATIVE_KEYWORDS` table loaded from
+2. **Caterer Dietary Legend hard block**: if the caterer's
+   `Dietary Legend Tags` includes a transitive superset of the constraint
+   (e.g. legend tracks `Vegetarian` → covers `Vegan` too) and the item lacks
+   any satisfying tag for that superset, the item is **definitely**
+   incompatible — converting an otherwise "maybe" into a "no".
+3. Otherwise fall back to the shared `NEGATIVE_KEYWORDS` table loaded from
    `data/dietary_keywords.json` — keyword match means "definitely incompatible",
    no match means "may contain" (treated as compatible here to match the
    webapp's lenient `maybe` bucket).
+
+The webapp uses the same three-step ladder. Two-implementation drift is
+avoided by sharing the JSON keyword file and the live taxonomy.
 
 ## Tag application during migration
 
@@ -144,3 +152,12 @@ compatibility severity:
 
 This is symmetric: anything the webapp blocks, the order generator will
 also refuse to honour as an explicit override.
+
+### Allergy-grade restrictions
+The "Is Allergy" classification is not stored as a column on
+`Dietary Restrictions` — there's no such field in the schema. It lives in
+the webapp/order-generator code as a hard-coded set of restriction names
+(`Nut Free`, `Gluten Free`, `Dairy Free`). For an allergy-grade restriction
+the webapp produces a non-overridable lockout dialog rather than a
+confirmation modal; the order generator's refusal-on-definite-incompatibility
+behaviour applies the same way to any restriction, allergy or not.

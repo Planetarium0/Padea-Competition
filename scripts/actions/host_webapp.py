@@ -173,7 +173,7 @@ def main(port: int = DEFAULT_PORT) -> None:
     print(f"Network:  {origin}/index.html")
     print()
     print(f"Generate QR codes for this server:")
-    print(f"  ./run qr --origin {origin}")
+    print(f"  ./run forms qr --origin {origin}")
     print()
     print("Press Ctrl+C to stop.")
     print()

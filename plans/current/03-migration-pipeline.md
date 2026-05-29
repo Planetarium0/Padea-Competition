@@ -59,13 +59,12 @@ logged as errors (no LLM call).
 
 ## Verification
 
-```bash
-python scripts/tests/verify_migration.py
-```
-
-The verifier counts records, asserts hard limits (6 schools, 4 caterers),
-and walks linked-record fields looking for orphans. It logs `errors`
-(structural problems) and `warnings` (data-quality issues) separately.
+The standalone `verify_migration.py` (record counts + orphan walker) has
+been retired and now lives under `old/`. Post-migration sanity is mostly
+covered by the unit-test suite (`./run test`) plus the live integration
+check `python scripts/tests/order_constraints.py` for order rounds.
+A fresh row-count audit would be a small, useful add-back — but the
+current code doesn't ship one.
 
 ## Re-running migrations
 

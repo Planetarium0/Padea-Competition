@@ -359,7 +359,8 @@ TABLES_SCHEMA: dict[str, dict[str, Any]] = {
                     "choices": [
                         {"name": "Queued"},
                         {"name": "Sent"},
-                        {"name": "Failed"}
+                        {"name": "Failed"},
+                        {"name": "Send Immediately"}
                     ]
                 }
             },
