@@ -197,6 +197,8 @@ def reject(proposal_id: str, notes: str = "", db: Database | None = None) -> Non
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    from support import self_healing_error_handler, Database
+
     parser = argparse.ArgumentParser(description="Execute an approved caterer switch")
     parser.add_argument(
         "proposal_id",
@@ -211,4 +213,19 @@ if __name__ == "__main__":
         help="Also accept Pending proposals (approve and execute in one step)",
     )
     args = parser.parse_args()
-    execute(args.proposal_id, dry_run=args.dry_run, approve=args.approve)
+
+    # Dynamic database state provider to serialize DB context if an edge case fails
+    def db_state_provider():
+        try:
+            db = Database.from_env()
+            return {
+                "caterer_switch_proposals": db.CatererSwitchProposals.all(),
+                "sessions": db.Sessions.all(),
+                "students": db.Students.all(),
+                "caterers": db.Caterers.all(),
+            }
+        except Exception as e:
+            return {"error_loading_db_state": str(e)}
+
+    with self_healing_error_handler("execute_caterer_switch", state_provider=db_state_provider):
+        execute(args.proposal_id, dry_run=args.dry_run, approve=args.approve)

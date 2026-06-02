@@ -833,6 +833,8 @@ def _print_summary(
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    from support import self_healing_error_handler, Database
+
     parser = argparse.ArgumentParser(
         description="Register weekly meal orders from student preferences",
     )
@@ -841,4 +843,22 @@ if __name__ == "__main__":
         help="Preview without writing to Airtable",
     )
     args = parser.parse_args()
-    register_orders(dry_run=args.dry_run)
+
+    # Dynamic database state provider to serialize DB context if an edge case fails
+    def db_state_provider():
+        try:
+            db = Database.from_env()
+            return {
+                "sessions": db.Sessions.all(),
+                "students": db.Students.all(),
+                "caterers": db.Caterers.all(),
+                "menu_items": db.MenuItems.all(),
+                "dietary_restrictions": db.DietaryRestrictions.all(),
+                "absences": db.Absences.all(),
+                "exclusions": db.Exclusions.all(),
+            }
+        except Exception as e:
+            return {"error_loading_db_state": str(e)}
+
+    with self_healing_error_handler("register_orders", state_provider=db_state_provider):
+        register_orders(dry_run=args.dry_run)

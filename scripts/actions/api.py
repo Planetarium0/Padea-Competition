@@ -106,7 +106,25 @@ def dispatch(func, match: re.Match, payload: dict, db: Database) -> tuple[int, A
     for name in sig.parameters:
         if name not in kwargs and name in payload:
             kwargs[name] = payload[name]
-    return func(**kwargs)
+
+    from support import self_healing_error_handler
+
+    def db_state_provider():
+        try:
+            return {
+                "sessions": db.Sessions.all(),
+                "students": db.Students.all(),
+                "caterers": db.Caterers.all(),
+                "menu_items": db.MenuItems.all(),
+                "dietary_restrictions": db.DietaryRestrictions.all(),
+                "caterer_feedback": db.CatererFeedback.all(),
+                "caterer_switch_proposals": db.CatererSwitchProposals.all(),
+            }
+        except Exception as e:
+            return {"error_loading_db_state": str(e)}
+
+    with self_healing_error_handler(f"api_{func.__name__}", state_provider=db_state_provider):
+        return func(**kwargs)
 
 
 # ---------------------------------------------------------------------------

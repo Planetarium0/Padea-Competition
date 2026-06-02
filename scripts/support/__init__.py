@@ -25,6 +25,7 @@ from .records import (
     YearLevel,
 )
 from .support import VERBOSE, ask_llm, log
+from .error_handler import UnhandledEdgeCaseError, self_healing_error_handler
 
 __all__ = [
     "AbsenceFields",
@@ -56,4 +57,7 @@ __all__ = [
     "load_substitutions",
     "log",
     "resolve_manager_id",
+    "UnhandledEdgeCaseError",
+    "self_healing_error_handler",
 ]
+

@@ -30,3 +30,25 @@ Rules:
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+
+## Self-Healing & Agent-Ready Architecture Standards
+
+1. **Strict Data Validation (Pydantic Layer)**:
+   - All runtime Airtable data reads and writes must pass through the validation models defined in `scripts/support/schemas.py`.
+   - Never rely solely on static Typings/TypedDict for data loaded at active runtime boundaries.
+
+2. **Automated State Capture & AI Prompting**:
+   - Wrap entrypoints of all active, recurring workflows in the `self_healing_error_handler` context manager (from `support` module).
+   - This handler serializes the localized database context and stack traces to `cache/failures/failure_<timestamp>.json`, and auto-generates a pre-formatted self-healing instruction prompt `cache/failures/patch_prompt_<timestamp>.md`.
+   - If you encounter a new failure JSON and prompt, load the state snapshot directly using the regression suite.
+
+3. **Regression Testing**:
+   - Write edge-case regression tests in `scripts/tests/test_edge_cases.py`.
+   - Before pushing or marking a task complete, **you MUST run the full test suite** using `./run test` and ensure all tests pass.
+
+4. **Documentation Guidelines**:
+   - After modifying core logic, you **MUST** review and update the documentation under `plans/current/` (e.g. reflecting updated constraints, abstractions, or workflows). Single-use localized edge cases do not need separate plan documentation unless they alter system-wide contracts.
+
+5. **Good Coding Practices**:
+   - Implement descriptive log levels, robust error assertions, type-safe fallback assignments, and defense-in-depth bounds checking.
+

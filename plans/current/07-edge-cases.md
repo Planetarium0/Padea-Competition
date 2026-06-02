@@ -157,3 +157,35 @@ when modifying behaviour.
 - **PDFs need pre-extraction.** Each migration that reads a PDF expects
   the matching `.txt` in `cache/`. `cache_pdf.py` does the extraction —
   must run after a PDF changes, or the migration will use stale text.
+
+## Self-Healing & Validation Architecture
+
+To ensure high reliability and enable automated agent-ready debugging, the active operational workflows implement a self-healing loop:
+
+### 1. Pydantic Runtime Validation
+- **Location**: `scripts/support/schemas.py`
+- **Execution**: Database read and write operations (in `scripts/support/database.py`) actively validate fetched data against Pydantic models. Any malformed Airtable fields (e.g. type mismatches, missing required links, or invalid enums) immediately trigger a Pydantic `ValidationError`.
+- **Active Schema Mappings**:
+  - `MODEL_MAP` maps active table names to their validation models (e.g., `Students` -> `Student`, `Caterers` -> `Caterer`, `Sessions` -> `Session`).
+
+### 2. State-Capture Exception Serialization
+- **Handler**: `support.self_healing_error_handler` context manager.
+- **Coverage**: Wraps the entry points for all primary actions:
+  - Order Generation (`scripts/actions/register_orders.py`)
+  - Email Pipeline (`scripts/actions/send_orders.py`)
+  - Caterer Evaluation (`scripts/actions/evaluate_caterers.py`)
+  - Proposal Execution (`scripts/actions/execute_caterer_switch.py`)
+  - API Dispatch Router (`scripts/actions/api.py` / `host_webapp.py`)
+- **Behavior**: Upon intercepting a validation or runtime exception (e.g., `IndexError`, `KeyError`, `ValidationError`):
+  1. Serializes the active command, traceback, and inputs.
+  2. Queries the live database context to capture a complete snapshot of all active tables.
+  3. Writes a machine-readable state representation to `cache/failures/failure_<timestamp>_<workflow>.json`.
+  4. Auto-generates a pre-formatted markdown instruction prompt `cache/failures/patch_prompt_<timestamp>_<workflow>.md` outlining the error and exact debug instructions.
+
+### 3. Test-Driven Regression & Healing Loop
+- **Test Harness**: `scripts/tests/test_edge_cases.py`
+- **Verification Workflow**:
+  1. The automated agent reads `failure_*.json`.
+  2. The agent initializes a new test inside `test_edge_cases.py`, using `populate_mock_db` to load the database snapshot directly into `MockDatabase`.
+  3. The agent replicates the error in memory, implements the code patch, and runs `./run test` to verify the fix before deploying to production.
+

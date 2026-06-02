@@ -98,7 +98,15 @@ class Table(Generic[FieldsT]):
         except Exception as e:
             _log.error(f"Error fetching from Airtable table {self.name}: {e}")
             return []
-        return [Record[FieldsT].from_raw(r) for r in raw]
+        
+        records = []
+        from .schemas import MODEL_MAP
+        model = MODEL_MAP.get(self.name)
+        for r in raw:
+            if model:
+                model.model_validate(r.get("fields", {}))
+            records.append(Record[FieldsT].from_raw(r))
+        return records
 
     def get(self, record_id: str) -> Record[FieldsT] | None:
         try:
@@ -108,6 +116,12 @@ class Table(Generic[FieldsT]):
             return None
         if not raw:
             return None
+        
+        from .schemas import MODEL_MAP
+        model = MODEL_MAP.get(self.name)
+        if model:
+            model.model_validate(raw.get("fields", {}))
+            
         return Record[FieldsT].from_raw(raw)
 
     # ------------------------------------------------------------------
@@ -121,11 +135,13 @@ class Table(Generic[FieldsT]):
         """Batch-create records. Accepts plain field dicts; ``{"fields": ...}``
         envelopes are unwrapped for compatibility with the old API."""
         formatted: list[Mapping[str, Any]] = []
+        from .schemas import MODEL_MAP
+        model = MODEL_MAP.get(self.name)
         for r in records:
-            if isinstance(r, dict) and "fields" in r and set(r.keys()) <= {"fields"}:
-                formatted.append(r["fields"])
-            else:
-                formatted.append(r)
+            fields = r["fields"] if isinstance(r, dict) and "fields" in r and set(r.keys()) <= {"fields"} else r
+            if model:
+                model.model_validate(fields)
+            formatted.append(fields)
         if not formatted:
             return []
 
@@ -144,6 +160,10 @@ class Table(Generic[FieldsT]):
         return inserted
 
     def update(self, record_id: str, fields: Mapping[str, Any]) -> Record[FieldsT]:
+        from .schemas import MODEL_MAP
+        model = MODEL_MAP.get(self.name)
+        if model:
+            model.model_validate(dict(fields))
         raw = self._raw.update(record_id, dict(fields))
         return Record[FieldsT].from_raw(raw)
 

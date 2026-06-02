@@ -398,10 +398,31 @@ def process_orders(db: Database | None = None, preview_only: bool = False) -> No
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    from support import self_healing_error_handler, Database
+
     parser = argparse.ArgumentParser(description="Send caterer order emails")
     parser.add_argument(
         "--preview", action="store_true",
         help="Preview emails without sending or marking as Sent",
     )
     args = parser.parse_args()
-    process_orders(preview_only=args.preview)
+
+    # Dynamic database state provider to serialize DB context if an edge case fails
+    def db_state_provider():
+        try:
+            db = Database.from_env()
+            return {
+                "weekly_orders": db.WeeklyOrders.all(),
+                "orders": db.Orders.all(),
+                "caterers": db.Caterers.all(),
+                "sessions": db.Sessions.all(),
+                "menu_items": db.MenuItems.all(),
+                "schools": db.Schools.all(),
+                "on_site_managers": db.OnSiteManagers.all(),
+                "manager_substitutions": db.ManagerSubstitutions.all(),
+            }
+        except Exception as e:
+            return {"error_loading_db_state": str(e)}
+
+    with self_healing_error_handler("send_orders", state_provider=db_state_provider):
+        process_orders(preview_only=args.preview)

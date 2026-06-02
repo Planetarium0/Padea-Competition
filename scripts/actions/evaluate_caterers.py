@@ -977,6 +977,8 @@ def force_proposal(
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    from support import self_healing_error_handler, Database
+
     parser = argparse.ArgumentParser(
         description="Evaluate caterer ratings and propose switches",
     )
@@ -1002,14 +1004,31 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    if args.force:
-        if not args.session:
-            parser.error("--force requires --session <record_id>")
-        force_proposal(
-            session_ref=args.session,
-            incoming_caterer_id=args.incoming,
-            dry_run=args.dry_run,
-            immediate=args.immediate,
-        )
-    else:
-        evaluate(dry_run=args.dry_run, immediate=args.immediate)
+    # Dynamic database state provider to serialize DB context if an edge case fails
+    def db_state_provider():
+        try:
+            db = Database.from_env()
+            return {
+                "caterer_feedback": db.CatererFeedback.all(),
+                "sessions": db.Sessions.all(),
+                "caterers": db.Caterers.all(),
+                "menu_items": db.MenuItems.all(),
+                "dietary_restrictions": db.DietaryRestrictions.all(),
+                "students": db.Students.all(),
+                "caterer_switch_proposals": db.CatererSwitchProposals.all(),
+            }
+        except Exception as e:
+            return {"error_loading_db_state": str(e)}
+
+    with self_healing_error_handler("evaluate_caterers", state_provider=db_state_provider):
+        if args.force:
+            if not args.session:
+                parser.error("--force requires --session <record_id>")
+            force_proposal(
+                session_ref=args.session,
+                incoming_caterer_id=args.incoming,
+                dry_run=args.dry_run,
+                immediate=args.immediate,
+            )
+        else:
+            evaluate(dry_run=args.dry_run, immediate=args.immediate)

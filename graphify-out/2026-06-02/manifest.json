@@ -1,0 +1,247 @@
+{
+  "/home/daniel/Downloads/Padea/run": {
+    "mtime": 1779594378.6064122,
+    "ast_hash": "009211b7fe4eb04280cb1f6e98b42962",
+    "semantic_hash": ""
+  },
+  "/home/daniel/Downloads/Padea/cache/dietary_mappings.json": {
+    "mtime": 1779499755.63026,
+    "ast_hash": "479f0e806a8360fa0f7825fbc81bab24",
+    "semantic_hash": "479f0e806a8360fa0f7825fbc81bab24"
+  },
+  "/home/daniel/Downloads/Padea/migrations/students.py": {
+    "mtime": 1779594207.8866549,
+    "ast_hash": "03d8b560b154e595d9871666cb1fd1c9",
+    "semantic_hash": ""
+  },
+  "/home/daniel/Downloads/Padea/migrations/exclusions.py": {
+    "mtime": 1779499853.5445828,
+    "ast_hash": "48995a7c2206245bcbf21b61d83d663c",
+    "semantic_hash": "48995a7c2206245bcbf21b61d83d663c"
+  },
+  "/home/daniel/Downloads/Padea/migrations/caterer_contacts.py": {
+    "mtime": 1779499564.8176746,
+    "ast_hash": "d230ccbfe8c5e83b907685535870c22e",
+    "semantic_hash": "d230ccbfe8c5e83b907685535870c22e"
+  },
+  "/home/daniel/Downloads/Padea/migrations/sessions.py": {
+    "mtime": 1779533969.4942272,
+    "ast_hash": "cac6c2f68422f7c85e56661113f53050",
+    "semantic_hash": ""
+  },
+  "/home/daniel/Downloads/Padea/migrations/absences.py": {
+    "mtime": 1779499791.0224292,
+    "ast_hash": "ab67e45cfcbdcf6268b9cfacc46e9f06",
+    "semantic_hash": "ab67e45cfcbdcf6268b9cfacc46e9f06"
+  },
+  "/home/daniel/Downloads/Padea/migrations/caterers.py": {
+    "mtime": 1779499542.8015795,
+    "ast_hash": "3996b36d3104a2e417bd3d88d9da36a7",
+    "semantic_hash": "3996b36d3104a2e417bd3d88d9da36a7"
+  },
+  "/home/daniel/Downloads/Padea/migrations/caterer_menus.py": {
+    "mtime": 1779594258.0939243,
+    "ast_hash": "bae19e38e7aa9d20d2c749b60a6ebd06",
+    "semantic_hash": ""
+  },
+  "/home/daniel/Downloads/Padea/.claude/settings.json": {
+    "mtime": 1779532381.1989665,
+    "ast_hash": "87f0d903477984d0587a02f8fe185263",
+    "semantic_hash": "87f0d903477984d0587a02f8fe185263"
+  },
+  "/home/daniel/Downloads/Padea/scripts/send_orders.py": {
+    "mtime": 1779528666.4234426,
+    "ast_hash": "b0cd65188db80bea1ad5b09f3f791231",
+    "semantic_hash": "b0cd65188db80bea1ad5b09f3f791231"
+  },
+  "/home/daniel/Downloads/Padea/scripts/schema.py": {
+    "mtime": 1779593874.5883784,
+    "ast_hash": "271450583abe913e94fdd0d44df84743",
+    "semantic_hash": ""
+  },
+  "/home/daniel/Downloads/Padea/scripts/update_schema.py": {
+    "mtime": 1779499479.0093052,
+    "ast_hash": "40e6ea2f04699a2c6ced43e038be2c92",
+    "semantic_hash": "40e6ea2f04699a2c6ced43e038be2c92"
+  },
+  "/home/daniel/Downloads/Padea/scripts/generate_orders.py": {
+    "mtime": 1779513598.0099394,
+    "ast_hash": "3b8fa65247ec69571fa6d449886095e7",
+    "semantic_hash": "3b8fa65247ec69571fa6d449886095e7"
+  },
+  "/home/daniel/Downloads/Padea/scripts/verify_migration.py": {
+    "mtime": 1779595042.5168135,
+    "ast_hash": "101256bd007e7bb771c9858ce57fa58e",
+    "semantic_hash": ""
+  },
+  "/home/daniel/Downloads/Padea/scripts/__init__.py": {
+    "mtime": 1779499261.4333956,
+    "ast_hash": "97a5c2c6acc74878f6082e13e17d612d",
+    "semantic_hash": "97a5c2c6acc74878f6082e13e17d612d"
+  },
+  "/home/daniel/Downloads/Padea/scripts/cache_pdf.py": {
+    "mtime": 1779499022.9494627,
+    "ast_hash": "f75a43d2773b23cb4211247bc5a143e0",
+    "semantic_hash": "f75a43d2773b23cb4211247bc5a143e0"
+  },
+  "/home/daniel/Downloads/Padea/scripts/prompt_user.py": {
+    "mtime": 1779500425.2068782,
+    "ast_hash": "26febd6dc291c9f07079d2fc237f8360",
+    "semantic_hash": "26febd6dc291c9f07079d2fc237f8360"
+  },
+  "/home/daniel/Downloads/Padea/scripts/generate_qr.py": {
+    "mtime": 1779585946.5696354,
+    "ast_hash": "4e78ad093d510ee1e50cb1c756686377",
+    "semantic_hash": ""
+  },
+  "/home/daniel/Downloads/Padea/scripts/support.py": {
+    "mtime": 1779500261.460784,
+    "ast_hash": "2d2480bd291d2a360973d2bf9395ef8f",
+    "semantic_hash": "2d2480bd291d2a360973d2bf9395ef8f"
+  },
+  "/home/daniel/Downloads/Padea/CLAUDE.md": {
+    "mtime": 1779532381.1987176,
+    "ast_hash": "fb2540e1c14ea80268bee55e0218a9fd",
+    "semantic_hash": "fb2540e1c14ea80268bee55e0218a9fd"
+  },
+  "/home/daniel/Downloads/Padea/cache/caterer-menus.txt": {
+    "mtime": 1779498953.2544563,
+    "ast_hash": "332179409a57166bcdad49435723e366",
+    "semantic_hash": "332179409a57166bcdad49435723e366"
+  },
+  "/home/daniel/Downloads/Padea/cache/caterer-contacts.txt": {
+    "mtime": 1779498953.2239645,
+    "ast_hash": "bc61c510a0da17add427ece39a6fed12",
+    "semantic_hash": "bc61c510a0da17add427ece39a6fed12"
+  },
+  "/home/daniel/Downloads/Padea/cache/exclusions.txt": {
+    "mtime": 1779498953.2606518,
+    "ast_hash": "7f305a1114573a0dbe7dd1f258e1f2b4",
+    "semantic_hash": "7f305a1114573a0dbe7dd1f258e1f2b4"
+  },
+  "/home/daniel/Downloads/Padea/cache/absences.txt": {
+    "mtime": 1779498953.268843,
+    "ast_hash": "088162446bdfa5783b4aa5bf4f16e41d",
+    "semantic_hash": "088162446bdfa5783b4aa5bf4f16e41d"
+  },
+  "/home/daniel/Downloads/Padea/plans/purpose.md": {
+    "mtime": 1779514334.829727,
+    "ast_hash": "3b5339292e5982babb6344145bd24781",
+    "semantic_hash": "3b5339292e5982babb6344145bd24781"
+  },
+  "/home/daniel/Downloads/Padea/plans/old/migration/implementation_plan.md": {
+    "mtime": 1779499054.6927614,
+    "ast_hash": "4f333c5635caf50d5031dfed560fca13",
+    "semantic_hash": "4f333c5635caf50d5031dfed560fca13"
+  },
+  "/home/daniel/Downloads/Padea/plans/old/migration/walkthrough.md": {
+    "mtime": 1779502249.1869154,
+    "ast_hash": "9f55f2a7f3c874fa8c7c4aa53f0e5313",
+    "semantic_hash": "9f55f2a7f3c874fa8c7c4aa53f0e5313"
+  },
+  "/home/daniel/Downloads/Padea/plans/old/migration/task.md": {
+    "mtime": 1779510571.0143628,
+    "ast_hash": "b7c8257ff217d4ef4d6b8f13e73c14a4",
+    "semantic_hash": "b7c8257ff217d4ef4d6b8f13e73c14a4"
+  },
+  "/home/daniel/Downloads/Padea/graphify-out/converted/students_b2717fca.md": {
+    "mtime": 1779595208.557874,
+    "ast_hash": "6d4eebca461161af444d8a8718f775a0",
+    "semantic_hash": "6d4eebca461161af444d8a8718f775a0"
+  },
+  "/home/daniel/Downloads/Padea/graphify-out/converted/sessions_1350dcdc.md": {
+    "mtime": 1779595208.6424916,
+    "ast_hash": "911bfeb60b7c461ae0abf434e516f98e",
+    "semantic_hash": "911bfeb60b7c461ae0abf434e516f98e"
+  },
+  "/home/daniel/Downloads/Padea/graphify-out/converted/caterers_01f88415.md": {
+    "mtime": 1779595208.6458864,
+    "ast_hash": "0329d218d428377ee11844dcca4b918a",
+    "semantic_hash": "0329d218d428377ee11844dcca4b918a"
+  },
+  "/home/daniel/Downloads/Padea/resources/caterer-contacts.pdf": {
+    "mtime": 1779360785.0,
+    "ast_hash": "8b1bcee31cd93e832664b521b61711df",
+    "semantic_hash": "8b1bcee31cd93e832664b521b61711df"
+  },
+  "/home/daniel/Downloads/Padea/resources/caterer-menus.pdf": {
+    "mtime": 1779361162.0,
+    "ast_hash": "c3bd1a19d22f3a39446421baf944d229",
+    "semantic_hash": "c3bd1a19d22f3a39446421baf944d229"
+  },
+  "/home/daniel/Downloads/Padea/resources/exclusions.pdf": {
+    "mtime": 1779360821.0,
+    "ast_hash": "6e2161589f281452784315dc152311af",
+    "semantic_hash": "6e2161589f281452784315dc152311af"
+  },
+  "/home/daniel/Downloads/Padea/resources/absences.pdf": {
+    "mtime": 1779361853.0,
+    "ast_hash": "40f70d573c1f9255d3fc5c53094c72b9",
+    "semantic_hash": "40f70d573c1f9255d3fc5c53094c72b9"
+  },
+  "/home/daniel/Downloads/Padea/output/qrcodes/Moreton_Bay_Boys'_College_-_2026-05-02.png": {
+    "mtime": 1779515552.9595137,
+    "ast_hash": "b0e19b8bb7ce6b3ec183c4389c59fc04",
+    "semantic_hash": "b0e19b8bb7ce6b3ec183c4389c59fc04"
+  },
+  "/home/daniel/Downloads/Padea/webapp/app.js": {
+    "mtime": 1779594659.8898811,
+    "ast_hash": "2e34513ebcff612375ba324947730862",
+    "semantic_hash": ""
+  },
+  "/home/daniel/Downloads/Padea/webapp/index.html": {
+    "mtime": 1779594742.0045562,
+    "ast_hash": "36a411591bc231f04a19f80c3433f5be",
+    "semantic_hash": ""
+  },
+  "/home/daniel/Downloads/Padea/plans/webapp.md": {
+    "mtime": 1779593205.7088847,
+    "ast_hash": "e3986afd28477fc22f64b71bc3e67d95",
+    "semantic_hash": ""
+  },
+  "/home/daniel/Downloads/Padea/plans/old/emailing/implementation_plan.md": {
+    "mtime": 1779511874.9114704,
+    "ast_hash": "bac032fae3fb5f550ca20e9e79bbddb6",
+    "semantic_hash": ""
+  },
+  "/home/daniel/Downloads/Padea/plans/old/emailing/implementation_plan_revised.md": {
+    "mtime": 1779513908.306808,
+    "ast_hash": "82efd2c94f4c024b64144aac0c93189b",
+    "semantic_hash": ""
+  },
+  "/home/daniel/Downloads/Padea/plans/old/emailing/task.md": {
+    "mtime": 1779514770.0199895,
+    "ast_hash": "41a022b296a24c9947333b3970cf0e4c",
+    "semantic_hash": ""
+  },
+  "/home/daniel/Downloads/Padea/graphify-out/memory/query_20260523_104100_why_does_airtable_get___connect_data_migration_pip.md": {
+    "mtime": 1779532860.4005973,
+    "ast_hash": "3ad3fc123e4a643517bb5e58a16ca9f1",
+    "semantic_hash": ""
+  },
+  "/home/daniel/Downloads/Padea/output/qrcodes/Moreton_Bay_Boys'_College_-_Tuesday.png": {
+    "mtime": 1779585904.9634004,
+    "ast_hash": "b0e19b8bb7ce6b3ec183c4389c59fc04",
+    "semantic_hash": ""
+  },
+  "/home/daniel/Downloads/Padea/output/qrcodes/John_Paul_College_-_Wednesday.png": {
+    "mtime": 1779587039.3571506,
+    "ast_hash": "3be1ee8c2ac4561c7a95ee5bca0018aa",
+    "semantic_hash": ""
+  },
+  "/home/daniel/Downloads/Padea/migrations/dietary_restrictions.py": {
+    "mtime": 1779594028.3590825,
+    "ast_hash": "6ec0c7bf13957cd9bcbe159363600493",
+    "semantic_hash": ""
+  },
+  "/home/daniel/Downloads/Padea/scripts/dietary_data.py": {
+    "mtime": 1779593944.3427858,
+    "ast_hash": "d35d18fca5a7e82b503b42ba51a4537f",
+    "semantic_hash": ""
+  },
+  "/home/daniel/Downloads/Padea/plans/structure.md": {
+    "mtime": 1779593237.0008595,
+    "ast_hash": "a79cb43d5e8a0002221e4f2d7b7c4234",
+    "semantic_hash": ""
+  }
+}
