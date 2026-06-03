@@ -29,16 +29,6 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Inject Supabase credentials
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-        run: |
-          sed -i \
-            -e "s|SUPABASE_URL_PLACEHOLDER|${SUPABASE_URL}|g" \
-            -e "s|SUPABASE_ANON_KEY_PLACEHOLDER|${SUPABASE_ANON_KEY}|g" \
-            webapp/supabase_client.js
-
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
