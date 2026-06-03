@@ -7,7 +7,7 @@ caterer email, sends it via Resend, and logs a record in the scheduled_emails
 table with the final status.
 
 Usage:
-  python scripts/send_orders.py [--preview]
+  python scripts/send_orders.py [--preview] [--limit N]
 """
 
 from __future__ import annotations
@@ -290,14 +290,22 @@ def format_email_body(
 # Main pipeline
 # ---------------------------------------------------------------------------
 
-def process_orders(db: Database | None = None, preview_only: bool = False) -> None:
+def process_orders(
+    db:           Database | None = None,
+    preview_only: bool = False,
+    limit:        int | None = None,
+) -> None:
     db = db or Database.from_env()
     pending_orders = load_pending_orders(db)
     if not pending_orders:
         log.info("No pending orders to process.")
         return
 
+    sent = 0
     for wo_record in pending_orders:
+        if limit is not None and sent >= limit:
+            log.info(f"Reached --limit {limit}; stopping.")
+            break
         wo_fields   = wo_record.fields
         wo_id_label = wo_fields.get("order_code", wo_record.id)
         log.info(f"\nProcessing: {wo_id_label}")
@@ -352,6 +360,7 @@ def process_orders(db: Database | None = None, preview_only: bool = False) -> No
             )
         else:
             log.info(f"[PREVIEW] Would send to {contact_email}")
+        sent += 1
 
 
 # ---------------------------------------------------------------------------
@@ -365,6 +374,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--preview", action="store_true",
         help="Preview emails without sending or marking as Sent",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Cap the number of caterer order emails this run will queue (useful for testing)",
     )
     args = parser.parse_args()
 
@@ -386,4 +401,4 @@ if __name__ == "__main__":
             return {"error_loading_db_state": str(e)}
 
     with self_healing_error_handler("send_orders", state_provider=db_state_provider):
-        process_orders(preview_only=args.preview)
+        process_orders(preview_only=args.preview, limit=args.limit)

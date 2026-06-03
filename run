@@ -21,11 +21,11 @@ usage() {
     cat <<EOF
 Usage:
   $0 migrate [resource]
-  $0 orders [generate [--dry-run]|preview|send]
+  $0 orders [generate [--dry-run]|preview|send] [--limit N]
   $0 forms qr [--origin URL] [--base-url URL] [--session ID] [--first]
-  $0 forms qr send [--dry-run] [--first]
-  $0 forms send {parents|students} [--dry-run] [--first]
-  $0 caterer evaluate [--dry-run]
+  $0 forms qr send [--dry-run] [--first] [--limit N]
+  $0 forms send {parents|students} [--dry-run] [--first] [--limit N]
+  $0 caterer evaluate [--dry-run] [--limit N]
   $0 caterer switch <proposal_id> [--approve] [--dry-run]
   $0 test [name]
   $0 script [name]
@@ -34,6 +34,8 @@ migrate resources:
   diet, schools, caterers, contacts, menus, sessions, students, absences, exclusions, all
 
 If no resource is supplied to migrate, all migrations run in dependency order.
+
+--limit N caps the number of emails the script will queue (testing aid).
 EOF
 }
 
@@ -108,7 +110,7 @@ case "$COMMAND" in
                 echo "Generating orders..."
                 $PYTHON scripts/actions/register_orders.py
                 echo "Logging order emails..."
-                $PYTHON scripts/actions/send_orders.py
+                $PYTHON scripts/actions/send_orders.py "$@"
                 ;;
             generate)
                 echo "Generating orders..."
@@ -116,11 +118,11 @@ case "$COMMAND" in
                 ;;
             preview)
                 echo "Previewing order emails..."
-                $PYTHON scripts/actions/send_orders.py --preview
+                $PYTHON scripts/actions/send_orders.py --preview "$@"
                 ;;
             send)
                 echo "Logging order emails..."
-                $PYTHON scripts/actions/send_orders.py
+                $PYTHON scripts/actions/send_orders.py "$@"
                 ;;
             *)
                 echo "[ERROR] Unknown orders subcommand: $SUBCOMMAND"

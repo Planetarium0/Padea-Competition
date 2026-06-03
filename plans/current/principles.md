@@ -53,6 +53,25 @@ minimal human intervention.
   On failure it writes `cache/failures/failure_<ts>_<workflow>.json`
   and a sibling `patch_prompt_<ts>_<workflow>.md` ready to feed to an
   AI patcher.
+- **`log.failure` vs `log.error` — pick by call-site location, not by
+  judgement.** The handler context boundary draws the line for you:
+  - **`log.error` + non-zero exit** — used *outside* the `with
+    self_healing_error_handler(...)` block: CLI argument parsing,
+    pre-flight ID lookups, anything where the cause is a human supplying
+    bad input (`--session "nonexistent"`, `--proposal-id` typo). These
+    don't get captured because there's nothing for an agent to patch.
+  - **`log.failure(...)`** — used *inside* (or reachable from inside)
+    the handler block: any soft error in operational logic. Logs at
+    ERROR exactly like `log.error`, but also registers with the active
+    handler via a ContextVar. Execution continues; at handler exit, if
+    any failures were registered (even with no escaping exception), the
+    standard `failure_*.json` + `patch_prompt_*.md` pair is written
+    just as if an exception had escaped. Use this for "one email out of
+    six failed", "student got no compatible meal", "dietary mapping
+    unknown" — anywhere you used to write `log.error` and continue.
+  - **`raise`** — used when the error means a contract has been
+    violated and continuing produces bad state (Pydantic validation
+    failure mid-write, an assumed invariant doesn't hold).
 - **Regress every failure.** When you patch a captured failure, add a
   test in `scripts/tests/test_edge_cases.py` that loads the snapshot
   via `populate_mock_db` and reproduces the bug. `./run test` must pass

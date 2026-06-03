@@ -15,7 +15,7 @@ Dietary hard filter: a candidate caterer is only eligible if it has at least
 one compatible menu item for EVERY non-opted-out student at the session.
 
 Usage:
-  python scripts/actions/evaluate_caterers.py [--dry-run]
+  python scripts/actions/evaluate_caterers.py [--dry-run] [--limit N]
 """
 
 from __future__ import annotations
@@ -709,6 +709,7 @@ def queue_alert_email(
 def evaluate(
     db:      Database | None = None,
     dry_run: bool = False,
+    limit:   int | None = None,
 ) -> None:
     db = db or Database.from_env()
 
@@ -722,8 +723,12 @@ def evaluate(
         f"Term start: {term_start}  |  Effective week if switched: {effective_week}"
     )
 
-    evaluated = 0
+    evaluated      = 0
+    emails_queued  = 0
     for (session_id, caterer_id), entries in index.feedback_index.items():
+        if limit is not None and emails_queued >= limit:
+            log.info(f"Reached --limit {limit}; stopping evaluation.")
+            break
         session_name = index.session_labels.get(session_id, session_id)
         caterer_name = index.caterer_names.get(caterer_id, caterer_id)
 
@@ -756,6 +761,7 @@ def evaluate(
             )
             email_id = f"WATCH-{session_id[:6]}-{caterer_id[:6]}-{date.today().isoformat()}"
             queue_alert_email(db, subject, body, recipient, email_id, dry_run)
+            emails_queued += 1
             continue
 
         # --- Switch threshold ---
@@ -820,6 +826,7 @@ def evaluate(
             )
             email_id = f"NOCAND-{session_id[:6]}-{caterer_id[:6]}-{date.today().isoformat()}"
             queue_alert_email(db, subject, body, recipient, email_id, dry_run)
+            emails_queued += 1
             continue
 
         best_score, best_id, best_name = candidates[0]
@@ -840,8 +847,12 @@ def evaluate(
             recipient_email=recipient,
             dry_run=dry_run,
         )
+        emails_queued += 1
 
-    log.info(f"Evaluation complete. {evaluated} (session, caterer) pair(s) had sufficient data.")
+    log.info(
+        f"Evaluation complete. {evaluated} (session, caterer) pair(s) had sufficient data; "
+        f"{emails_queued} email(s) queued."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -977,6 +988,12 @@ if __name__ == "__main__":
         "--incoming",
         help="Incoming caterer record ID (optional with --force; auto-selected if omitted)",
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Cap the number of emails this run will queue (useful for testing)",
+    )
     args = parser.parse_args()
 
     # Dynamic database state provider to serialize DB context if an edge case fails
@@ -999,10 +1016,13 @@ if __name__ == "__main__":
         if args.force:
             if not args.session:
                 parser.error("--force requires --session <record_id>")
-            force_proposal(
-                session_ref=args.session,
-                incoming_caterer_id=args.incoming,
-                dry_run=args.dry_run,
-            )
+            if args.limit == 0:
+                log.info("--limit 0 set; skipping forced proposal email.")
+            else:
+                force_proposal(
+                    session_ref=args.session,
+                    incoming_caterer_id=args.incoming,
+                    dry_run=args.dry_run,
+                )
         else:
-            evaluate(dry_run=args.dry_run)
+            evaluate(dry_run=args.dry_run, limit=args.limit)

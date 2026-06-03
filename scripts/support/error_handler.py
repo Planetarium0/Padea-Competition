@@ -12,7 +12,10 @@ import json
 import os
 import sys
 import traceback
-from typing import Any, Callable, Dict, Optional, Union
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Union
+
+from .support import _active_handler
 
 
 class UnhandledEdgeCaseError(Exception):
@@ -20,8 +23,36 @@ class UnhandledEdgeCaseError(Exception):
     pass
 
 
+class LoggedFailureBatch(Exception):
+    """Marker type for the synthetic failure constructed when a wrapped
+    workflow completes without raising but accumulated ``log.failure(...)``
+    calls during execution. Never actually raised — used only as the
+    ``error.type`` field in the captured artifact.
+    """
+    pass
+
+
+# Module-level so tests can monkey-patch it without touching env / cwd.
+_FAILURES_DIR: Path = Path(__file__).resolve().parents[2] / "cache" / "failures"
+
+
 class self_healing_error_handler(contextlib.AbstractContextManager):
-    """Context manager to catch, serialize, and prompt-heal failures in active workflows."""
+    """Context manager to catch, serialize, and prompt-heal failures in active workflows.
+
+    Captures two kinds of failures:
+
+    1. **Escaping exceptions** — any unhandled exception inside the block.
+    2. **Logged failures** — any call to ``log.failure(...)`` while this
+       handler is active. Even if no exception escapes, those accumulate
+       and trigger the same artifact-writing path at ``__exit__``.
+
+    Either path produces a matching pair of files under
+    ``cache/failures/``:
+
+    - ``failure_<ts>_<workflow>.json`` — machine-readable state snapshot.
+    - ``patch_prompt_<ts>_<workflow>.md`` — preformatted instructions for
+      an AI patcher (Claude Code, etc.).
+    """
 
     def __init__(
         self,
@@ -30,38 +61,102 @@ class self_healing_error_handler(contextlib.AbstractContextManager):
     ) -> None:
         self.command_name = command_name
         self.state_provider = state_provider
+        self._logged_failures: List[str] = []
+        self._token: Optional[Any] = None
 
     def __enter__(self) -> self_healing_error_handler:
+        # Register as the active handler so log.failure(...) routes here.
+        self._token = _active_handler.set(self)
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
-        if exc_type is None:
+        # Always deregister, even if the exception path fails.
+        if self._token is not None:
+            try:
+                _active_handler.reset(self._token)
+            except (LookupError, ValueError):
+                # Token from a different Context — fall back to clearing.
+                _active_handler.set(None)
+            self._token = None
+
+        # Path 1: an exception escaped. Capture and let it bubble.
+        if exc_type is not None:
+            if exc_type in (SystemExit, KeyboardInterrupt):
+                return False
+            try:
+                self._handle_exception_failure(exc_type, exc_val, exc_tb)
+            except Exception as e:
+                print(f"[FATAL] Self-healing error handler failed: {e}", file=sys.stderr)
+                traceback.print_exc()
             return False
 
-        # Exclude expected system exits (like sys.exit(0) or keyboard interrupts)
-        if exc_type in (SystemExit, KeyboardInterrupt):
-            return False
+        # Path 2: clean exit, but log.failure() calls accumulated.
+        if self._logged_failures:
+            try:
+                self._handle_logged_failure_batch()
+            except Exception as e:
+                print(f"[FATAL] Self-healing error handler failed: {e}", file=sys.stderr)
+                traceback.print_exc()
 
-        try:
-            self._handle_failure(exc_type, exc_val, exc_tb)
-        except Exception as e:
-            # If the error handler itself fails, print details but let original exception bubble up
-            print(f"[FATAL] Self-healing error handler failed: {e}", file=sys.stderr)
-            traceback.print_exc()
-
-        # Let the original exception bubble up to the runtime/cli so it still prints normally
         return False
 
-    def _handle_failure(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    # ------------------------------------------------------------------
+    # log.failure registration (called from support.support._failure)
+    # ------------------------------------------------------------------
+
+    def register_failure(self, message: str) -> None:
+        """Append a failure message to the in-flight list. Idempotent on the
+        same message? No — duplicates are kept because each call site is a
+        signal in its own right (e.g. 3 emails failing to send is different
+        from 1)."""
+        self._logged_failures.append(message)
+
+    # ------------------------------------------------------------------
+    # Capture paths — both end up calling _write_failure_artifacts
+    # ------------------------------------------------------------------
+
+    def _handle_exception_failure(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        tb_lines = traceback.format_exception(exc_type, exc_val, exc_tb)
+        tb_str = "".join(tb_lines)
+        self._write_failure_artifacts(
+            error_type=exc_type.__name__,
+            error_message=str(exc_val),
+            traceback_text=tb_str,
+        )
+
+    def _handle_logged_failure_batch(self) -> None:
+        count = len(self._logged_failures)
+        message = (
+            f"{count} failure(s) registered via log.failure during "
+            f"'{self.command_name}'"
+        )
+        # The "traceback" slot carries the bulleted failure list so the
+        # patch-prompt template still has something concrete to show.
+        body_lines = [
+            "(no exception was raised — the following messages were registered",
+            "via log.failure(...) during the wrapped workflow.)",
+            "",
+        ]
+        body_lines.extend(f"- {m}" for m in self._logged_failures)
+        self._write_failure_artifacts(
+            error_type=LoggedFailureBatch.__name__,
+            error_message=message,
+            traceback_text="\n".join(body_lines),
+        )
+
+    def _write_failure_artifacts(
+        self,
+        error_type:     str,
+        error_message:  str,
+        traceback_text: str,
+    ) -> None:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         failure_id = f"{timestamp}_{self.command_name}"
-        
-        # Ensure the failure output directories exist
-        failures_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../cache/failures"))
-        os.makedirs(failures_dir, exist_ok=True)
 
-        # 1. Resolve State Snapshot
-        state_snapshot = {}
+        _FAILURES_DIR.mkdir(parents=True, exist_ok=True)
+
+        # Resolve State Snapshot
+        state_snapshot: Any = {}
         if self.state_provider:
             try:
                 if callable(self.state_provider):
@@ -71,21 +166,17 @@ class self_healing_error_handler(contextlib.AbstractContextManager):
             except Exception as e:
                 state_snapshot = {"error_resolving_state": str(e)}
 
-        # Ensure state snapshot is JSON serializable
         serialized_state = self._make_json_serializable(state_snapshot)
-
-        # 2. Build Failure JSON payload
-        tb_lines = traceback.format_exception(exc_type, exc_val, exc_tb)
-        tb_str = "".join(tb_lines)
 
         failure_payload = {
             "timestamp": datetime.datetime.now().isoformat(),
             "command_name": self.command_name,
             "error": {
-                "type": exc_type.__name__,
-                "message": str(exc_val),
-                "traceback": tb_str,
+                "type": error_type,
+                "message": error_message,
+                "traceback": traceback_text,
             },
+            "logged_failures": list(self._logged_failures),
             "context": {
                 "sys_argv": sys.argv,
                 "cwd": os.getcwd(),
@@ -94,27 +185,23 @@ class self_healing_error_handler(contextlib.AbstractContextManager):
         }
 
         json_filename = f"failure_{failure_id}.json"
-        json_path = os.path.join(failures_dir, json_filename)
+        json_path = _FAILURES_DIR / json_filename
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(failure_payload, f, indent=2, ensure_ascii=False)
 
-        # 3. Build Dynamic Self-Healing Prompt Markdown
         prompt_filename = f"patch_prompt_{failure_id}.md"
-        prompt_path = os.path.join(failures_dir, prompt_filename)
-        
+        prompt_path = _FAILURES_DIR / prompt_filename
         self_healing_prompt = self._build_prompt_content(
             failure_id=failure_id,
-            error_type=exc_type.__name__,
-            error_message=str(exc_val),
+            error_type=error_type,
+            error_message=error_message,
             json_filename=json_filename,
-            json_path=json_path,
-            traceback=tb_str
+            json_path=str(json_path),
+            traceback=traceback_text,
         )
-
         with open(prompt_path, "w", encoding="utf-8") as f:
             f.write(self_healing_prompt)
 
-        # Log completion message to stderr
         print(f"\n=============================================================", file=sys.stderr)
         print(f"[SELF-HEALING ERROR LOGGED]", file=sys.stderr)
         print(f"A failure was caught in the active workflow '{self.command_name}'.", file=sys.stderr)
@@ -134,10 +221,41 @@ class self_healing_error_handler(contextlib.AbstractContextManager):
         json_path: str,
         traceback: str
     ) -> str:
+        is_batch = error_type == LoggedFailureBatch.__name__
+        if is_batch:
+            intro = (
+                "One or more soft errors were registered via `log.failure(...)` "
+                "during this workflow. No exception escaped, but each registered "
+                "message represents an issue that the workflow author flagged "
+                "for capture. Review each, decide whether it is a bug or expected "
+                "noise, and patch accordingly."
+            )
+            evidence_heading = "## Registered Failures"
+            evidence_lang = ""  # plain text — no Python traceback
+            patch_target_hint = (
+                "Identify the source of each registered failure (each call site is "
+                "a `log.failure(...)` in `scripts/`). Decide per site whether to "
+                "fix the underlying issue, downgrade to `log.error` (genuine soft "
+                "warning), or promote to `raise` (contract violation)."
+            )
+        else:
+            intro = (
+                "A runtime exception occurred in the active catering operations "
+                "pipeline. Use the attached context and instructions below to "
+                "automatically reproduce, patch, and test a fix."
+            )
+            evidence_heading = "## Stack Trace"
+            evidence_lang = "python"
+            patch_target_hint = (
+                "Identify the source script (indicated by the stack trace) where "
+                "the failure occurred. Implement a safe, robust, and clean code "
+                "patch that resolves this edge case (e.g. adding fallback checks, "
+                "validation, or modifying the logical rules)."
+            )
+
         return f"""# Self-Healing Instruction: Resolve Catchable Edge Case in Padea
 
-A runtime exception occurred in the active catering operations pipeline. 
-Use the attached context and instructions below to automatically reproduce, patch, and test a fix.
+{intro}
 
 ## Failure Metadata
 - **Workflow**: `{self.command_name}`
@@ -145,8 +263,8 @@ Use the attached context and instructions below to automatically reproduce, patc
 - **Error Message**: `{error_message}`
 - **State Snapshot File**: `{json_path}`
 
-## Stack Trace
-```python
+{evidence_heading}
+```{evidence_lang}
 {traceback}
 ```
 
@@ -164,16 +282,16 @@ Use the attached context and instructions below to automatically reproduce, patc
 1. **Load State Snapshot**:
    - Read the serialized state from [failure_{failure_id}.json](file://{json_path}).
    - Use the variables and database records captured under the `"state_snapshot"` key to understand the exact runtime state at the moment of failure.
+   - The `"logged_failures"` key lists every `log.failure(...)` message that fired during the workflow (may be empty for pure exception captures).
 
 2. **Replicate via Regression Test**:
    - Open `scripts/tests/test_edge_cases.py`.
    - Add a new regression test (e.g., `test_failure_{failure_id}`) to the suite.
    - Use the database snapshot records in the JSON to initialize a `MockDatabase` context via `populate_mock_db`, and call the failing workflow matching sys_argv or the target function.
-   - Verify that this test fails with the exact same error: `{error_type}`.
+   - Verify that this test fails (or, for a logged-failure batch, that the same `log.failure` messages are emitted).
 
 3. **Implement Code Patch**:
-   - Identify the source script (indicated by the stack trace) where the failure occurred.
-   - Implement a safe, robust, and clean code patch that resolves this edge case (e.g. adding fallback checks, validation, or modifying the logical rules).
+   - {patch_target_hint}
    - Adhere to the principles in `plans/current/principles.md` — especially:
      validate at DB boundaries (Pydantic), one script = one goal, type-hint
      module-boundary signatures, every failing branch has a test.

@@ -137,12 +137,15 @@ LOG_LEVEL=info               # verbose|info|warning|error
 
 ## Self-healing loop (when something breaks)
 
-1. The script fails. The `self_healing_error_handler` context manager
-   wrote `cache/failures/failure_<ts>_<workflow>.json` (state snapshot)
-   and `patch_prompt_<ts>_<workflow>.md` (preformatted instructions).
+1. The script fails (either an exception escaped *or* one or more
+   `log.failure(...)` calls fired inside the wrapped block — both
+   trigger the same capture). The `self_healing_error_handler` context
+   manager wrote `cache/failures/failure_<ts>_<workflow>.json` (state
+   snapshot + `logged_failures` list) and
+   `patch_prompt_<ts>_<workflow>.md` (preformatted instructions).
 2. Reproduce: load the snapshot into `MockDatabase` via
    `populate_mock_db` in `scripts/tests/test_edge_cases.py`. Confirm
-   you see the same exception.
+   you see the same exception, or the same `log.failure` messages.
 3. Patch in the offending module.
 4. Run `./run test test_edge_cases` (or the full suite). Must pass.
 5. If the patch changes a principle or invariant in `principles.md` /

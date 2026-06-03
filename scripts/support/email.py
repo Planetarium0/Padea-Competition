@@ -37,7 +37,7 @@ def schedule_email(
     email_id:                    str,
     weekly_order_id:             str | None = None,
     caterer_switch_proposal_id:  str | None = None,
-) -> "Record[ScheduledEmailFields] | None":
+) -> Record[ScheduledEmailFields] | None:
     """Create an audit record in scheduled_emails and immediately send via Resend.
 
     Exactly one of ``weekly_order_id`` or ``caterer_switch_proposal_id`` should
@@ -61,25 +61,42 @@ def schedule_email(
     se_record = created[0] if created else None
     log.info(f"[QUEUED] Email record created: {email_id}")
 
+    # Development override: redirect all outbound mail to the dev inbox.
+    # The audit record retains the original to_address so the log stays truthful.
+    if os.environ.get("APP_ENV") == "development":
+        dev_recipient = os.environ.get("DEV_NOTIFICATION_EMAIL")
+        if not dev_recipient:
+            log.error(
+                f"[DEV] APP_ENV=development but DEV_NOTIFICATION_EMAIL is not set — "
+                f"skipping send to {to_email}"
+            )
+            return se_record
+        log.warning(f"[DEV] Redirecting {to_email} → {dev_recipient} (APP_ENV=development)")
+        actual_to = dev_recipient
+        actual_cc: list[str] | None = None
+    else:
+        actual_to = to_email
+        actual_cc = cc_email
+
     from_addr = os.environ.get("RESEND_FROM", "Padea <orders@padea.com.au>")
     send_params: resend.Emails.SendParams = {
         "from": from_addr,
-        "to": [to_email],
+        "to": [actual_to],
         "subject": subject,
         "text": body,
     }
-    if cc_email:
-        send_params["cc"] = cc_email
+    if actual_cc:
+        send_params["cc"] = actual_cc
     try:
         resend.api_key = os.environ["RESEND_API_KEY"]
         resend.Emails.send(send_params)
         if se_record:
             db.ScheduledEmails.update(se_record.id, {"status": "Sent"})
-        log.info(f"[SENT] Email sent to {to_email}")
+        log.info(f"[SENT] Email sent to {actual_to}")
     except Exception as exc:
         if se_record:
             db.ScheduledEmails.update(se_record.id, {"status": "Failed"})
-        log.error(f"[FAILED] Failed to send email to {to_email}: {exc}")
+        log.error(f"[FAILED] Failed to send email to {actual_to}: {exc}")
 
     return se_record
 

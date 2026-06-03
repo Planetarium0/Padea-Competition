@@ -10,6 +10,7 @@ Usage:
   python scripts/actions/send_meals_links.py --target {parents|students}
                                               [--immediate]
                                               [--dry-run]
+                                              [--limit N]
 
 Requires URL_ORIGIN in .env (or as an environment variable):
   URL_ORIGIN=http://<server-ip>:8000
@@ -141,6 +142,7 @@ def send_links(
     target:  str,
     dry_run: bool = False,
     first:   bool = False,
+    limit:   int | None = None,
     db:      Database | None = None,
 ) -> None:
     db = db or Database.from_env()
@@ -165,6 +167,9 @@ def send_links(
     sent = skipped = 0
 
     for student in all_students:
+        if limit is not None and sent >= limit:
+            log.info(f"Reached --limit {limit}; stopping.")
+            break
         sf: StudentFields = student.fields
         student_name = sf.get("name") or "(no name)"
 
@@ -264,6 +269,12 @@ if __name__ == "__main__":
         action="store_true",
         help="Append &first=1 to each link, hiding the caterer rating in the webapp",
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Cap the number of emails this run will queue (useful for testing)",
+    )
     args = parser.parse_args()
 
     def db_state_provider():
@@ -281,4 +292,4 @@ if __name__ == "__main__":
 
     from support import self_healing_error_handler
     with self_healing_error_handler("send_meals_links", state_provider=db_state_provider):
-        send_links(target=args.target, dry_run=args.dry_run, first=args.first)
+        send_links(target=args.target, dry_run=args.dry_run, first=args.first, limit=args.limit)

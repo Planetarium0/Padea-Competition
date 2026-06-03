@@ -9,6 +9,7 @@ top-level types for callers that want to type-annotate function signatures.
 
 from __future__ import annotations
 
+import contextvars
 import logging
 import os
 from typing import Any
@@ -17,6 +18,21 @@ from dotenv import load_dotenv
 
 from .database import Database, Record, Table  # noqa: F401 — re-exported
 from .prompt_user import prompt_user
+
+
+# ---------------------------------------------------------------------------
+# Active self-healing handler — read by log.failure to register soft errors
+# with the currently-wrapped workflow. ContextVar (not a thread-local) so
+# nested handlers and future async code both work.
+# ---------------------------------------------------------------------------
+
+# Holds the active ``self_healing_error_handler`` instance (or ``None`` outside
+# any wrapped workflow). Typed as ``Any`` because the handler class lives in a
+# sibling module that imports back from here; using the concrete type would
+# require a forward reference and adds nothing at runtime.
+_active_handler: contextvars.ContextVar[Any] = contextvars.ContextVar(
+    "_active_handler", default=None
+)
 
 # Initialise dotenv first so LOG_LEVEL can be read from .env.
 load_dotenv()
@@ -37,6 +53,34 @@ def _verbose(self: logging.Logger, message: str, *args: Any, **kwargs: Any) -> N
 
 
 logging.Logger.verbose = _verbose  # type: ignore[attr-defined]
+
+
+# ---------------------------------------------------------------------------
+# log.failure — error-level logging PLUS registration with the active
+# self-healing handler. Use for any error that should trigger an agent-driven
+# capture; reserve log.error for human-misuse errors (bad CLI args, etc.)
+# raised outside any wrapped workflow. See plans/current/principles.md §2.
+# ---------------------------------------------------------------------------
+
+def _failure(self: logging.Logger, message: str, *args: Any, **kwargs: Any) -> None:
+    """Log at ERROR and register with the active self_healing_error_handler.
+
+    Execution continues exactly as ``log.error`` would — only the capture
+    behaviour changes. Outside a wrapped workflow the registration is a
+    no-op, so calling ``log.failure`` from helper code (migrations, REPL)
+    is always safe.
+    """
+    self.error(message, *args, **kwargs)
+    try:
+        formatted = message % args if args else message
+    except Exception:
+        formatted = message
+    handler = _active_handler.get()
+    if handler is not None:
+        handler.register_failure(formatted)
+
+
+logging.Logger.failure = _failure  # type: ignore[attr-defined]
 
 
 # ---------------------------------------------------------------------------

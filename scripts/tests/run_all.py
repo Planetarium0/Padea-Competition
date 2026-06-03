@@ -21,6 +21,7 @@ if str(_TESTS_DIR) not in sys.path:
 
 import test_database
 import test_email
+import test_error_handler
 import test_evaluate_caterers
 import test_execute_caterer_switch
 import test_register_orders
@@ -37,6 +38,7 @@ def suite() -> unittest.TestSuite:
     for module in (
         test_database,
         test_email,
+        test_error_handler,
         test_register_orders,
         test_send_meals_links,
         test_send_orders,

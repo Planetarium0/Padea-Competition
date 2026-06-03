@@ -1,10 +1,4 @@
-"""Tests for scripts/support/email.py — escalate_to_dev.
-
-schedule_email behaviour is exercised by test_send_orders / test_send_qr_emails
-/ test_send_meals_links / test_evaluate_caterers. This module isolates the new
-escalation surface: artifact creation, dedupe by failure_id, body contents,
-and best-effort email semantics under Resend failure.
-"""
+"""Tests for scripts/support/email.py — schedule_email dev redirect and escalate_to_dev."""
 from __future__ import annotations
 
 import os
@@ -15,7 +9,75 @@ from pathlib import Path
 from unittest import mock
 
 import support.email as email_module
-from support.email import escalate_to_dev
+from support.email import escalate_to_dev, schedule_email
+from mock_db import MockDatabase
+
+
+class TestScheduleEmailDevRedirect(unittest.TestCase):
+    """APP_ENV=development redirects sends to DEV_NOTIFICATION_EMAIL."""
+
+    def setUp(self) -> None:
+        self._send_patch = mock.patch("support.email.resend.Emails.send")
+        self.mock_send = self._send_patch.start()
+
+    def tearDown(self) -> None:
+        self._send_patch.stop()
+
+    def _call(self, to_email: str = "caterer@example.com", cc_email: list[str] | None = None) -> None:
+        schedule_email(
+            MockDatabase(),
+            to_email=to_email,
+            cc_email=cc_email,
+            subject="Test subject",
+            body="Test body",
+            email_id="EMAIL-TEST-001",
+        )
+
+    def test_dev_mode_redirects_to_to_dev_recipient(self) -> None:
+        with mock.patch.dict(os.environ, {
+            "APP_ENV": "development",
+            "DEV_NOTIFICATION_EMAIL": "dev@example.com",
+            "RESEND_API_KEY": "key",
+        }):
+            self._call(to_email="caterer@real.com")
+        sent = self.mock_send.call_args[0][0]
+        self.assertEqual(sent["to"], ["dev@example.com"])
+
+    def test_dev_mode_drops_cc(self) -> None:
+        with mock.patch.dict(os.environ, {
+            "APP_ENV": "development",
+            "DEV_NOTIFICATION_EMAIL": "dev@example.com",
+            "RESEND_API_KEY": "key",
+        }):
+            self._call(cc_email=["chef@real.com", "manager@real.com"])
+        sent = self.mock_send.call_args[0][0]
+        self.assertNotIn("cc", sent)
+
+    def test_dev_mode_audit_record_keeps_original_to_address(self) -> None:
+        db = MockDatabase()
+        with mock.patch.dict(os.environ, {
+            "APP_ENV": "development",
+            "DEV_NOTIFICATION_EMAIL": "dev@example.com",
+            "RESEND_API_KEY": "key",
+        }):
+            schedule_email(db, to_email="caterer@real.com", cc_email=None,
+                           subject="S", body="B", email_id="E-001")
+        self.assertEqual(db.ScheduledEmails.created_fields[0]["to_address"], "caterer@real.com")
+
+    def test_dev_mode_no_dev_recipient_skips_send(self) -> None:
+        env = {"APP_ENV": "development", "RESEND_API_KEY": "key"}
+        env.pop("DEV_NOTIFICATION_EMAIL", None)
+        with mock.patch.dict(os.environ, env, clear=False):
+            os.environ.pop("DEV_NOTIFICATION_EMAIL", None)
+            self._call()
+        self.mock_send.assert_not_called()
+
+    def test_production_mode_sends_to_real_recipient(self) -> None:
+        with mock.patch.dict(os.environ, {"RESEND_API_KEY": "key"}, clear=False):
+            os.environ.pop("APP_ENV", None)
+            self._call(to_email="caterer@real.com")
+        sent = self.mock_send.call_args[0][0]
+        self.assertEqual(sent["to"], ["caterer@real.com"])
 
 
 class TestEscalateToDev(unittest.TestCase):
