@@ -57,9 +57,9 @@ class TestSelfHealingRegression(unittest.TestCase):
         """Concrete example: replicates a validation failure, mock-loads it, and shows regression handling."""
         # 1. Simulate a malformed record failing Pydantic validation
         invalid_student_data = {
-            "Student Name": "Incomplete Student",
-            "Year Level": "NOT_AN_INT",  # Invalid type: Pydantic expects int or null
-            "Dietary Requirements": [],
+            "name": "Incomplete Student",
+            "year_level": "NOT_AN_INT",  # Invalid type: Pydantic expects int or null
+            "dietary_requirement_ids": [],
         }
 
         # Verify that Pydantic validation catches this and raises ValidationError
@@ -72,11 +72,11 @@ class TestSelfHealingRegression(unittest.TestCase):
         # 2. Demonstrate how MockDatabase is populated from a captured state
         mock_snapshot = {
             "students": [
-                {"id": "recStudent01", "fields": {"Student Name": "Good Student", "Year Level": 12}},
-                {"id": "recStudent02", "fields": {"Student Name": "Another Student", "Year Level": 11}}
+                {"id": "recStudent01", "fields": {"name": "Good Student", "year_level": 12}},
+                {"id": "recStudent02", "fields": {"name": "Another Student", "year_level": 11}}
             ],
             "caterers": [
-                {"id": "recCaterer01", "fields": {"Caterer Name": "Eco Lunch", "Able to Serve Schools": []}}
+                {"id": "recCaterer01", "fields": {"name": "Eco Lunch", "able_to_serve_school_ids": []}}
             ]
         }
 
@@ -85,10 +85,10 @@ class TestSelfHealingRegression(unittest.TestCase):
 
         # Assert database was correctly populated in-memory
         self.assertEqual(len(db.Students.all()), 2)
-        self.assertEqual(db.Students.all()[0].fields["Student Name"], "Good Student")
-        self.assertEqual(db.Students.all()[1].fields["Year Level"], 11)
+        self.assertEqual(db.Students.all()[0].fields["name"], "Good Student")
+        self.assertEqual(db.Students.all()[1].fields["year_level"], 11)
         self.assertEqual(len(db.Caterers.all()), 1)
-        self.assertEqual(db.Caterers.all()[0].fields["Caterer Name"], "Eco Lunch")
+        self.assertEqual(db.Caterers.all()[0].fields["name"], "Eco Lunch")
 
     def test_logical_unhandled_edge_case(self) -> None:
         """Concrete example: replicates an unhandled logical exception in ordering logic."""
@@ -99,24 +99,23 @@ class TestSelfHealingRegression(unittest.TestCase):
                 {
                     "id": "recStudentVegan",
                     "fields": {
-                        "Student Name": "Vegan Student",
-                        "Dietary Requirements": ["recDietVeg"],
-                        "Sessions": ["recSessionMon"]
+                        "name":                    "Vegan Student",
+                        "dietary_requirement_ids": ["recDietVeg"],
+                        "session_ids":             ["recSessionMon"]
                     }
                 }
             ],
             "dietary_restrictions": [
-                {"id": "recDietVeg", "fields": {"Restriction Name": "Vegan", "Supersets": []}}
+                {"id": "recDietVeg", "fields": {"name": "Vegan", "superset_ids": []}}
             ],
             "sessions": [
                 {
                     "id": "recSessionMon",
                     "fields": {
-                        "Session ID": "Alpha - Mon",
-                        "School": ["recSchoolA"],
-                        "Caterer": ["recCatererMeat Only"],
-                        "Day": "Monday",
-                        "Year Levels": ["All"]
+                        "session_code": "Alpha - Mon",
+                        "school_id":    "recSchoolA",
+                        "caterer_id":   "recCatererMeat Only",
+                        "day":          "Monday",
                     }
                 }
             ],
@@ -124,8 +123,8 @@ class TestSelfHealingRegression(unittest.TestCase):
                 {
                     "id": "recCatererMeat Only",
                     "fields": {
-                        "Caterer Name": "Meat Masters",
-                        "Able to Serve Schools": ["recSchoolA"]
+                        "name":                     "Meat Masters",
+                        "able_to_serve_school_ids": ["recSchoolA"]
                     }
                 }
             ],
@@ -134,9 +133,9 @@ class TestSelfHealingRegression(unittest.TestCase):
                 {
                     "id": "recMenuBeef",
                     "fields": {
-                        "Menu Item Name": "Beef Burger",
-                        "Caterer": ["recCatererMeat Only"],
-                        "Dietary Tags": []
+                        "name":            "Beef Burger",
+                        "caterer_id":      "recCatererMeat Only",
+                        "dietary_tag_ids": []
                     }
                 }
             ]
@@ -156,7 +155,7 @@ class TestSelfHealingRegression(unittest.TestCase):
         # Let's verify that none of the caterer's menu items satisfy this vegan student
         compatible_items = [
             item for item in menu_items
-            if is_item_compatible(item.fields, vegan_student.fields["Dietary Requirements"], hierarchy)
+            if is_item_compatible(item.fields, vegan_student.fields["dietary_requirement_ids"], hierarchy)
         ]
         
         # Test assertion replicating the unhandled logic state: No compatible items!

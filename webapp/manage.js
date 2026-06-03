@@ -12,6 +12,8 @@
 
 "use strict";
 
+import { supabase } from './supabase_client.js'
+
 // ── URL params ────────────────────────────────────────────────────────────────
 const _p = new URLSearchParams(location.search);
 const MANAGER_ID = _p.get("manager");
@@ -55,11 +57,11 @@ let filteredStudents = [];
 
 let studentId   = STUDENT_ID || null;
 let studentName = "";
-let allRestrictions = [];           // [{id, name, supersets}]
+let allRestrictions = [];           // [{id, name, superset_ids}]
 let initialDietIds  = new Set();
 let checkedDietIds  = new Set();
 
-let menuItems   = [];               // [{id, fields}]
+let menuItems   = [];               // [{id, name, dietary_tag_ids, is_variant, variant_of_id, ...}]
 let variantMap  = {};               // parentId → [variantItem, ...]
 let legendTagIds = [];
 let dietMaps    = null;             // built once restrictions + neg-keywords are loaded
@@ -78,13 +80,6 @@ let confirmCallback      = null;
 const _cache = Object.create(null);
 const cacheGet = k => Object.prototype.hasOwnProperty.call(_cache, k) ? _cache[k] : null;
 const cacheSet = (k, v) => { _cache[k] = v; };
-
-// ── API ───────────────────────────────────────────────────────────────────────
-async function apiFetch(url, opts = {}) {
-  const res = await fetch(url, opts);
-  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
-  return res.json();
-}
 
 // ── Utility ───────────────────────────────────────────────────────────────────
 function escapeHtml(s) {
@@ -132,7 +127,7 @@ function buildHierarchyMaps(restrictions, negativeKeywords = {}) {
   }
   const children = {};
   for (const r of restrictions)
-    for (const pid of r.supersets) (children[pid] ||= []).push(r.id);
+    for (const pid of r.superset_ids) (children[pid] ||= []).push(r.id);
 
   function descendants(id, acc = new Set()) {
     if (acc.has(id)) return acc;
@@ -144,7 +139,7 @@ function buildHierarchyMaps(restrictions, negativeKeywords = {}) {
     if (acc.has(id)) return acc;
     acc.add(id);
     const r = idToRestr[id];
-    if (r) for (const pid of r.supersets) ancestors(pid, acc);
+    if (r) for (const pid of r.superset_ids) ancestors(pid, acc);
     return acc;
   }
   const subsetClosure = {}, supersetClosure = {};
@@ -157,8 +152,8 @@ function buildHierarchyMaps(restrictions, negativeKeywords = {}) {
 
 function checkCompatibility(item, studentReqIds, maps) {
   if (!studentReqIds.length) return { compatible: true, severity: "ok", issues: [] };
-  const itemTagIds    = item.fields["Dietary Tags"] || [];
-  const itemNameLower = (item.fields["Menu Item Name"] || "").toLowerCase();
+  const itemTagIds    = item.dietary_tag_ids || [];
+  const itemNameLower = (item.name || "").toLowerCase();
   const legendTagIdSet = maps.legendTagIdSet || new Set();
   const issues = [];
   for (const reqId of studentReqIds) {
@@ -190,8 +185,8 @@ function checkCompatibility(item, studentReqIds, maps) {
 function buildVariantMap(items) {
   const map = {};
   for (const item of items)
-    if (item.fields["Is Variant"]) {
-      const pid = (item.fields["Variant Of"] || [])[0];
+    if (item.is_variant) {
+      const pid = item.variant_of_id;
       if (pid) (map[pid] ||= []).push(item);
     }
   return map;
@@ -214,16 +209,16 @@ let _negKwP        = null;
 
 function loadRestrictions() {
   if (_restrictionsP) return _restrictionsP;
-  _restrictionsP = apiFetch("/api/dietary-restrictions").then(data => {
-    allRestrictions = data;
-    return data;
+  _restrictionsP = supabase.from('dietary_restrictions_view').select('*').then(({ data }) => {
+    allRestrictions = data || [];
+    return allRestrictions;
   });
   return _restrictionsP;
 }
 
 function loadNegativeKeywords() {
   if (_negKwP) return _negKwP;
-  _negKwP = fetch("/data/dietary_keywords.json", { cache: "no-cache" })
+  _negKwP = fetch('./data/dietary_keywords.json', { cache: 'no-cache' })
     .then(r => r.json())
     .then(d => d.negative_keywords || {})
     .catch(() => ({}));
@@ -237,6 +232,33 @@ async function ensureDietMaps() {
   return dietMaps;
 }
 
+async function loadManagerSessions(managerId) {
+  const { data } = await supabase
+    .from('sessions_view')
+    .select('*, schools(name)')
+    .eq('on_site_manager_id', managerId);
+  const DAY_ORDER = { Monday: 0, Tuesday: 1, Wednesday: 2, Thursday: 3, Friday: 4 };
+  return (data || [])
+    .map(sess => ({
+      id: sess.id,
+      label: `${sess.day} — ${sess.schools?.name || '?'}`,
+      day: sess.day,
+      catererIds: sess.caterer_id ? [sess.caterer_id] : [],
+      incomingCatererIds: sess.incoming_caterer_id ? [sess.incoming_caterer_id] : [],
+    }))
+    .sort((a, b) => (DAY_ORDER[a.day] ?? 99) - (DAY_ORDER[b.day] ?? 99));
+}
+
+async function loadSessionStudentsAll(sessionId) {
+  const { data } = await supabase
+    .from('students')
+    .select('id, name, student_sessions!inner(session_id)')
+    .eq('student_sessions.session_id', sessionId);
+  return (data || [])
+    .map(s => ({ id: s.id, name: s.name || '(no name)' }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 // ── Initialisation ────────────────────────────────────────────────────────────
 async function init() {
   if (!MANAGER_ID && !STUDENT_ID) { showView("error"); return; }
@@ -247,16 +269,16 @@ async function init() {
   if (IS_MANAGER) {
     document.getElementById("topbar-label").textContent = "Manager";
     showView("session-picker");
-    await loadManagerSessions();
+    await _loadManagerSessions();
   } else {
     await loadEditForm(STUDENT_ID, false);
   }
 }
 
 // ── Manager: session list ─────────────────────────────────────────────────────
-async function loadManagerSessions() {
+async function _loadManagerSessions() {
   try {
-    sessions = await apiFetch(`/api/manager/${MANAGER_ID}/sessions`);
+    sessions = await loadManagerSessions(MANAGER_ID);
   } catch {
     showError("Could not load your sessions. Check your link or try again.");
     return;
@@ -287,7 +309,7 @@ async function selectSession(sessId) {
   empty.classList.add("hidden");
 
   try {
-    studentList = await apiFetch(`/api/session/${sessId}/students-all`);
+    studentList = await loadSessionStudentsAll(sessId);
   } catch {
     showError("Could not load students for this session.");
     loading.classList.add("hidden");
@@ -367,26 +389,27 @@ async function loadEditForm(sId, isManager) {
   }
 
   try {
-    const [studentData] = await Promise.all([
-      apiFetch(`/api/student/${sId}`),
+    const [{ data: studentData }, _restrictions] = await Promise.all([
+      supabase.from('students_view').select('*').eq('id', sId).single(),
       loadRestrictions(),
     ]);
 
-    studentName = studentData.fields["Student Name"] || sId;
+    if (!studentData) throw new Error('Student not found');
+
+    studentName = studentData.name || sId;
     if (isManager) {
       document.getElementById("edit-student-name").textContent = studentName;
     } else {
       document.getElementById("topbar-label").textContent = studentName;
     }
 
-    const dietIds = studentData.fields["Dietary Requirements"] || [];
+    const dietIds = studentData.dietary_requirement_ids || [];
     initialDietIds = new Set(dietIds);
     checkedDietIds = new Set(dietIds);
     renderDietList();
 
     if (isManager) {
-      const prefIds = studentData.fields["Meal Preference"] || [];
-      initialPrefItemId  = prefIds[0] || null;
+      initialPrefItemId  = studentData.meal_preference_id || null;
       selectedPrefItemId = initialPrefItemId;
 
       const catId = (selectedSession.incomingCatererIds[0] || selectedSession.catererIds[0]) || null;
@@ -452,10 +475,12 @@ async function loadMenu(catId) {
     if (cached) {
       ({ items, catData } = cached);
     } else {
-      [items, catData] = await Promise.all([
-        apiFetch(`/api/caterer/${catId}/menu`),
-        apiFetch(`/api/caterer/${catId}`),
+      const [menuResult, legendResult] = await Promise.all([
+        supabase.from('menu_items_view').select('*').eq('caterer_id', catId),
+        supabase.from('caterer_legend_tags').select('restriction_id').eq('caterer_id', catId),
       ]);
+      items   = menuResult.data || [];
+      catData = { legendTagIds: (legendResult.data || []).map(r => r.restriction_id) };
       cacheSet(`menu:${catId}`, { items, catData });
     }
     menuItems    = items;
@@ -481,7 +506,7 @@ function updatePrefTrigger() {
   if (!selectedPrefItemId) { setPrefTrigger("Tap to choose a meal", ""); return; }
   const item = menuItems.find(m => m.id === selectedPrefItemId);
   item
-    ? setPrefTrigger("Currently selected", item.fields["Menu Item Name"] || "—")
+    ? setPrefTrigger("Currently selected", item.name || "—")
     : setPrefTrigger("Tap to choose a meal", "");
 }
 
@@ -493,16 +518,25 @@ function setOrderTrigger(label, name) {
 function updateOrderTrigger() {
   if (!selectedOverrideItemId) { setOrderTrigger("Choose a different meal…", ""); return; }
   const item = menuItems.find(m => m.id === selectedOverrideItemId);
-  setOrderTrigger("Override to", item ? item.fields["Menu Item Name"] || "—" : "—");
+  setOrderTrigger("Override to", item ? item.name || "—" : "—");
 }
 
 // ── Today's order ─────────────────────────────────────────────────────────────
 async function loadTodayOrder(sId, sessId) {
   try {
-    const ticket = await apiFetch(`/api/student/${sId}/ticket?session_id=${sessId}`);
-    if (!ticket.meal) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const { data } = await supabase
+      .from('order_students')
+      .select('orders!inner(id, date, session_id, menu_item_id, menu_items(id, name, menu_item_dietary_tags(restriction_id)))')
+      .eq('student_id', sId)
+      .eq('orders.session_id', sessId)
+      .eq('orders.date', today)
+      .maybeSingle();
+
+    if (!data?.orders) return;
+    const order = data.orders;
     hasExistingOrder = true;
-    todayOrderItemId = ticket.meal.id;
+    todayOrderItemId = order.menu_item_id;
 
     const isOptedOut = [...checkedDietIds].some(id => {
       const r = allRestrictions.find(r => r.id === id);
@@ -510,8 +544,11 @@ async function loadTodayOrder(sId, sessId) {
     });
     if (isOptedOut) return;
 
-    document.getElementById("order-meal-name").textContent = ticket.meal.name;
-    document.getElementById("order-meal-tags").innerHTML = (ticket.meal.tags || []).map(tid => {
+    const mealName = order.menu_items?.name || '(unnamed)';
+    const mealTags = (order.menu_items?.menu_item_dietary_tags || []).map(t => t.restriction_id);
+
+    document.getElementById("order-meal-name").textContent = mealName;
+    document.getElementById("order-meal-tags").innerHTML = mealTags.map(tid => {
       const name = allRestrictions.find(r => r.id === tid)?.name;
       return name ? `<span class="tag">${escapeHtml(TAG_SHORT[name] || name)}</span>` : "";
     }).join("");
@@ -559,7 +596,7 @@ function renderMealList() {
     ? (selectedOverrideItemId || todayOrderItemId)
     : selectedPrefItemId;
 
-  const displayItems = menuItems.filter(i => !i.fields["Is Variant"]);
+  const displayItems = menuItems.filter(i => !i.is_variant);
   const compat = [], maybe = [], incompat = [];
 
   for (const item of displayItems) {
@@ -572,8 +609,8 @@ function renderMealList() {
   }
 
   function renderRow({ item, result }) {
-    const name     = item.fields["Menu Item Name"] || "—";
-    const tagIds   = item.fields["Dietary Tags"] || [];
+    const name     = item.name || "—";
+    const tagIds   = item.dietary_tag_ids || [];
     const tagsHtml = tagIds.map(tid => {
       const tName = dietMaps.idToName[tid];
       return tName ? `<span class="tag">${escapeHtml(TAG_SHORT[tName] || tName)}</span>` : "";
@@ -694,8 +731,8 @@ function openVariantPicker(parentId) {
     const { severity, issues } = dietMaps
       ? checkCompatibility(item, activeDietIds, dietMaps)
       : { severity: "ok", issues: [] };
-    const name     = item.fields["Menu Item Name"] || "—";
-    const tagIds   = item.fields["Dietary Tags"] || [];
+    const name     = item.name || "—";
+    const tagIds   = item.dietary_tag_ids || [];
     const tagsHtml = tagIds.map(tid => {
       const tName = dietMaps?.idToName[tid];
       return tName ? `<span class="tag">${escapeHtml(TAG_SHORT[tName] || tName)}</span>` : "";
@@ -786,30 +823,17 @@ async function save() {
   const ops = [];
 
   if (!eqSets(initialDietIds, checkedDietIds)) {
-    ops.push(apiFetch(`/api/student/${studentId}/dietary-requirements`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ restriction_ids: [...checkedDietIds] }),
-    }));
+    ops.push(saveDietaryRequirements(studentId, [...checkedDietIds]));
   }
 
   if (IS_MANAGER && selectedPrefItemId !== initialPrefItemId && selectedPrefItemId) {
-    ops.push(apiFetch(`/api/student/${studentId}/meal-preference`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ meal_item_id: selectedPrefItemId }),
-    }));
+    ops.push(
+      supabase.from('students').update({ meal_preference_id: selectedPrefItemId }).eq('id', studentId)
+    );
   }
 
   if (IS_MANAGER && selectedOverrideItemId && selectedOverrideItemId !== todayOrderItemId) {
-    ops.push(apiFetch(`/api/student/${studentId}/order-override`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        session_id:       selectedSession.id,
-        new_meal_item_id: selectedOverrideItemId,
-      }),
-    }));
+    ops.push(overrideOrder(studentId, selectedSession.id, selectedOverrideItemId));
   }
 
   try {
@@ -828,6 +852,27 @@ async function save() {
     btn.disabled = false;
     btn.textContent = "Save changes";
   }
+}
+
+async function saveDietaryRequirements(sId, restrictionIds) {
+  await supabase.from('student_dietary_restrictions').delete().eq('student_id', sId);
+  if (restrictionIds.length > 0) {
+    await supabase.from('student_dietary_restrictions').insert(
+      restrictionIds.map(rid => ({ student_id: sId, restriction_id: rid }))
+    );
+  }
+}
+
+async function overrideOrder(sId, sessId, newMenuItemId) {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabase.rpc('override_order', {
+    p_student_id: sId,
+    p_session_id: sessId,
+    p_new_menu_item_id: newMenuItemId,
+    p_date: today,
+  });
+  if (error) throw new Error(error.message);
+  return data;
 }
 
 function editAnother() {
@@ -851,5 +896,8 @@ const mgr = {
   confirmNo()  { closeConfirm(); },
   confirmYes() { const cb = confirmCallback; closeConfirm(); if (cb) cb(); },
 };
+
+// Expose mgr globally so onclick attributes in HTML still work with module scripts.
+window.mgr = mgr;
 
 init();

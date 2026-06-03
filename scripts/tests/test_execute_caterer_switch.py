@@ -25,12 +25,12 @@ IN_CATERER_ID  = fixtures.CATERER_B_ID
 
 def _approved_proposal() -> Record:
     return Record(id=PROPOSAL_ID, fields={
-        "Proposal ID":      "PROP-ALPHA-2026-05-01",
-        "Session":          [fixtures.SESSION_MON_ID],
-        "Outgoing Caterer": [OUT_CATERER_ID],
-        "Incoming Caterer": [IN_CATERER_ID],
-        "Status":           "Approved",
-        "Proposed On":      "2026-05-01",
+        "proposal_code":       "PROP-ALPHA-2026-05-01",
+        "session_id":          fixtures.SESSION_MON_ID,
+        "outgoing_caterer_id": OUT_CATERER_ID,
+        "incoming_caterer_id": IN_CATERER_ID,
+        "status":              "Approved",
+        "proposed_on":         "2026-05-01",
     })
 
 
@@ -43,9 +43,9 @@ def _setup_db(proposal: Record | None = None, extra_sessions: list[Record] | Non
     # Two students enrolled at school A's sessions
     db.Students._records = [
         Record(id=f"stu{i}", fields={
-            "Student Name":    f"Student {i}",
-            "Sessions":        [fixtures.SESSION_MON_ID],
-            "Meal Preference": [fixtures.ITEM_VEG_PASTA_ID],
+            "name":               f"Student {i}",
+            "session_ids":        [fixtures.SESSION_MON_ID],
+            "meal_preference_id": fixtures.ITEM_VEG_PASTA_ID,
         })
         for i in range(3)
     ]
@@ -68,17 +68,17 @@ class TestExecuteCatererSwitch(unittest.TestCase):
         self.assertNotIn(fixtures.SESSION_WED_ID, session_update_ids)
 
         for _, fields in db.Sessions.updates:
-            self.assertEqual(fields["Incoming Caterer"], [IN_CATERER_ID])
+            self.assertEqual(fields["incoming_caterer_id"], IN_CATERER_ID)
 
     def test_happy_path_clears_student_meal_preferences(self):
         db = _setup_db()
         execute(PROPOSAL_ID, dry_run=False, db=db)
 
-        # At least one batch_update call clearing Meal Preference
+        # At least one batch_update call clearing meal_preference_id
         cleared_ids = set()
         for batch in db.Students.batch_update_calls:
             for u in batch:
-                if u.get("fields", {}).get("Meal Preference") == []:
+                if "meal_preference_id" in u and u.get("meal_preference_id") is None:
                     cleared_ids.add(u["id"])
 
         # All 3 students enrolled at SESSION_MON_ID should be cleared
@@ -90,16 +90,16 @@ class TestExecuteCatererSwitch(unittest.TestCase):
 
         proposal_updates = {uid: fields for uid, fields in db.CatererSwitchProposals.updates}
         self.assertIn(PROPOSAL_ID, proposal_updates)
-        self.assertEqual(proposal_updates[PROPOSAL_ID]["Status"], "Approved")
+        self.assertEqual(proposal_updates[PROPOSAL_ID]["status"], "Approved")
 
     def test_non_approved_status_raises_system_exit(self):
         for status in ("Pending", "Rejected", "Executed"):
             with self.subTest(status=status):
                 proposal = Record(id=PROPOSAL_ID, fields={
-                    "Session":          [fixtures.SESSION_MON_ID],
-                    "Outgoing Caterer": [OUT_CATERER_ID],
-                    "Incoming Caterer": [IN_CATERER_ID],
-                    "Status":           status,
+                    "session_id":          fixtures.SESSION_MON_ID,
+                    "outgoing_caterer_id": OUT_CATERER_ID,
+                    "incoming_caterer_id": IN_CATERER_ID,
+                    "status":              status,
                 })
                 db = _setup_db(proposal=proposal)
                 with self.assertRaises(SystemExit) as cm:
@@ -126,10 +126,10 @@ class TestExecuteCatererSwitch(unittest.TestCase):
         # Sessions not named in the proposal must not be touched —
         # whether at the same school or a different one.
         other_session = Record(id="sessOther", fields={
-            "Session ID": "Beta College - Tuesday",
-            "School":     [fixtures.SCHOOL_B_ID],
-            "Caterer":    [OUT_CATERER_ID],
-            "Day":        "Tuesday",
+            "session_code": "Beta College - Tuesday",
+            "school_id":    fixtures.SCHOOL_B_ID,
+            "caterer_id":   OUT_CATERER_ID,
+            "day":          "Tuesday",
         })
         db = _setup_db(extra_sessions=[other_session])
         execute(PROPOSAL_ID, dry_run=False, db=db)

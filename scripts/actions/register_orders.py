@@ -101,7 +101,7 @@ class OrderingData:
 
     @classmethod
     def load(cls, db: Database) -> "OrderingData":
-        log.info("Loading data from Airtable...")
+        log.info("Loading data from Supabase...")
         data = cls(
             sessions=             db.Sessions.all(),
             students=             db.Students.all(),
@@ -141,18 +141,19 @@ class OrderingIndex:
     def build(cls, data: OrderingData) -> "OrderingIndex":
         menu_items_by_caterer: dict[str, list[Record[MenuItemFields]]] = defaultdict(list)
         for item in data.menu_items:
-            for cid in (item.fields.get("Caterer") or []):
+            cid = item.fields.get("caterer_id")
+            if cid:
                 menu_items_by_caterer[cid].append(item)
 
         students_by_session: dict[str, list[Record[StudentFields]]] = defaultdict(list)
         for stu in data.students:
-            for sid in (stu.fields.get("Sessions") or []):
+            for sid in (stu.fields.get("session_ids") or []):
                 students_by_session[sid].append(stu)
 
         absent_pairs: set[tuple[str, str]] = set()
         for ab in data.absences:
-            stu_id  = (ab.fields.get("Student") or [None])[0]
-            sess_id = (ab.fields.get("Session") or [None])[0]
+            stu_id  = ab.fields.get("student_id")
+            sess_id = ab.fields.get("session_id")
             if stu_id and sess_id:
                 absent_pairs.add((stu_id, sess_id))
 
@@ -201,7 +202,7 @@ def is_student_excluded(
     ``session_date`` is the actual date the session occurs next week (sessions
     recur weekly and are matched by Day, not by the Date field on the record).
     """
-    sess_school = (session_fields.get("School") or [None])[0]
+    sess_school = session_fields.get("school_id")
     if not sess_school or not session_date:
         return False
 
@@ -209,15 +210,15 @@ def is_student_excluded(
 
     for exc in index.exclusions:
         ef = exc.fields
-        if (ef.get("School") or [None])[0] != sess_school:
+        if ef.get("school_id") != sess_school:
             continue
-        if ef.get("Date") != sess_date_str:
+        if ef.get("date") != sess_date_str:
             continue
-        affected = ef.get("Affected Year Levels") or []
+        affected = ef.get("year_levels") or []
         affected_lower = {a.lower() for a in affected}
         if not affected or "all" in affected_lower:
             return True
-        yr = student_fields.get("Year Level")
+        yr = student_fields.get("year_level")
         if yr is not None and str(int(yr)) in affected:
             return True
     return False
@@ -269,7 +270,7 @@ def compute_max_variety(caterer_fields: CatererFields, total_students: int) -> i
     are ordered with qty 1 or 2.
     """
     for n in range(6, 3, -1):
-        min_qty = caterer_fields.get(f"Min Qty {n} Items")
+        min_qty = caterer_fields.get(f"min_qty_{n}_items")
         if min_qty is not None and int(min_qty) > 0 and total_students >= n * int(min_qty):
             return n
     return max(1, total_students // 3)
@@ -323,7 +324,7 @@ def _find_min_qty(caterer_fields: CatererFields, num_distinct_items: int) -> int
     ``Min Qty N Items`` = each item must have at least this many portions.
     """
     for n in range(num_distinct_items, 3, -1):
-        val = caterer_fields.get(f"Min Qty {n} Items")
+        val = caterer_fields.get(f"min_qty_{n}_items")
         if val is not None:
             return int(val)
     return None
@@ -343,8 +344,8 @@ def enforce_min_qty(
     fully removed — which would displace students from their meals while still
     leaving the same violation behind.
     """
-    caterer_name   = caterer_fields.get("Caterer Name", "?")
-    legend_tag_ids = list(caterer_fields.get("Dietary Legend Tags") or [])
+    caterer_name   = caterer_fields.get("name", "?")
+    legend_tag_ids = list(caterer_fields.get("legend_tag_ids") or [])
     assignments    = list(assignments)
 
     for _iteration in range(30):  # safety cap
@@ -371,7 +372,7 @@ def enforce_min_qty(
         made_change = False
         for viol_item_id in list(violating):
             indices_on_item = item_to_indices[viol_item_id]
-            viol_item_name  = index.menu_item_by_id.get(viol_item_id, {}).get("Menu Item Name", "?")
+            viol_item_name  = index.menu_item_by_id.get(viol_item_id, {}).get("name", "?")
 
             # First pass: verify every student on this item has a compatible target.
             # If any student is blocked, leave the whole item in place.
@@ -379,7 +380,7 @@ def enforce_min_qty(
             for idx in indices_on_item:
                 a           = assignments[idx]
                 stu_fields  = index.student_by_id.get(a.student_id, {})
-                dietary_ids = stu_fields.get("Dietary Requirements") or []
+                dietary_ids = stu_fields.get("dietary_requirement_ids") or []
                 has_target  = any(
                     is_item_compatible(
                         index.menu_item_by_id.get(iid, {}), dietary_ids, index.dietary_hierarchy, legend_tag_ids,
@@ -387,7 +388,7 @@ def enforce_min_qty(
                     for iid in valid_items
                 )
                 if not has_target:
-                    stu_name = stu_fields.get("Student Name", "?")
+                    stu_name = stu_fields.get("name", "?")
                     log.warning(
                         f"  Item '{viol_item_name}' cannot be dissolved — "
                         f"{stu_name} has no dietarily compatible swap target."
@@ -402,7 +403,7 @@ def enforce_min_qty(
             for idx in indices_on_item:
                 a           = assignments[idx]
                 stu_fields  = index.student_by_id.get(a.student_id, {})
-                dietary_ids = stu_fields.get("Dietary Requirements") or []
+                dietary_ids = stu_fields.get("dietary_requirement_ids") or []
 
                 compat = {
                     iid: cnt for iid, cnt in valid_items.items()
@@ -424,9 +425,9 @@ def enforce_min_qty(
                 assignments[idx] = a.with_item(chosen_id)
                 valid_items[chosen_id] = valid_items.get(chosen_id, 0) + 1
 
-                stu_name = stu_fields.get("Student Name", "?")
-                old_name = index.menu_item_by_id.get(a.item_id, {}).get("Menu Item Name", "?")
-                new_name = index.menu_item_by_id.get(chosen_id, {}).get("Menu Item Name", "?")
+                stu_name = stu_fields.get("name", "?")
+                old_name = index.menu_item_by_id.get(a.item_id, {}).get("name", "?")
+                new_name = index.menu_item_by_id.get(chosen_id, {}).get("name", "?")
                 log.info(f"  Min-qty swap: {stu_name}: {old_name} → {new_name}")
                 made_change = True
 
@@ -451,7 +452,7 @@ def clear_existing_orders(
     max_date = max(dates).isoformat()
 
     existing = db.Orders.all(
-        formula=f"AND({{Date}} >= '{min_date}', {{Date}} <= '{max_date}')",
+        filter=lambda q, mn=min_date, mx=max_date: q.gte("date", mn).lte("date", mx),
     )
     if existing:
         log.info(f"Clearing {len(existing)} existing Orders for next week...")
@@ -459,7 +460,7 @@ def clear_existing_orders(
             db.Orders.batch_delete([r.id for r in existing])
 
     existing_wo = db.WeeklyOrders.all(
-        formula=f"AND({{Week Start}} >= '{min_date}', {{Week Start}} <= '{max_date}')",
+        filter=lambda q, mn=min_date, mx=max_date: q.gte("week_start", mn).lte("week_start", mx),
     )
     if existing_wo:
         log.info(f"Clearing {len(existing_wo)} existing draft Weekly Orders for next week...")
@@ -483,7 +484,7 @@ def flip_incoming_caterers(db: Database, dry_run: bool = False) -> None:
     (proposals are Status='Approved' between coordinator approval and here).
     """
     sessions = db.Sessions.all()
-    to_flip = [r for r in sessions if r.fields.get("Incoming Caterer")]
+    to_flip = [r for r in sessions if r.fields.get("incoming_caterer_id")]
     if not to_flip:
         return
 
@@ -492,19 +493,19 @@ def flip_incoming_caterers(db: Database, dry_run: bool = False) -> None:
     log.info(f"Committing {len(to_flip)} pending caterer switch(es)...")
     if dry_run:
         for r in to_flip:
-            incoming = (r.fields.get("Incoming Caterer") or [None])[0]
-            log.info(f"  [DRY RUN] Would flip session {r.id}: Caterer → {incoming}")
+            incoming_id = r.fields.get("incoming_caterer_id")
+            log.info(f"  [DRY RUN] Would flip session {r.id}: Caterer → {incoming_id}")
         return
 
     for r in to_flip:
-        incoming = r.fields.get("Incoming Caterer") or []
-        db.Sessions.update(r.id, {"Caterer": incoming, "Incoming Caterer": []})
-        log.info(f"  Flipped session {r.id} to caterer {incoming[0] if incoming else '?'}")
+        incoming_id = r.fields.get("incoming_caterer_id")
+        db.Sessions.update(r.id, {"caterer_id": incoming_id, "incoming_caterer_id": None})
+        log.info(f"  Flipped session {r.id} to caterer {incoming_id or '?'}")
 
         for p in proposals:
             pf = p.fields
-            if r.id in (pf.get("Session") or []) and pf.get("Status") == "Approved":
-                db.CatererSwitchProposals.update(p.id, {"Status": "Executed"})
+            if pf.get("session_id") == r.id and pf.get("status") == "Approved":
+                db.CatererSwitchProposals.update(p.id, {"status": "Executed"})
                 log.info(f"  Marked proposal {p.id} as Executed")
 
 
@@ -547,7 +548,7 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
     # Sessions for next week — matched by Day field (sessions recur weekly)
     next_week_sessions = [
         sess for sess in data.sessions
-        if sess.fields.get("Day") in week_dates
+        if sess.fields.get("day") in week_dates
     ]
     log.info(f"Found {len(next_week_sessions)} sessions for next week")
 
@@ -563,23 +564,23 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
     for sess_rec in next_week_sessions:
         sess_id     = sess_rec.id
         sess_fields = sess_rec.fields
-        cid = (sess_fields.get("Caterer") or [None])[0]
+        cid = sess_fields.get("caterer_id")
         if not cid:
             continue
-        session_date = week_dates.get(sess_fields.get("Day", ""))
+        session_date = week_dates.get(sess_fields.get("day", ""))
         menu_ids = {item.id for item in index.menu_items_by_caterer.get(cid, [])}
         for stu in index.students_by_session.get(sess_id, []):
             if (stu.id, sess_id) in index.absent_pairs:
                 continue
             if is_student_excluded(stu.fields, sess_fields, session_date, index):
                 continue
-            dietary_ids = stu.fields.get("Dietary Requirements") or []
+            dietary_ids = stu.fields.get("dietary_requirement_ids") or []
             if has_opted_out(dietary_ids, index.dietary_hierarchy):
                 continue
             caterer_student_counts[cid] += 1
-            pref_ids = stu.fields.get("Meal Preference") or []
-            if pref_ids and pref_ids[0] in menu_ids:
-                explicit_pref_counts[cid] += 1
+            pref_id = stu.fields.get("meal_preference_id")
+            if pref_id and pref_id in menu_ids:
+                    explicit_pref_counts[cid] += 1
 
     caterer_max_variety = {
         cid: compute_max_variety(index.caterer_by_id.get(cid, {}), total)
@@ -587,7 +588,7 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
     }
 
     for cid, count in explicit_pref_counts.items():
-        caterer_name = index.caterer_by_id.get(cid, {}).get("Caterer Name", cid)
+        caterer_name = index.caterer_by_id.get(cid, {}).get("name", cid)
         mode    = "popularity" if count >= VARIETY_THRESHOLD else "variety"
         max_v   = caterer_max_variety.get(cid)
         cap_str = f", capped at {max_v} items" if (mode == "variety" and max_v) else ""
@@ -605,15 +606,14 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
     for sess_rec in next_week_sessions:
         sess_id      = sess_rec.id
         sess_fields  = sess_rec.fields
-        sess_label   = sess_fields.get("Session ID", sess_id)
-        day          = sess_fields.get("Day", "?")
+        sess_label   = sess_fields.get("session_code", sess_id)
+        day          = sess_fields.get("day", "?")
         session_date = week_dates.get(day)
 
-        caterer_links = sess_fields.get("Caterer") or []
-        if not caterer_links:
+        caterer_id = sess_fields.get("caterer_id")
+        if not caterer_id:
             log.warning(f"Session '{sess_label}' has no caterer — skipping.")
             continue
-        caterer_id = caterer_links[0]
 
         caterer_menu = index.menu_items_by_caterer.get(caterer_id, [])
         if not caterer_menu:
@@ -625,12 +625,12 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
         log.info(f"Session '{sess_label}' ({day}): {len(enrolled)} enrolled students")
 
         batch          = caterer_batches[caterer_id]
-        legend_tag_ids = list(index.caterer_by_id.get(caterer_id, {}).get("Dietary Legend Tags") or [])
+        legend_tag_ids = list(index.caterer_by_id.get(caterer_id, {}).get("legend_tag_ids") or [])
 
         for stu in enrolled:
             stu_id     = stu.id
             stu_fields = stu.fields
-            stu_name   = stu_fields.get("Student Name", "?")
+            stu_name   = stu_fields.get("name", "?")
 
             if (stu_id, sess_id) in index.absent_pairs:
                 stats["absent"] += 1
@@ -640,22 +640,21 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
                 stats["excluded"] += 1
                 continue
 
-            dietary_ids = stu_fields.get("Dietary Requirements") or []
+            dietary_ids = stu_fields.get("dietary_requirement_ids") or []
 
             if has_opted_out(dietary_ids, index.dietary_hierarchy):
                 stats["opted_out"] += 1
                 continue
 
             # --- Try explicit Meal Preference ---
-            pref_ids    = stu_fields.get("Meal Preference") or []
+            pref_id     = stu_fields.get("meal_preference_id")
             item_id: str | None = None
             is_explicit = False
 
-            if pref_ids:
-                pref_id = pref_ids[0]
+            if pref_id:
                 if pref_id in caterer_menu_ids:
                     pref_fields = index.menu_item_by_id.get(pref_id, {})
-                    pref_name   = pref_fields.get("Menu Item Name", "?")
+                    pref_name   = pref_fields.get("name", "?")
                     if not is_item_compatible(pref_fields, dietary_ids, index.dietary_hierarchy, legend_tag_ids):
                         # Definite incompatibility — refuse the override and
                         # force-swap to a compatible fallback below.
@@ -696,7 +695,7 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
             ))
             stats["assigned"] += 1
 
-            item_name = index.menu_item_by_id.get(item_id, {}).get("Menu Item Name", "?")
+            item_name = index.menu_item_by_id.get(item_id, {}).get("name", "?")
             if is_explicit:
                 source = "explicit"
             elif explicit_pref_counts[caterer_id] < VARIETY_THRESHOLD:
@@ -716,29 +715,29 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
     # -----------------------------------------------------------------------
     for caterer_id, batch in caterer_batches.items():
         caterer_fields = index.caterer_by_id.get(caterer_id, {})
-        caterer_name   = caterer_fields.get("Caterer Name", "?")
+        caterer_name   = caterer_fields.get("name", "?")
         log.info(f"\nEnforcing min-qty for '{caterer_name}'...")
         batch.assignments = enforce_min_qty(caterer_fields, batch.assignments, index)
 
     # -----------------------------------------------------------------------
-    # Dry-run summary or write to Airtable
+    # Dry-run summary or write to Supabase
     # -----------------------------------------------------------------------
     if dry_run:
-        log.info("\n=== DRY RUN — not writing to Airtable ===")
+        log.info("\n=== DRY RUN — not writing to database ===")
         _print_summary(caterer_batches, index, week_dates)
         return
 
-    log.info("\nWriting to Airtable...")
+    log.info("\nWriting to Supabase...")
 
     for caterer_id, batch in caterer_batches.items():
         if not batch.assignments:
             continue
 
         caterer_fields = index.caterer_by_id.get(caterer_id, {})
-        caterer_name   = caterer_fields.get("Caterer Name", "?")
-        price_per_item = caterer_fields.get("Price per Item") or 0
-        delivery_fee   = caterer_fields.get("Delivery Fee") or 0
-        fee_structure  = caterer_fields.get("Delivery Fee Structure", "Per trip")
+        caterer_name   = caterer_fields.get("name", "?")
+        price_per_item = caterer_fields.get("price_per_item") or 0
+        delivery_fee   = caterer_fields.get("delivery_fee") or 0
+        fee_structure  = caterer_fields.get("delivery_fee_structure", "Per trip")
 
         total_meals     = len(batch.assignments)
         unique_sessions = len({a.session_id for a in batch.assignments})
@@ -753,11 +752,11 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
         log.info(f"Creating Weekly Order: {wo_id} ({total_meals} meals, ${total_cost:.2f})")
 
         created_wo = db.WeeklyOrders.create([{
-            "Order ID":    wo_id,
-            "Caterer":     [caterer_id],
-            "Week Start":  next_monday.isoformat(),
-            "Total Meals": total_meals,
-            "Total Cost":  total_cost,
+            "order_code":  wo_id,
+            "caterer_id":  caterer_id,
+            "week_start":  next_monday.isoformat(),
+            "total_meals": total_meals,
+            "total_cost":  total_cost,
         }])
         if not created_wo:
             log.error(f"Failed to create Weekly Order for '{caterer_name}' — skipping.")
@@ -765,10 +764,8 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
 
         wo_airtable_id = created_wo[0].id
 
-        # One Order row per (session, item) pair — all students sharing that
-        # meal are linked in the Student field. Quantity = number of students.
-        # send_orders.py sums Quantity; the ticket API uses FIND in ARRAYJOIN
-        # to locate a student's row, both of which work with this shape.
+        # One Order row per (session, item) pair. student_ids is written to the
+        # order_students junction table via the database layer.
         grouped: dict[tuple[str, str], list[str]] = defaultdict(list)
         for a in batch.assignments:
             grouped[(a.session_id, a.item_id)].append(a.student_id)
@@ -776,18 +773,18 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
         order_records: list[dict[str, Any]] = []
         for (sess_id, item_id), student_ids in grouped.items():
             sess_fields  = index.session_by_id.get(sess_id, {})
-            day          = sess_fields.get("Day", "")
+            day          = sess_fields.get("day", "")
             session_date = week_dates.get(day, next_monday)
-            sess_label   = sess_fields.get("Session ID", sess_id)
-            item_name    = index.menu_item_by_id.get(item_id, {}).get("Menu Item Name", "?")
+            sess_label   = sess_fields.get("session_code", sess_id)
+            item_name    = index.menu_item_by_id.get(item_id, {}).get("name", "?")
             order_records.append({
-                "Order ID":     f"{sess_label} — {item_name} — {week_label}",
-                "Weekly Order": [wo_airtable_id],
-                "Menu Item":    [item_id],
-                "Session":      [sess_id],
-                "Student":      student_ids,
-                "Date":         session_date.isoformat(),
-                "Quantity":     len(student_ids),
+                "order_code":      f"{sess_label} — {item_name} — {week_label}",
+                "weekly_order_id": wo_airtable_id,
+                "menu_item_id":    item_id,
+                "session_id":      sess_id,
+                "student_ids":     student_ids,
+                "date":            session_date.isoformat(),
+                "quantity":        len(student_ids),
             })
 
         log.info(f"  Creating {len(order_records)} Order records ({total_meals} meals)...")
@@ -803,7 +800,7 @@ def _print_summary(
 ) -> None:
     """Print a human-readable dry-run summary."""
     for caterer_id, batch in caterer_batches.items():
-        caterer_name = index.caterer_by_id.get(caterer_id, {}).get("Caterer Name", "?")
+        caterer_name = index.caterer_by_id.get(caterer_id, {}).get("name", "?")
         print(f"\n{'='*60}")
         print(f"  {caterer_name} — {len(batch.assignments)} meals")
         print(f"{'='*60}")
@@ -814,8 +811,8 @@ def _print_summary(
 
         for sess_id, orders in by_session.items():
             sf         = index.session_by_id.get(sess_id, {})
-            sess_label = sf.get("Session ID", sess_id)
-            day        = sf.get("Day", "?")
+            sess_label = sf.get("session_code", sess_id)
+            day        = sf.get("day", "?")
             date_      = week_dates.get(day, "?")
             print(f"\n  {day} {date_} — {sess_label}")
 
@@ -824,7 +821,7 @@ def _print_summary(
                 item_counts[a.item_id] += 1
 
             for item_id, count in sorted(item_counts.items(), key=lambda x: -x[1]):
-                item_name = index.menu_item_by_id.get(item_id, {}).get("Menu Item Name", "?")
+                item_name = index.menu_item_by_id.get(item_id, {}).get("name", "?")
                 print(f"    {item_name:40s} ×{count}")
 
 

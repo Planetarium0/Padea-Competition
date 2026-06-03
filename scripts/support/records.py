@@ -1,15 +1,13 @@
 """
-Typed record models for the Padea Airtable base.
+Typed record models for the Padea Supabase database.
 
-For every table in `data/schema.py` we expose:
-  - ``<Name>Fields`` — a ``TypedDict`` describing the optional shape that
-    Airtable returns inside ``record["fields"]``. Optional because Airtable
-    omits keys whose value is empty.
-  - ``<Name>Record`` — alias for ``Record[<Name>Fields]``, the full record
-    envelope that ``Table.all()`` / ``Table.get()`` produce.
-
-The functional ``TypedDict(...)`` syntax is used because most Airtable field
-names contain spaces and can't appear as Python identifiers.
+For every table we expose:
+  - ``<Name>Fields`` — a ``TypedDict`` describing the shape returned by
+    ``Table.all()`` / ``Table.get()``. Fields match Postgres column names
+    (snake_case). Linked fields that were multi-record arrays in Airtable
+    are either scalar FKs (one-to-many) or UUID list fields aggregated by
+    the corresponding *_view (many-to-many via junction tables).
+  - ``<Name>Record`` — alias for ``Record[<Name>Fields]``.
 """
 
 from __future__ import annotations
@@ -18,7 +16,7 @@ from typing import Literal, TypedDict
 
 
 # ---------------------------------------------------------------------------
-# Enum-like literals for the small set of singleSelect fields
+# Enum-like literals
 # ---------------------------------------------------------------------------
 
 Region = Literal[
@@ -41,8 +39,9 @@ YearLevel = Literal["All", "12", "11", "10", "9", "8", "7", "6"]
 SchoolFields = TypedDict(
     "SchoolFields",
     {
-        "School Name": str,
-        "Region": Region,
+        "id": str,
+        "name": str,
+        "region": Region,
     },
     total=False,
 )
@@ -50,9 +49,10 @@ SchoolFields = TypedDict(
 OnSiteManagerFields = TypedDict(
     "OnSiteManagerFields",
     {
-        "Manager Name": str,
-        "Mobile": str,
-        "Email": str,
+        "id": str,
+        "name": str,
+        "mobile": str,
+        "email": str,
     },
     total=False,
 )
@@ -60,22 +60,24 @@ OnSiteManagerFields = TypedDict(
 CatererFields = TypedDict(
     "CatererFields",
     {
-        "Caterer Name": str,
-        "Region": Region,
-        "Min Qty 4 Items": int,
-        "Min Qty 5 Items": int,
-        "Min Qty 6 Items": int,
-        "Price per Item": float,
-        "Contact Name": str,
-        "Contact Email": str,
-        "Chef Name": str,
-        "Chef Email": str,
-        "Chef Wants CC": bool,
-        "Delivery Fee": float,
-        "Delivery Fee Structure": DeliveryFeeStructure,
-        "Notes": str,
-        "Able to Serve Schools": list[str],
-        "Dietary Legend Tags": list[str],
+        "id": str,
+        "name": str,
+        "region": Region,
+        "min_qty_4_items": int,
+        "min_qty_5_items": int,
+        "min_qty_6_items": int,
+        "price_per_item": float,
+        "contact_name": str,
+        "contact_email": str,
+        "chef_name": str,
+        "chef_email": str,
+        "chef_wants_cc": bool,
+        "delivery_fee": float,
+        "delivery_fee_structure": DeliveryFeeStructure,
+        "notes": str,
+        # Aggregated by caterers_view
+        "legend_tag_ids": list[str],
+        "able_to_serve_school_ids": list[str],
     },
     total=False,
 )
@@ -83,12 +85,14 @@ CatererFields = TypedDict(
 MenuItemFields = TypedDict(
     "MenuItemFields",
     {
-        "Menu Item Name": str,
-        "Caterer": list[str],
-        "Dietary Tags": list[str],
-        "Is Variant": bool,
-        "Variant Of": list[str],
-        "Notes": str,
+        "id": str,
+        "name": str,
+        "caterer_id": str,
+        "is_variant": bool,
+        "variant_of_id": str,
+        "notes": str,
+        # Aggregated by menu_items_view
+        "dietary_tag_ids": list[str],
     },
     total=False,
 )
@@ -96,9 +100,11 @@ MenuItemFields = TypedDict(
 DietaryRestrictionFields = TypedDict(
     "DietaryRestrictionFields",
     {
-        "Restriction Name": str,
-        "Supersets": list[str],
-        "Subsets": list[str],
+        "id": str,
+        "name": str,
+        # Aggregated by dietary_restrictions_view
+        "superset_ids": list[str],
+        "subset_ids": list[str],
     },
     total=False,
 )
@@ -106,17 +112,19 @@ DietaryRestrictionFields = TypedDict(
 StudentFields = TypedDict(
     "StudentFields",
     {
-        "Student Name": str,
-        "Year Level": int,
-        "Subjects": str,
-        "Dietary Requirements": list[str],
-        "Student Email": str,
-        "Parent Name": str,
-        "Parent Email": str,
-        "Parent Mobile": str,
-        "Sessions": list[str],
-        "Meal Preference": list[str],
-        "Last Submitted": str,
+        "id": str,
+        "name": str,
+        "year_level": int,
+        "subjects": str,
+        "email": str,
+        "parent_name": str,
+        "parent_email": str,
+        "parent_mobile": str,
+        "meal_preference_id": str,
+        "last_submitted": str,
+        # Aggregated by students_view
+        "dietary_requirement_ids": list[str],
+        "session_ids": list[str],
     },
     total=False,
 )
@@ -124,18 +132,19 @@ StudentFields = TypedDict(
 SessionFields = TypedDict(
     "SessionFields",
     {
-        "Session ID": str,
-        "School": list[str],
-        "Caterer": list[str],
-        "Date": str,
-        "Day": DayName,
-        "On-Site Manager": list[str],
-        "Start Time": str,
-        "End Time": str,
-        "Dinner Time": str,
-        "Year Levels": list[YearLevel],
-        "Building": str,
-        "Incoming Caterer": list[str],
+        "id": str,
+        "session_code": str,
+        "school_id": str,
+        "caterer_id": str,
+        "incoming_caterer_id": str,
+        "on_site_manager_id": str,
+        "day": DayName,
+        "start_time": str,
+        "end_time": str,
+        "dinner_time": str,
+        "building": str,
+        # Aggregated by sessions_view
+        "year_levels": list[YearLevel],
     },
     total=False,
 )
@@ -143,11 +152,12 @@ SessionFields = TypedDict(
 AbsenceFields = TypedDict(
     "AbsenceFields",
     {
-        "Absence ID": str,
-        "Student": list[str],
-        "Session": list[str],
-        "Date": str,
-        "Reason": str,
+        "id": str,
+        "absence_code": str,
+        "student_id": str,
+        "session_id": str,
+        "date": str,
+        "reason": str,
     },
     total=False,
 )
@@ -155,11 +165,13 @@ AbsenceFields = TypedDict(
 ExclusionFields = TypedDict(
     "ExclusionFields",
     {
-        "Exclusion ID": str,
-        "School": list[str],
-        "Date": str,
-        "Affected Year Levels": list[YearLevel],
-        "Reason": str,
+        "id": str,
+        "exclusion_code": str,
+        "school_id": str,
+        "date": str,
+        "reason": str,
+        # Aggregated by exclusions_view
+        "year_levels": list[YearLevel],
     },
     total=False,
 )
@@ -167,13 +179,14 @@ ExclusionFields = TypedDict(
 CatererFeedbackFields = TypedDict(
     "CatererFeedbackFields",
     {
-        "Feedback ID": str,
-        "Student": list[str],
-        "Session": list[str],
-        "Caterer": list[str],
-        "Rating": int,
-        "Comment": str,
-        "Session Date": str,
+        "id": str,
+        "feedback_code": str,
+        "student_id": str,
+        "session_id": str,
+        "caterer_id": str,
+        "rating": int,
+        "comment": str,
+        "session_date": str,
     },
     total=False,
 )
@@ -181,12 +194,13 @@ CatererFeedbackFields = TypedDict(
 WeeklyOrderFields = TypedDict(
     "WeeklyOrderFields",
     {
-        "Order ID": str,
-        "Caterer": list[str],
-        "Week Start": str,
-        "Total Meals": int,
-        "Total Cost": float,
-        "Notes": str,
+        "id": str,
+        "order_code": str,
+        "caterer_id": str,
+        "week_start": str,
+        "total_meals": int,
+        "total_cost": float,
+        "notes": str,
     },
     total=False,
 )
@@ -194,13 +208,15 @@ WeeklyOrderFields = TypedDict(
 OrderFields = TypedDict(
     "OrderFields",
     {
-        "Order ID": str,
-        "Weekly Order": list[str],
-        "Menu Item": list[str],
-        "Session": list[str],
-        "Student": list[str],
-        "Date": str,
-        "Quantity": int,
+        "id": str,
+        "order_code": str,
+        "weekly_order_id": str,
+        "menu_item_id": str,
+        "session_id": str,
+        "date": str,
+        "quantity": int,
+        # Aggregated by orders_view
+        "student_ids": list[str],
     },
     total=False,
 )
@@ -208,15 +224,17 @@ OrderFields = TypedDict(
 ScheduledEmailFields = TypedDict(
     "ScheduledEmailFields",
     {
-        "Email ID": str,
-        "To": str,
-        "CC": str,
-        "Subject": str,
-        "Body": str,
-        "Status": EmailStatus,
-        "Weekly Order": list[str],
-        "Caterer Switch Proposal": list[str],
-        "Send Date": str | None,
+        "id": str,
+        "email_code": str,
+        "to_address": str,
+        "cc_address": str,
+        "subject": str,
+        "body": str,
+        "status": EmailStatus,
+        "weekly_order_id": str,
+        "caterer_switch_proposal_id": str,
+        "send_date": str,
+        "sent_at": str,
     },
     total=False,
 )
@@ -224,10 +242,11 @@ ScheduledEmailFields = TypedDict(
 ManagerSubstitutionFields = TypedDict(
     "ManagerSubstitutionFields",
     {
-        "Substitution ID": str,
-        "Session": list[str],
-        "Date": str,
-        "Substitute Manager": list[str],
+        "id": str,
+        "substitution_code": str,
+        "session_id": str,
+        "date": str,
+        "substitute_manager_id": str,
     },
     total=False,
 )
@@ -235,17 +254,18 @@ ManagerSubstitutionFields = TypedDict(
 CatererSwitchProposalFields = TypedDict(
     "CatererSwitchProposalFields",
     {
-        "Proposal ID": str,
-        "Session": list[str],
-        "Outgoing Caterer": list[str],
-        "Incoming Caterer": list[str],
-        "Avg Rating": float,
-        "Sessions Sampled": int,
-        "Unique Raters": int,
-        "Proposed On": str,
-        "Effective Week": str,
-        "Status": ProposalStatus,
-        "Notes": str,
+        "id": str,
+        "proposal_code": str,
+        "session_id": str,
+        "outgoing_caterer_id": str,
+        "incoming_caterer_id": str,
+        "avg_rating": float,
+        "sessions_sampled": int,
+        "unique_raters": int,
+        "proposed_on": str,
+        "effective_week": str,
+        "status": ProposalStatus,
+        "notes": str,
     },
     total=False,
 )

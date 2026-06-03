@@ -70,7 +70,7 @@ def expected_eating_count(
             continue
         if is_student_excluded(stu.fields, sess_rec.fields, session_date, index):
             continue
-        if has_opted_out(stu.fields.get("Dietary Requirements"), index.dietary_hierarchy):
+        if has_opted_out(stu.fields.get("dietary_requirement_ids"), index.dietary_hierarchy):
             continue
         count += 1
     return count
@@ -92,22 +92,23 @@ def check_min_qty(
     # wo_id → item_id → total quantity (next week only)
     orders_by_wo: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for order in data.orders:
-        if order.fields.get("Date") not in week_date_strs:
+        if order.fields.get("date") not in week_date_strs:
             continue
-        item_id  = (order.fields.get("Menu Item") or [None])[0]
-        quantity = order.fields.get("Quantity", 0)
+        item_id  = order.fields.get("menu_item_id")
+        quantity = order.fields.get("quantity", 0)
         if not item_id:
             continue
-        for wo_id in (order.fields.get("Weekly Order") or []):
+        wo_id = order.fields.get("weekly_order_id")
+        if wo_id:
             orders_by_wo[wo_id][item_id] += quantity
 
     errors  = 0
     checked = 0
     for wo in data.weekly_orders:
-        if wo.fields.get("Week Start") != next_monday:
+        if wo.fields.get("week_start") != next_monday:
             continue
-        wo_label   = wo.fields.get("Order ID", wo.id)
-        caterer_id = (wo.fields.get("Caterer") or [None])[0]
+        wo_label   = wo.fields.get("order_code", wo.id)
+        caterer_id = wo.fields.get("caterer_id")
         caterer_fields = index.caterer_by_id.get(caterer_id, {}) if caterer_id else {}
 
         item_totals = orders_by_wo.get(wo.id, {})
@@ -125,7 +126,7 @@ def check_min_qty(
             checked += 1
         else:
             for iid, cnt in violating:
-                item_name = index.menu_item_by_id.get(iid, {}).get("Menu Item Name", "?")
+                item_name = index.menu_item_by_id.get(iid, {}).get("name", "?")
                 log.error(
                     f"✗ '{wo_label}': '{item_name}' has {cnt} (needs ≥ {min_qty} "
                     f"with {num_items} distinct items)."
@@ -150,21 +151,21 @@ def check_session_totals(
 
     orders_by_session: dict[str, int] = defaultdict(int)
     for order in data.orders:
-        if order.fields.get("Date") not in week_date_strs:
+        if order.fields.get("date") not in week_date_strs:
             continue
-        sess_id  = (order.fields.get("Session") or [None])[0]
-        quantity = order.fields.get("Quantity", 0)
+        sess_id  = order.fields.get("session_id")
+        quantity = order.fields.get("quantity", 0)
         if sess_id:
             orders_by_session[sess_id] += quantity
 
     errors  = 0
     checked = 0
     for sess in data.base.sessions:
-        day = sess.fields.get("Day")
+        day = sess.fields.get("day")
         if day not in week_dates:
             continue
         session_date = week_dates[day]
-        sess_label   = sess.fields.get("Session ID", sess.id)
+        sess_label   = sess.fields.get("session_code", sess.id)
 
         expected = expected_eating_count(sess, session_date, index)
         actual   = orders_by_session.get(sess.id, 0)

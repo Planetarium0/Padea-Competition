@@ -2,23 +2,24 @@
  * Padea Meals — meal rating + next-week preference webapp.
  *
  * URL params:
- *   session  — Airtable Session record ID (required)
- *   student  — Airtable Student record ID (optional; from personalised QR)
+ *   session  — Supabase Session record ID (required)
+ *   student  — Supabase Student record ID (optional; from personalised QR)
  *
- * Data model (post-iteration-3):
- *   - Students.Dietary Requirements is a multipleRecordLinks → Dietary Restrictions.
- *   - Students.Meal Preference is a multipleRecordLinks → Menu Items (one item).
- *   - Menu Items.Dietary Tags is a multipleRecordLinks → Dietary Restrictions.
- *   - Dietary Restrictions has a 'Supersets' self-link describing the hierarchy
- *     (e.g. Vegetarian.Supersets = [No Red Meat]). An item is compatible with
- *     a constraint C iff one of its tags is in subset-closure(C).
- *   - Meal Selections is gone. Preference is upserted onto Students.Meal Preference.
+ * Data model:
+ *   - students.dietary_requirement_ids → array of dietary_restriction UUIDs.
+ *   - students.meal_preference_id → single menu_item UUID (or null).
+ *   - menu_items_view.dietary_tag_ids → array of dietary_restriction UUIDs.
+ *   - dietary_restrictions_view.superset_ids describes the hierarchy
+ *     (e.g. Vegetarian.superset_ids = [No Red Meat id]). An item is compatible
+ *     with a constraint C iff one of its tags is in subset-closure(C).
  *
  * Loading strategy:
  *   - First paint is synchronous (picker or form skeleton) based on URL + localStorage.
  *   - Session, Dietary Restrictions and Menu Items load in parallel in the background.
  *   - The meal picker opens instantly once the menu has arrived.
  */
+
+import { supabase } from './supabase_client.js'
 
 // ============================================================
 // Constants
@@ -37,7 +38,7 @@ const TAG_SHORT = {
   "Pescatarian": "Pesc",
 };
 
-// Name-keyword heuristic is loaded from /data/dietary_keywords.json at boot
+// Name-keyword heuristic is loaded from ./data/dietary_keywords.json at boot
 // (see loadNegativeKeywords) so the order generator and the webapp share one
 // source of truth. The resolved object is attached to dietMaps.negativeKeywords.
 
@@ -61,22 +62,10 @@ const CONSTRAINT_PHRASE = {
 };
 
 // ============================================================
-// API client
-// ============================================================
-
-async function apiFetch(url, options = {}) {
-  const res = await fetch(url, options);
-  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
-  return res.json();
-}
-
-// ============================================================
 // Cache helpers
 // ============================================================
 
-// In-memory cache for API responses — lives only for the current page session.
-// TTL and persistence are handled server-side; the client just avoids redundant
-// requests within a single visit.
+// In-memory cache for supabase responses — lives only for the current page session.
 const _memCache = Object.create(null);
 
 function cacheGet(key) {
@@ -104,7 +93,7 @@ function setKnownStudent(sessionId, sid) { ls.set(knownStudentKey(sessionId), si
 function clearKnownStudent(sessionId) { ls.remove(knownStudentKey(sessionId)); }
 
 // Device-side lockout — one submission per (session, device, day). Combined
-// with the server-side roster filter (Last Submitted == today hides the
+// with the server-side roster filter (last_submitted == today hides the
 // student from the dropdown) this means a student who submits is locked out
 // from re-using the form, either from their own device or someone else's.
 function submittedKey(sessionId) {
@@ -121,46 +110,54 @@ async function loadSession(sessionId) {
   const key = `padea_session_${sessionId}`;
   const cached = cacheGet(key);
   if (cached) {
-    console.log(`[padea] session (cache hit): ${cached.fields["Session ID"]}`);
+    console.log(`[padea] session (cache hit): ${cached.session_code}`);
     return cached;
   }
   console.log(`[padea] fetching session ${sessionId}…`);
-  const rec = await apiFetch(`/api/session/${sessionId}`);
-  console.log(`[padea] session loaded: ${rec.fields["Session ID"]}`,
-    "caterer:", rec.fields.Caterer,
-    "incoming:", rec.fields["Incoming Caterer"] || []);
-  cacheSet(key, rec);
-  return rec;
+  const { data, error } = await supabase.from('sessions_view').select('*').eq('id', sessionId).single();
+  if (error || !data) throw new Error(`Session not found: ${sessionId}`);
+  console.log(`[padea] session loaded: ${data.session_code}`,
+    "caterer:", data.caterer_id,
+    "incoming:", data.incoming_caterer_id || null);
+  cacheSet(key, data);
+  return data;
 }
 
-// During a caterer-switch transition, Sessions.Incoming Caterer is set and the
+// During a caterer-switch transition, sessions.incoming_caterer_id is set and the
 // webapp should show the incoming caterer's menu for preferences. Ratings still
-// belong to Sessions.Caterer (who cooked today's meal).
+// belong to sessions.caterer_id (who cooked today's meal).
 function menuCatererId(session) {
   if (!session) return null;
-  const incoming = (session.fields["Incoming Caterer"] || [])[0];
-  const current = (session.fields.Caterer || [])[0];
-  return incoming || current || null;
+  return session.incoming_caterer_id || session.caterer_id || null;
 }
 
 function isInTransition(session) {
-  return !!(session && (session.fields["Incoming Caterer"] || []).length);
+  return !!(session && session.incoming_caterer_id);
 }
 
 async function loadStudent(studentId) {
   const key = `padea_student_${studentId}`;
   const cached = cacheGet(key);
   if (cached) return cached;
-  const rec = await apiFetch(`/api/student/${studentId}`);
-  cacheSet(key, rec);
-  return rec;
+  const { data, error } = await supabase.from('students_view').select('*').eq('id', studentId).single();
+  if (error || !data) throw new Error(`Student not found: ${studentId}`);
+  cacheSet(key, data);
+  return data;
 }
 
 async function loadStudentsForSession(sessionId) {
   const key = `padea_students_${sessionId}`;
   const cached = cacheGet(key);
   if (cached) return cached;
-  const result = await apiFetch(`/api/session/${sessionId}/students`);
+  const today = new Date().toISOString().slice(0, 10);
+  const { data } = await supabase
+    .from('students')
+    .select('id, name, last_submitted, student_sessions!inner(session_id)')
+    .eq('student_sessions.session_id', sessionId);
+  const result = (data || [])
+    .filter(s => s.last_submitted !== today)
+    .map(s => ({ id: s.id, name: s.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
   cacheSet(key, result);
   return result;
 }
@@ -172,27 +169,28 @@ async function loadMenuItems(catererId) {
     console.log(`[padea] menu (cache hit, ${cached.length} items)`);
     return cached;
   }
-  const items = await apiFetch(`/api/caterer/${catererId}/menu`);
+  const { data } = await supabase.from('menu_items_view').select('*').eq('caterer_id', catererId);
+  const items = data || [];
   console.log(`[padea] menu loaded: ${items.length} items`);
   cacheSet(key, items);
   return items;
 }
 
 async function loadDietaryRestrictions() {
-  const key = "padea_diet_restrictions";
+  const key = 'padea_diet_restrictions';
   const cached = cacheGet(key);
   if (cached) return cached;
-  const data = await apiFetch("/api/dietary-restrictions");
-  console.log(`[padea] dietary restrictions loaded: ${data.length}`);
-  cacheSet(key, data);
-  return data;
+  const { data } = await supabase.from('dietary_restrictions_view').select('*');
+  console.log(`[padea] dietary restrictions loaded: ${(data || []).length}`);
+  cacheSet(key, data || []);
+  return data || [];
 }
 
 async function loadNegativeKeywords() {
-  const key = "padea_neg_keywords";
+  const key = 'padea_neg_keywords';
   const cached = cacheGet(key);
   if (cached) return cached;
-  const res = await fetch("data/dietary_keywords.json", { cache: "no-cache" });
+  const res = await fetch('./data/dietary_keywords.json', { cache: 'no-cache' });
   if (!res.ok) throw new Error(`keywords ${res.status}`);
   const data = (await res.json()).negative_keywords || {};
   console.log(`[padea] negative keywords loaded: ${Object.keys(data).length} entries`);
@@ -204,27 +202,55 @@ async function loadCaterer(catererId) {
   const key = `padea_caterer_${catererId}`;
   const cached = cacheGet(key);
   if (cached) return cached;
-  const data = await apiFetch(`/api/caterer/${catererId}`);
-  cacheSet(key, data);
-  return data;
+  const { data } = await supabase.from('caterer_legend_tags').select('restriction_id').eq('caterer_id', catererId);
+  const result = { legendTagIds: (data || []).map(r => r.restriction_id) };
+  cacheSet(key, result);
+  return result;
 }
 
 async function loadExistingFeedback(studentId, catererId) {
-  const key = `padea_fb_${studentId}_${catererId || ""}`;
+  const key = `padea_fb_${studentId}_${catererId || ''}`;
   const cached = cacheGet(key);
   if (cached !== null) return cached;
-  const fb = await apiFetch(`/api/feedback?student_id=${studentId}&caterer_id=${catererId || ""}`);
-  cacheSet(key, fb);
-  return fb;
+  const { data } = await supabase
+    .from('caterer_feedback')
+    .select('id, rating, comment')
+    .eq('student_id', studentId)
+    .eq('caterer_id', catererId)
+    .maybeSingle();
+  const result = data
+    ? { recordId: data.id, rating: data.rating || 0, comment: data.comment || '' }
+    : { recordId: null, rating: 0, comment: '' };
+  cacheSet(key, result);
+  return result;
 }
 
 async function loadStudentTicket(studentId, sessionId) {
   const key = `padea_ticket_${studentId}_${sessionId}`;
   const cached = cacheGet(key);
   if (cached !== null) return cached;
-  const t = await apiFetch(`/api/student/${studentId}/ticket?session_id=${sessionId}`);
-  cacheSet(key, t);
-  return t;
+  const today = new Date().toISOString().slice(0, 10);
+  const { data } = await supabase
+    .from('order_students')
+    .select('orders!inner(id, date, session_id, menu_item_id, menu_items(id, name, menu_item_dietary_tags(restriction_id)))')
+    .eq('student_id', studentId)
+    .eq('orders.session_id', sessionId)
+    .eq('orders.date', today)
+    .maybeSingle();
+  if (!data?.orders) {
+    cacheSet(key, { meal: null });
+    return { meal: null };
+  }
+  const order = data.orders;
+  const result = {
+    meal: {
+      id: order.menu_item_id,
+      name: order.menu_items?.name || '(unnamed)',
+      tags: (order.menu_items?.menu_item_dietary_tags || []).map(t => t.restriction_id),
+    },
+  };
+  cacheSet(key, result);
+  return result;
 }
 
 
@@ -235,8 +261,8 @@ async function loadStudentTicket(studentId, sessionId) {
 function buildVariantMap(items) {
   const map = {};
   for (const item of items) {
-    if (item.fields["Is Variant"]) {
-      const parentId = (item.fields["Variant Of"] || [])[0];
+    if (item.is_variant) {
+      const parentId = item.variant_of_id;
       if (parentId) (map[parentId] ||= []).push(item);
     }
   }
@@ -271,10 +297,10 @@ function buildHierarchyMaps(restrictions, negativeKeywords = {}) {
     idToRestr[r.id] = r;
   }
   // Build child map (parentId → [subset childIds]) from each restriction's
-  // Supersets list (a restriction lists its less-restrictive parents).
+  // superset_ids list (a restriction lists its less-restrictive parents).
   const children = {};
   for (const r of restrictions) {
-    for (const parentId of r.supersets) {
+    for (const parentId of r.superset_ids) {
       (children[parentId] ||= []).push(r.id);
     }
   }
@@ -295,7 +321,7 @@ function buildHierarchyMaps(restrictions, negativeKeywords = {}) {
     if (acc.has(id)) return acc;
     acc.add(id);
     const r = idToRestr[id];
-    if (r) for (const parentId of r.supersets) ancestors(parentId, acc);
+    if (r) for (const parentId of r.superset_ids) ancestors(parentId, acc);
     return acc;
   }
   const supersetClosure = {};
@@ -316,8 +342,8 @@ function buildHierarchyMaps(restrictions, negativeKeywords = {}) {
 function checkCompatibility(item, studentReqIds, maps) {
   if (!studentReqIds.length) return { compatible: true, severity: "ok", issues: [] };
 
-  const itemTagIds = item.fields["Dietary Tags"] || [];
-  const itemNameLower = (item.fields["Menu Item Name"] || "").toLowerCase();
+  const itemTagIds = item.dietary_tag_ids || [];
+  const itemNameLower = (item.name || "").toLowerCase();
   const legendTagIdSet = maps.legendTagIdSet || new Set();
 
   const issues = [];
@@ -368,7 +394,7 @@ function checkCompatibility(item, studentReqIds, maps) {
 }
 
 function hasOptedOut(student, maps) {
-  const reqs = student?.fields?.["Dietary Requirements"] || [];
+  const reqs = student?.dietary_requirement_ids || [];
   return reqs.some(id => maps.idToName[id] === "Opted out of Catering");
 }
 
@@ -470,7 +496,7 @@ const app = {
     // Show the cutoff footnote immediately based on local time.
     renderCutoffFootnote();
 
-    // Fetch Dietary Restrictions + the shared NEGATIVE_KEYWORDS table in
+    // Fetch Dietary Restrictions + the shared negative_keywords in
     // parallel (both independent of session). Both feed dietMaps.
     state.dietPromise = Promise.all([
       loadDietaryRestrictions(),
@@ -494,7 +520,7 @@ const app = {
     }
     state.session = session;
     document.getElementById("session-label").textContent =
-      formatSessionLabel(session.fields);
+      formatSessionLabel(session);
 
     // Prefetch the menu — during a caterer switch transition, this is the
     // incoming caterer's menu; otherwise the current caterer's.
@@ -575,7 +601,7 @@ const app = {
     if (!parent) return;
     const variants = state.variantMap[parentId] || [];
     const allOptions = [parent, ...variants];
-    const reqs = state.student?.fields["Dietary Requirements"] || [];
+    const reqs = state.student?.dietary_requirement_ids || [];
     const maps = state.dietMaps;
 
     // Determine the initial selection:
@@ -598,9 +624,9 @@ const app = {
   attemptUnsafeSelect(itemId) {
     const item = state.menuItems.find(i => i.id === itemId);
     if (!item || !state.dietMaps) return;
-    const reqs = state.student.fields["Dietary Requirements"] || [];
+    const reqs = state.student.dietary_requirement_ids || [];
     const { severity, issues } = checkCompatibility(item, reqs, state.dietMaps);
-    const name = item.fields["Menu Item Name"] || "this meal";
+    const name = item.name || "this meal";
 
     if (severity === "no") {
       // Definite incompatibility — non-negotiable hard block.
@@ -639,7 +665,9 @@ const app = {
       // them out and the form refuses to re-open on this device.
       setSubmittedFlag(state.sessionId);
       try {
-        await apiFetch(`/api/student/${state.studentId}/mark-submitted`, { method: "POST" });
+        const today = new Date().toISOString().slice(0, 10);
+        await supabase.from('students').update({ last_submitted: today }).eq('id', state.studentId);
+        cacheBust(`padea_student_${state.studentId}`);
       } catch (err) {
         console.warn("[padea] mark-submitted failed", err);
       }
@@ -750,20 +778,20 @@ async function loadFormData(studentId) {
   }
   state.student = student;
   document.getElementById("student-name").textContent =
-    student.fields["Student Name"] || "—";
+    student.name || "—";
 
   // During a caterer-switch transition the student's preference was cleared by
-  // execute_caterer_switch.py — treat the form as unselected regardless of any
+  // execute_caterer_switch — treat the form as unselected regardless of any
   // stale cached value so the trigger shows "Tap to choose a meal".
   const transition = isInTransition(state.session);
   state.initialMealItemId = transition
     ? null
-    : ((student.fields["Meal Preference"] || [])[0] || null);
+    : (student.meal_preference_id || null);
   state.mealItemId = state.initialMealItemId;
   document.getElementById("transition-banner").classList.toggle("hidden", !transition);
 
-  console.log(`[padea] student loaded: ${student.fields["Student Name"]}`,
-    "diet ids:", student.fields["Dietary Requirements"] || [],
+  console.log(`[padea] student loaded: ${student.name}`,
+    "diet ids:", student.dietary_requirement_ids || [],
     "preference:", state.initialMealItemId);
 
   // Apply opted-out lock if applicable. Needs dietary maps first.
@@ -782,7 +810,7 @@ async function loadFormData(studentId) {
   // Load existing feedback in the background. persistChanges awaits this
   // promise before deciding create vs update, preventing duplicate records
   // if the user submits before this resolves.
-  const catererId = (state.session?.fields?.Caterer || [])[0];
+  const catererId = state.session?.caterer_id;
   state.feedbackPromise = loadExistingFeedback(studentId, catererId)
     .then(fb => {
       state.feedbackRecordId = fb.recordId;
@@ -812,7 +840,7 @@ async function loadFormData(studentId) {
 
 function refreshFormFromState() {
   document.getElementById("student-name").textContent =
-    state.student?.fields["Student Name"] || "—";
+    state.student?.name || "—";
   document.querySelectorAll("#stars .star").forEach(s => {
     s.classList.toggle("active", Number(s.dataset.v) <= state.rating);
   });
@@ -862,7 +890,7 @@ function renderMealList() {
   ul.classList.add("hidden");
   empty.classList.add("hidden");
 
-  const allReqs = state.student?.fields["Dietary Requirements"] || [];
+  const allReqs = state.student?.dietary_requirement_ids || [];
   const maps = state.dietMaps;
   const reqs = maps
     ? allReqs.filter(id => maps.idToName[id] !== "Opted out of Catering")
@@ -890,7 +918,7 @@ function renderMealList() {
   }
 
   // Exclude variants from the main list — they appear only inside the variant picker.
-  const displayItems = state.menuItems.filter(i => !i.fields["Is Variant"]);
+  const displayItems = state.menuItems.filter(i => !i.is_variant);
 
   // Bucket items: compatible / possibly-compatible / definitely-incompatible.
   // For items with variants, use the best severity across all options.
@@ -905,8 +933,8 @@ function renderMealList() {
   }
 
   const renderRow = ({ item, result }) => {
-    const name = item.fields["Menu Item Name"] || "—";
-    const tagIds = item.fields["Dietary Tags"] || [];
+    const name = item.name || "—";
+    const tagIds = item.dietary_tag_ids || [];
     const tagsHtml = tagIds.map(tid => {
       const tName = maps.idToName[tid];
       if (!tName) return "";
@@ -1011,7 +1039,7 @@ function updateMealTrigger() {
     const item = state.menuItems.find(i => i.id === state.mealItemId);
     if (item) {
       label.textContent = "Currently selected";
-      nameEl.textContent = item.fields["Menu Item Name"] || "—";
+      nameEl.textContent = item.name || "—";
       return;
     }
   }
@@ -1053,33 +1081,36 @@ async function persistChanges() {
     // Wait for the background lookup to resolve so we never create a duplicate
     // when the user submits faster than the server responds.
     if (state.feedbackPromise) await state.feedbackPromise;
-    // Always attribute to session.Caterer (who cooked today), not Incoming Caterer.
-    const catererId = (state.session?.fields?.Caterer || [])[0] || "";
+    // Always attribute to session.caterer_id (who cooked today), not incoming caterer.
+    const catererId = state.session?.caterer_id || "";
+    const today = new Date().toISOString().slice(0, 10);
+    const payload = {
+      student_id: state.studentId,
+      caterer_id: catererId,
+      session_id: state.sessionId,
+      rating: state.rating,
+      comment: state.comment.trim(),
+      session_date: today,
+    };
     ops.push(
-      apiFetch("/api/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          student_id: state.studentId,
-          session_id: state.sessionId,
-          caterer_id: catererId,
-          rating: state.rating,
-          comment: state.comment.trim(),
-          feedback_record_id: state.feedbackRecordId || null,
-        }),
-      }).then(data => { state.feedbackRecordId = data.recordId; })
+      (async () => {
+        if (state.feedbackRecordId) {
+          const { data } = await supabase.from('caterer_feedback').update(payload).eq('id', state.feedbackRecordId).select('id').single();
+          state.feedbackRecordId = data?.id;
+        } else {
+          const { data } = await supabase.from('caterer_feedback').insert(payload).select('id').single();
+          state.feedbackRecordId = data?.id;
+        }
+      })()
     );
   }
 
   if (mealChanged) {
     ops.push(
-      apiFetch(`/api/student/${state.studentId}/meal-preference`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ meal_item_id: state.mealItemId }),
-      }).then(() => {
+      (async () => {
+        await supabase.from('students').update({ meal_preference_id: state.mealItemId }).eq('id', state.studentId);
         cacheBust(`padea_student_${state.studentId}`);
-      })
+      })()
     );
   }
 
@@ -1093,7 +1124,7 @@ async function persistChanges() {
     state.initialMealItemId = state.mealItemId;
   }
 
-  const _catererId = (state.session?.fields?.Caterer || [])[0] || "";
+  const _catererId = state.session?.caterer_id || "";
   cacheBust(`padea_fb_${state.studentId}_${_catererId}`);
 }
 
@@ -1163,11 +1194,8 @@ function escapeHtml(s) {
     .replace(/'/g, "&#39;");
 }
 
-function formatSessionLabel(fields) {
-  const id = fields["Session ID"] || "";
-  // ID is sufficient
-  // const date = fields["Date"] || "";
-  return id; //, date].filter(Boolean).join(" · ");
+function formatSessionLabel(session) {
+  return session.session_code || "";
 }
 
 function showError(msg) {
@@ -1199,8 +1227,8 @@ function showVariantModal(options, selectedId, maps, reqs) {
       ? checkCompatibility(item, reqs, maps)
       : { severity: "ok", issues: [] };
     const isBlocked = severity === "no";
-    const name = item.fields["Menu Item Name"] || "—";
-    const tagIds = item.fields["Dietary Tags"] || [];
+    const name = item.name || "—";
+    const tagIds = item.dietary_tag_ids || [];
     const tagsHtml = tagIds.map(tid => {
       const tName = maps?.idToName[tid];
       if (!tName) return "";
@@ -1256,7 +1284,7 @@ window.confirmVariantModal = function () {
   // If the chosen option is dietarily problematic, route through the
   // existing unsafe-select confirmation flow.
   const item = state.menuItems.find(i => i.id === id);
-  const reqs = state.student?.fields["Dietary Requirements"] || [];
+  const reqs = state.student?.dietary_requirement_ids || [];
   if (item && state.dietMaps && reqs.length) {
     const { severity } = checkCompatibility(item, reqs, state.dietMaps);
     if (severity !== "ok") {

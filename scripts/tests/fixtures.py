@@ -68,10 +68,10 @@ SUB_MON_ID = "subMon01"
 def dietary_records() -> list[Record]:
     """Standard set of dietary restriction Records for tests."""
     return [
-        Record(id=DIET_VEG_ID,    fields={"Restriction Name": "Vegetarian",            "Supersets": []}),
-        Record(id=DIET_VEGAN_ID,  fields={"Restriction Name": "Vegan",                 "Supersets": [DIET_VEG_ID]}),
-        Record(id=DIET_OPT_ID,    fields={"Restriction Name": "Opted out of Catering", "Supersets": []}),
-        Record(id=DIET_NOBEEF_ID, fields={"Restriction Name": "No Beef",               "Supersets": []}),
+        Record(id=DIET_VEG_ID,    fields={"name": "Vegetarian",            "superset_ids": []}),
+        Record(id=DIET_VEGAN_ID,  fields={"name": "Vegan",                 "superset_ids": [DIET_VEG_ID]}),
+        Record(id=DIET_OPT_ID,    fields={"name": "Opted out of Catering", "superset_ids": []}),
+        Record(id=DIET_NOBEEF_ID, fields={"name": "No Beef",               "superset_ids": []}),
     ]
 
 
@@ -102,24 +102,24 @@ def menu_items_caterer_a() -> list[Record]:
     """
     return [
         Record(id=ITEM_CHICKEN_RICE_ID, fields={
-            "Menu Item Name": "Chicken Fried Rice",
-            "Caterer": [CATERER_A_ID],
-            "Dietary Tags": [],
+            "name":            "Chicken Fried Rice",
+            "caterer_id":      CATERER_A_ID,
+            "dietary_tag_ids": [],
         }),
         Record(id=ITEM_BEEF_BURGER_ID, fields={
-            "Menu Item Name": "Beef Burger",
-            "Caterer": [CATERER_A_ID],
-            "Dietary Tags": [],
+            "name":            "Beef Burger",
+            "caterer_id":      CATERER_A_ID,
+            "dietary_tag_ids": [],
         }),
         Record(id=ITEM_VEG_PASTA_ID, fields={
-            "Menu Item Name": "Vegetarian Pasta",
-            "Caterer": [CATERER_A_ID],
-            "Dietary Tags": [DIET_VEG_ID],
+            "name":            "Vegetarian Pasta",
+            "caterer_id":      CATERER_A_ID,
+            "dietary_tag_ids": [DIET_VEG_ID],
         }),
         Record(id=ITEM_VEGAN_BOWL_ID, fields={
-            "Menu Item Name": "Vegan Bowl",
-            "Caterer": [CATERER_A_ID],
-            "Dietary Tags": [DIET_VEGAN_ID],
+            "name":            "Vegan Bowl",
+            "caterer_id":      CATERER_A_ID,
+            "dietary_tag_ids": [DIET_VEGAN_ID],
         }),
     ]
 
@@ -128,14 +128,14 @@ def menu_items_caterer_b() -> list[Record]:
     """Two items for Caterer B: one meat, one vegan-tagged."""
     return [
         Record(id=ITEM_B_GRILLED_CHICKEN_ID, fields={
-            "Menu Item Name": "Grilled Chicken",
-            "Caterer": [CATERER_B_ID],
-            "Dietary Tags": [],
+            "name":            "Grilled Chicken",
+            "caterer_id":      CATERER_B_ID,
+            "dietary_tag_ids": [],
         }),
         Record(id=ITEM_B_VEG_CURRY_ID, fields={
-            "Menu Item Name": "Vegetable Curry",
-            "Caterer": [CATERER_B_ID],
-            "Dietary Tags": [DIET_VEGAN_ID],
+            "name":            "Vegetable Curry",
+            "caterer_id":      CATERER_B_ID,
+            "dietary_tag_ids": [DIET_VEGAN_ID],
         }),
     ]
 
@@ -148,14 +148,14 @@ def menu_items_meat_only() -> list[Record]:
     """
     return [
         Record(id=ITEM_MEAT_CHICKEN_ID, fields={
-            "Menu Item Name": "Chicken Burger",
-            "Caterer": [CATERER_MEAT_ID],
-            "Dietary Tags": [],
+            "name":            "Chicken Burger",
+            "caterer_id":      CATERER_MEAT_ID,
+            "dietary_tag_ids": [],
         }),
         Record(id=ITEM_MEAT_BEEF_ID, fields={
-            "Menu Item Name": "Beef Steak",
-            "Caterer": [CATERER_MEAT_ID],
-            "Dietary Tags": [],
+            "name":            "Beef Steak",
+            "caterer_id":      CATERER_MEAT_ID,
+            "dietary_tag_ids": [],
         }),
     ]
 
@@ -165,11 +165,11 @@ def menu_items_meat_only() -> list[Record]:
 # ---------------------------------------------------------------------------
 
 def school_alpha() -> Record:
-    return Record(id=SCHOOL_A_ID, fields={"School Name": "Alpha Academy", "Region": "Redlands"})
+    return Record(id=SCHOOL_A_ID, fields={"name": "Alpha Academy", "region": "Redlands"})
 
 
 def school_beta() -> Record:
-    return Record(id=SCHOOL_B_ID, fields={"School Name": "Beta College", "Region": "South Brisbane"})
+    return Record(id=SCHOOL_B_ID, fields={"name": "Beta College", "region": "South Brisbane"})
 
 
 # ---------------------------------------------------------------------------
@@ -178,33 +178,36 @@ def school_beta() -> Record:
 
 def caterer_a() -> Record:
     return Record(id=CATERER_A_ID, fields={
-        "Caterer Name":          "Café Deluxe",
-        "Able to Serve Schools": [],
-        "Contact Email":         "cafe@deluxe.com",
-        "Contact Name":          "Alice Smith",
-        "Price per Item":        12.0,
-        "Delivery Fee":          20.0,
-        "Delivery Fee Structure": "Per trip",
-        "Min Qty 4 Items":       3,
+        "name":                     "Café Deluxe",
+        "able_to_serve_school_ids": [],
+        "contact_email":            "cafe@deluxe.com",
+        "contact_name":             "Alice Smith",
+        "price_per_item":           12.0,
+        "delivery_fee":             20.0,
+        "delivery_fee_structure":   "Per trip",
+        "min_qty_4_items":          3,
+        "legend_tag_ids":           [],
     })
 
 
 def caterer_b() -> Record:
     return Record(id=CATERER_B_ID, fields={
-        "Caterer Name":          "Fresh Eats",
-        "Able to Serve Schools": [SCHOOL_A_ID],
-        "Contact Email":         "info@fresh-eats.com",
-        "Contact Name":          "Bob Jones",
-        "Price per Item":        10.0,
-        "Delivery Fee":          15.0,
-        "Delivery Fee Structure": "Per trip",
+        "name":                     "Fresh Eats",
+        "able_to_serve_school_ids": [SCHOOL_A_ID],
+        "contact_email":            "info@fresh-eats.com",
+        "contact_name":             "Bob Jones",
+        "price_per_item":           10.0,
+        "delivery_fee":             15.0,
+        "delivery_fee_structure":   "Per trip",
+        "legend_tag_ids":           [],
     })
 
 
 def caterer_meat_only() -> Record:
     return Record(id=CATERER_MEAT_ID, fields={
-        "Caterer Name":          "Meat Masters",
-        "Able to Serve Schools": [SCHOOL_A_ID],
+        "name":                     "Meat Masters",
+        "able_to_serve_school_ids": [SCHOOL_A_ID],
+        "legend_tag_ids":           [],
     })
 
 
@@ -214,27 +217,25 @@ def caterer_meat_only() -> Record:
 
 def session_monday() -> Record:
     return Record(id=SESSION_MON_ID, fields={
-        "Session ID":      "Alpha Academy - Monday",
-        "School":          [SCHOOL_A_ID],
-        "Caterer":         [CATERER_A_ID],
-        "Day":             "Monday",
-        "Date":            "2026-02-02",
-        "Dinner Time":     "6:30 PM",
-        "Building":        "Block B",
-        "On-Site Manager": [MANAGER_A_ID],
+        "session_code":       "Alpha Academy - Monday",
+        "school_id":          SCHOOL_A_ID,
+        "caterer_id":         CATERER_A_ID,
+        "day":                "Monday",
+        "dinner_time":        "6:30 PM",
+        "building":           "Block B",
+        "on_site_manager_id": MANAGER_A_ID,
     })
 
 
 def session_wednesday() -> Record:
     return Record(id=SESSION_WED_ID, fields={
-        "Session ID":      "Alpha Academy - Wednesday",
-        "School":          [SCHOOL_A_ID],
-        "Caterer":         [CATERER_A_ID],
-        "Day":             "Wednesday",
-        "Date":            "2026-02-04",
-        "Dinner Time":     "18:00",
-        "Building":        "Block C",
-        "On-Site Manager": [MANAGER_A_ID],
+        "session_code":       "Alpha Academy - Wednesday",
+        "school_id":          SCHOOL_A_ID,
+        "caterer_id":         CATERER_A_ID,
+        "day":                "Wednesday",
+        "dinner_time":        "18:00",
+        "building":           "Block C",
+        "on_site_manager_id": MANAGER_A_ID,
     })
 
 
@@ -244,28 +245,28 @@ def session_wednesday() -> Record:
 
 def manager_alpha() -> Record:
     return Record(id=MANAGER_A_ID, fields={
-        "Manager Name": "Carol Manager",
-        "Mobile":       "0412345678",
-        "Email":        "carol@alpha.edu.au",
+        "name":   "Carol Manager",
+        "mobile": "0412345678",
+        "email":  "carol@alpha.edu.au",
     })
 
 
 def manager_beta() -> Record:
     """Substitute manager used in substitution tests."""
     return Record(id=MANAGER_B_ID, fields={
-        "Manager Name": "Dave Substitute",
-        "Mobile":       "0499999999",
-        "Email":        "dave@beta.edu.au",
+        "name":   "Dave Substitute",
+        "mobile": "0499999999",
+        "email":  "dave@beta.edu.au",
     })
 
 
 def substitution_monday(date_str: str = "2026-06-02") -> Record:
     """One-off substitution: Dave covers the Monday session on date_str."""
     return Record(id=SUB_MON_ID, fields={
-        "Substitution ID": f"Alpha Academy - Monday - {date_str}",
-        "Session":          [SESSION_MON_ID],
-        "Date":             date_str,
-        "Substitute Manager": [MANAGER_B_ID],
+        "substitution_code":     f"Alpha Academy - Monday - {date_str}",
+        "session_id":            SESSION_MON_ID,
+        "date":                  date_str,
+        "substitute_manager_id": MANAGER_B_ID,
     })
 
 
@@ -275,46 +276,46 @@ def substitution_monday(date_str: str = "2026-06-02") -> Record:
 
 def student_normal() -> Record:
     return Record(id=STU_NORMAL_ID, fields={
-        "Student Name":        "Normal Student",
-        "Year Level":          10,
-        "Sessions":            [SESSION_MON_ID],
-        "Dietary Requirements": [],
+        "name":                    "Normal Student",
+        "year_level":              10,
+        "session_ids":             [SESSION_MON_ID],
+        "dietary_requirement_ids": [],
     })
 
 
 def student_vegetarian() -> Record:
     return Record(id=STU_VEG_ID, fields={
-        "Student Name":        "Veggie Student",
-        "Year Level":          11,
-        "Sessions":            [SESSION_MON_ID],
-        "Dietary Requirements": [DIET_VEG_ID],
+        "name":                    "Veggie Student",
+        "year_level":              11,
+        "session_ids":             [SESSION_MON_ID],
+        "dietary_requirement_ids": [DIET_VEG_ID],
     })
 
 
 def student_vegan() -> Record:
     return Record(id=STU_VEGAN_ID, fields={
-        "Student Name":        "Vegan Student",
-        "Year Level":          10,
-        "Sessions":            [SESSION_MON_ID],
-        "Dietary Requirements": [DIET_VEGAN_ID],
+        "name":                    "Vegan Student",
+        "year_level":              10,
+        "session_ids":             [SESSION_MON_ID],
+        "dietary_requirement_ids": [DIET_VEGAN_ID],
     })
 
 
 def student_opted_out() -> Record:
     return Record(id=STU_OPT_ID, fields={
-        "Student Name":        "No Meal Student",
-        "Year Level":          9,
-        "Sessions":            [SESSION_MON_ID],
-        "Dietary Requirements": [DIET_OPT_ID],
+        "name":                    "No Meal Student",
+        "year_level":              9,
+        "session_ids":             [SESSION_MON_ID],
+        "dietary_requirement_ids": [DIET_OPT_ID],
     })
 
 
 def student_no_beef() -> Record:
     return Record(id=STU_NOBEEF_ID, fields={
-        "Student Name":        "No Beef Student",
-        "Year Level":          10,
-        "Sessions":            [SESSION_MON_ID],
-        "Dietary Requirements": [DIET_NOBEEF_ID],
+        "name":                    "No Beef Student",
+        "year_level":              10,
+        "session_ids":             [SESSION_MON_ID],
+        "dietary_requirement_ids": [DIET_NOBEEF_ID],
     })
 
 
@@ -325,10 +326,10 @@ def student_no_beef() -> Record:
 def make_students(n: int, session_id: str = SESSION_MON_ID) -> list[Record]:
     return [
         Record(id=f"stu{i:04d}", fields={
-            "Student Name":        f"Student {i}",
-            "Year Level":          10,
-            "Sessions":            [session_id],
-            "Dietary Requirements": [],
+            "name":                    f"Student {i}",
+            "year_level":              10,
+            "session_ids":             [session_id],
+            "dietary_requirement_ids": [],
         })
         for i in range(n)
     ]

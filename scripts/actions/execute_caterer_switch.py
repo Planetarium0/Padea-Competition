@@ -48,11 +48,11 @@ class SwitchContext:
 
     @property
     def outgoing_name(self) -> str:
-        return self.outgoing.fields.get("Caterer Name", self.outgoing.id)
+        return self.outgoing.fields.get("name", self.outgoing.id)
 
     @property
     def incoming_name(self) -> str:
-        return self.incoming.fields.get("Caterer Name", self.incoming.id)
+        return self.incoming.fields.get("name", self.incoming.id)
 
 
 def _resolve_context(
@@ -70,20 +70,20 @@ def _resolve_context(
         sys.exit(1)
 
     pf = proposal.fields
-    status = pf.get("Status")
+    status = pf.get("status")
     allowed = ("Pending", "Approved") if approve else ("Approved",)
     if status not in allowed:
         log.error(
-            f"Proposal {proposal_id} has Status='{status}'. "
+            f"Proposal {proposal_id} has status='{status}'. "
             + ("Only 'Approved' or 'Pending' proposals can be executed with --approve."
                if approve else
                "Only 'Approved' proposals can be executed. Use --approve to also accept 'Pending'.")
         )
         sys.exit(1)
 
-    session_id          = (pf.get("Session")          or [None])[0]
-    outgoing_caterer_id = (pf.get("Outgoing Caterer") or [None])[0]
-    incoming_caterer_id = (pf.get("Incoming Caterer") or [None])[0]
+    session_id          = pf.get("session_id")
+    outgoing_caterer_id = pf.get("outgoing_caterer_id")
+    incoming_caterer_id = pf.get("incoming_caterer_id")
 
     if not session_id or not outgoing_caterer_id or not incoming_caterer_id:
         log.error("Proposal is missing Session, Outgoing Caterer, or Incoming Caterer.")
@@ -107,13 +107,13 @@ def _resolve_context(
         session_rec: Record[SessionFields] | None = db.Sessions.get(session_id)
         if session_rec:
             sf        = session_rec.fields
-            school_id = (sf.get("School") or [session_id])[0]
-            day       = sf.get("Day") or ""
+            school_id = sf.get("school_id") or session_id
+            day       = sf.get("day") or ""
             school_name_str = school_id
             try:
                 school_rec = db.Schools.get(school_id)
                 if school_rec:
-                    school_name_str = school_rec.fields.get("School Name", school_id)
+                    school_name_str = school_rec.fields.get("name", school_id)
             except Exception:
                 pass
             session_name = f"{school_name_str} — {day}" if day else school_name_str
@@ -148,23 +148,23 @@ def execute(proposal_id: str, dry_run: bool = False, approve: bool = False, db: 
     )
 
     if not dry_run:
-        db.Sessions.update(ctx.session_id, {"Incoming Caterer": [ctx.incoming.id]})
+        db.Sessions.update(ctx.session_id, {"incoming_caterer_id": ctx.incoming.id})
 
     # ------------------------------------------------------------------
-    # 2. Clear Students.Meal Preference for students in this session
+    # 2. Clear students' meal_preference_id for students in this session
     # ------------------------------------------------------------------
     all_students = db.Students.all()
     affected_students = [
         stu for stu in all_students
-        if ctx.session_id in (stu.fields.get("Sessions") or [])
+        if ctx.session_id in (stu.fields.get("session_ids") or [])
     ]
     log.info(
-        f"  Clearing Meal Preference for {len(affected_students)} student(s) "
+        f"  Clearing meal_preference_id for {len(affected_students)} student(s) "
         f"enrolled in {ctx.session_name}"
     )
 
     if not dry_run and affected_students:
-        updates = [{"id": stu.id, "fields": {"Meal Preference": []}}
+        updates = [{"id": stu.id, "meal_preference_id": None}
                    for stu in affected_students]
         db.Students.batch_update(updates)
 
@@ -173,7 +173,7 @@ def execute(proposal_id: str, dry_run: bool = False, approve: bool = False, db: 
     # ------------------------------------------------------------------
     log.info(f"  Marking proposal {proposal_id} as Approved")
     if not dry_run:
-        db.CatererSwitchProposals.update(proposal_id, {"Status": "Approved"})
+        db.CatererSwitchProposals.update(proposal_id, {"status": "Approved"})
 
     log.info(
         f"Switch queued: {ctx.outgoing_name} → {ctx.incoming_name} "
@@ -185,9 +185,9 @@ def execute(proposal_id: str, dry_run: bool = False, approve: bool = False, db: 
 def reject(proposal_id: str, notes: str = "", db: Database | None = None) -> None:
     """Mark a Caterer Switch Proposal as Rejected with optional coordinator notes."""
     db = db or Database.from_env()
-    fields: dict[str, object] = {"Status": "Rejected"}
+    fields: dict[str, object] = {"status": "Rejected"}
     if notes:
-        fields["Notes"] = notes
+        fields["notes"] = notes
     db.CatererSwitchProposals.update(proposal_id, fields)
     log.info(f"Proposal {proposal_id} marked Rejected.")
 
@@ -202,11 +202,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Execute an approved caterer switch")
     parser.add_argument(
         "proposal_id",
-        help="Airtable record ID of the Caterer Switch Proposals row",
+        help="UUID of the Caterer Switch Proposals row",
     )
     parser.add_argument(
         "--dry-run", action="store_true",
-        help="Log what would happen without writing to Airtable",
+        help="Log what would happen without writing to the database",
     )
     parser.add_argument(
         "--approve", action="store_true",

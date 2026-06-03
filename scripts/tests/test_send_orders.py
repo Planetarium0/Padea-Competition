@@ -53,15 +53,15 @@ class TestSubtractMinutes(unittest.TestCase):
 
 def _make_session_context(
     day: str = "Monday",
-    session_id: str = "Alpha Academy - Monday",
+    session_code: str = "Alpha Academy - Monday",
     manager_email: str | None = "carol@alpha.edu.au",
 ) -> SessionContext:
     return SessionContext(
         fields={
-            "Session ID":  session_id,
-            "Day":         day,
-            "Dinner Time": "6:30 PM",
-            "Building":    "Block B",
+            "session_code": session_code,
+            "day":          day,
+            "dinner_time":  "6:30 PM",
+            "building":     "Block B",
         },
         school_name    = "Alpha Academy",
         manager_name   = "Carol Manager",
@@ -74,19 +74,19 @@ def _make_line_item(session: SessionContext, item_name: str, qty: int) -> LineIt
     return LineItem(
         quantity=qty,
         session=session,
-        menu_item={"Menu Item Name": item_name},
+        menu_item={"name": item_name},
     )
 
 
 class TestFormatEmailBody(unittest.TestCase):
 
     def test_per_trip_fee_single_delivery(self):
-        wo_fields = {"Week Start": "2026-02-02", "Total Meals": 5}
+        wo_fields = {"week_start": "2026-02-02", "total_meals": 5}
         caterer_fields = {
-            "Caterer Name":           "Café Deluxe",
-            "Contact Name":           "Alice Smith",
-            "Delivery Fee":           20.0,
-            "Delivery Fee Structure": "Per trip",
+            "name":                   "Café Deluxe",
+            "contact_name":           "Alice Smith",
+            "delivery_fee":           20.0,
+            "delivery_fee_structure": "Per trip",
         }
         sess = _make_session_context()
         line_items = [_make_line_item(sess, "Chicken Fried Rice", 3),
@@ -103,12 +103,12 @@ class TestFormatEmailBody(unittest.TestCase):
         self.assertIn("Vegan Bowl ×2", body)
 
     def test_per_school_per_trip_fee_multiple_deliveries(self):
-        wo_fields = {"Week Start": "2026-02-02", "Total Meals": 6}
+        wo_fields = {"week_start": "2026-02-02", "total_meals": 6}
         caterer_fields = {
-            "Caterer Name":           "Fresh Eats",
-            "Contact Name":           "Bob Jones",
-            "Delivery Fee":           15.0,
-            "Delivery Fee Structure": "Per school per trip",
+            "name":                   "Fresh Eats",
+            "contact_name":           "Bob Jones",
+            "delivery_fee":           15.0,
+            "delivery_fee_structure": "Per school per trip",
         }
         sess_mon = _make_session_context("Monday", "Alpha Academy - Monday")
         sess_wed = _make_session_context("Wednesday", "Alpha Academy - Wednesday")
@@ -124,11 +124,11 @@ class TestFormatEmailBody(unittest.TestCase):
         self.assertIn("2 deliveries", body)
 
     def test_manager_contact_info_included(self):
-        wo_fields      = {"Week Start": "2026-02-02", "Total Meals": 2}
+        wo_fields      = {"week_start": "2026-02-02", "total_meals": 2}
         caterer_fields = {
-            "Caterer Name": "Café Deluxe",
-            "Contact Name": "Alice Smith",
-            "Delivery Fee": 0.0,
+            "name":         "Café Deluxe",
+            "contact_name": "Alice Smith",
+            "delivery_fee": 0.0,
         }
         sess = _make_session_context()
         body = format_email_body(wo_fields, caterer_fields, [_make_line_item(sess, "Meal", 2)])
@@ -137,17 +137,17 @@ class TestFormatEmailBody(unittest.TestCase):
         self.assertIn("0412345678", body)
 
     def test_building_included(self):
-        wo_fields      = {"Week Start": "2026-02-02", "Total Meals": 1}
-        caterer_fields = {"Caterer Name": "X", "Contact Name": "Y", "Delivery Fee": 0.0}
+        wo_fields      = {"week_start": "2026-02-02", "total_meals": 1}
+        caterer_fields = {"name": "X", "contact_name": "Y", "delivery_fee": 0.0}
         sess = _make_session_context()
         body = format_email_body(wo_fields, caterer_fields, [_make_line_item(sess, "Meal", 1)])
         self.assertIn("Block B", body)
 
     def test_deliver_by_is_10_min_before_dinner(self):
-        wo_fields      = {"Week Start": "2026-02-02", "Total Meals": 1}
-        caterer_fields = {"Caterer Name": "X", "Contact Name": "Y", "Delivery Fee": 0.0}
+        wo_fields      = {"week_start": "2026-02-02", "total_meals": 1}
+        caterer_fields = {"name": "X", "contact_name": "Y", "delivery_fee": 0.0}
         sess = SessionContext(
-            fields={"Session ID": "S", "Day": "Monday", "Dinner Time": "6:30 PM", "Building": ""},
+            fields={"session_code": "S", "day": "Monday", "dinner_time": "6:30 PM", "building": ""},
             school_name="School", manager_name=None, manager_mobile=None, manager_email=None,
         )
         body = format_email_body(wo_fields, caterer_fields, [_make_line_item(sess, "Meal", 1)])
@@ -155,7 +155,7 @@ class TestFormatEmailBody(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# schedule_email
+# schedule_email — field names written to scheduled_emails table
 # ---------------------------------------------------------------------------
 
 class TestScheduleEmail(unittest.TestCase):
@@ -173,11 +173,11 @@ class TestScheduleEmail(unittest.TestCase):
         )
         self.assertEqual(len(db.ScheduledEmails.created_fields), 1)
         f = db.ScheduledEmails.created_fields[0]
-        self.assertEqual(f["To"], "chef@example.com")
-        self.assertEqual(f["Email ID"], "EMAIL-001")
-        self.assertEqual(f["Status"], "Queued")
-        self.assertEqual(f["Weekly Order"], ["recWO001"])
-        self.assertNotIn("CC", f)
+        self.assertEqual(f["to_address"], "chef@example.com")
+        self.assertEqual(f["email_code"], "EMAIL-001")
+        self.assertEqual(f["status"], "Queued")
+        self.assertEqual(f["weekly_order_id"], "recWO001")
+        self.assertNotIn("cc_address", f)
 
     def test_multiple_cc_addresses_joined(self):
         db = MockDatabase()
@@ -191,9 +191,9 @@ class TestScheduleEmail(unittest.TestCase):
             weekly_order_id="recWO002",
         )
         f = db.ScheduledEmails.created_fields[0]
-        self.assertEqual(f["CC"], "manager@school.edu.au, deputy@school.edu.au")
+        self.assertEqual(f["cc_address"], "manager@school.edu.au, deputy@school.edu.au")
 
-    def test_creates_send_immediately_record_with_switch_proposal_link(self):
+    def test_creates_record_with_switch_proposal_link(self):
         db = MockDatabase()
         schedule_email(
             db,
@@ -202,14 +202,12 @@ class TestScheduleEmail(unittest.TestCase):
             subject="Switch Proposal",
             body="Body",
             email_id="SWITCH-001",
-            immediate=True,
             caterer_switch_proposal_id="recPROP01",
         )
         f = db.ScheduledEmails.created_fields[0]
-        self.assertEqual(f["Status"], "Send Immediately")
-        self.assertEqual(f["Caterer Switch Proposal"], ["recPROP01"])
-        self.assertEqual(f["CC"], "copy@school.edu.au")
-        self.assertNotIn("Weekly Order", f)
+        self.assertEqual(f["caterer_switch_proposal_id"], "recPROP01")
+        self.assertEqual(f["cc_address"], "copy@school.edu.au")
+        self.assertNotIn("weekly_order_id", f)
 
 
 if __name__ == "__main__":

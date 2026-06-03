@@ -89,7 +89,7 @@ class RollingStats:
 
 @dataclass(frozen=True)
 class EvaluationData:
-    """Raw records loaded from Airtable for the evaluation pass."""
+    """Raw records loaded from the database for the evaluation pass."""
 
     sessions:             list[Record[SessionFields]]
     feedback:             list[Record[CatererFeedbackFields]]
@@ -103,7 +103,7 @@ class EvaluationData:
 
     @classmethod
     def load(cls, db: Database) -> "EvaluationData":
-        log.info("Loading data from Airtable...")
+        log.info("Loading data from Supabase...")
         data = cls(
             sessions=             db.Sessions.all(),
             feedback=             db.CatererFeedback.all(),
@@ -130,7 +130,6 @@ class EvaluationIndex:
     data:                EvaluationData
     session_to_school:   dict[str, str]
     session_to_caterer:  dict[str, str]
-    session_to_date:     dict[str, str]
     school_to_sessions:  dict[str, list[str]]
     school_names:        dict[str, str]
     caterer_names:       dict[str, str]
@@ -145,56 +144,52 @@ class EvaluationIndex:
     def build(cls, data: EvaluationData) -> "EvaluationIndex":
         session_to_school:  dict[str, str] = {}
         session_to_caterer: dict[str, str] = {}
-        session_to_date:    dict[str, str] = {}
         school_to_sessions: dict[str, list[str]] = defaultdict(list)
 
-        school_names: dict[str, str] = {r.id: r.fields.get("School Name", r.id) for r in data.schools}
+        school_names: dict[str, str] = {r.id: r.fields.get("name", r.id) for r in data.schools}
 
         for rec in data.sessions:
             f = rec.fields
-            school_id  = (f.get("School")  or [None])[0]
-            caterer_id = (f.get("Caterer") or [None])[0]
-            date_v     = f.get("Date")
+            school_id  = f.get("school_id")
+            caterer_id = f.get("caterer_id")
             if school_id:
                 session_to_school[rec.id] = school_id
                 school_to_sessions[school_id].append(rec.id)
             if caterer_id:
                 session_to_caterer[rec.id] = caterer_id
-            if date_v:
-                session_to_date[rec.id] = date_v
 
         menu_by_caterer: dict[str, list[Record[MenuItemFields]]] = defaultdict(list)
         for item in data.menu_items:
-            for cid in (item.fields.get("Caterer") or []):
+            cid = item.fields.get("caterer_id")
+            if cid:
                 menu_by_caterer[cid].append(item)
 
         hierarchy = build_hierarchy(data.dietary_restrictions)
-        feedback_index = _build_feedback_index(data.feedback, session_to_date)
+        feedback_index = _build_feedback_index(data.feedback)
 
         # Group students by all their sessions.
         session_to_students: dict[str, list[Record[StudentFields]]] = defaultdict(list)
         for stu in data.students:
-            for sid in (stu.fields.get("Sessions") or []):
+            for sid in (stu.fields.get("session_ids") or []):
                 session_to_students[sid].append(stu)
 
         # Build human-readable label for each session.
         session_labels: dict[str, str] = {}
         for rec in data.sessions:
             f = rec.fields
-            school_id = (f.get("School") or [None])[0]
+            school_id = f.get("school_id")
             sname = school_names.get(school_id, school_id) if school_id else rec.id
-            day   = f.get("Day") or ""
+            day   = f.get("day") or ""
             session_labels[rec.id] = f"{sname} — {day}" if day else sname
 
         return cls(
             data=                data,
             session_to_school=   session_to_school,
             session_to_caterer=  session_to_caterer,
-            session_to_date=     session_to_date,
             school_to_sessions=  dict(school_to_sessions),
             school_names=        school_names,
-            caterer_names=       {r.id: r.fields.get("Caterer Name", r.id) for r in data.caterers},
-            manager_emails=      {r.id: r.fields.get("Email") for r in data.managers},
+            caterer_names=       {r.id: r.fields.get("name", r.id) for r in data.caterers},
+            manager_emails=      {r.id: r.fields.get("email") for r in data.managers},
             menu_by_caterer=     dict(menu_by_caterer),
             dietary_hierarchy=   hierarchy,
             feedback_index=      feedback_index,
@@ -207,27 +202,25 @@ class EvaluationIndex:
         for sess in self.data.sessions:
             if sess.id != session_id:
                 continue
-            for mgr_id in (sess.fields.get("On-Site Manager") or []):
-                email = self.manager_emails.get(mgr_id)
-                if email:
-                    return email
+            mgr_id = sess.fields.get("on_site_manager_id")
+            if mgr_id:
+                return self.manager_emails.get(mgr_id)
         return None
 
 
 def _build_feedback_index(
-    feedback_list:   list[Record[CatererFeedbackFields]],
-    session_to_date: dict[str, str],
+    feedback_list: list[Record[CatererFeedbackFields]],
 ) -> dict[tuple[str, str], list[FeedbackEntry]]:
     """Group feedback by (session_id, caterer_id), sorted by date ascending."""
     index: dict[tuple[str, str], list[FeedbackEntry]] = defaultdict(list)
-    legacy_count = 0
-    skipped      = 0
+    skipped = 0
     for fb in feedback_list:
         f          = fb.fields
-        rating     = f.get("Rating")
-        caterer_id = (f.get("Caterer") or [None])[0]
-        student_id = (f.get("Student") or [None])[0]
-        session_id = (f.get("Session") or [None])[0]
+        rating     = f.get("rating")
+        caterer_id = f.get("caterer_id")
+        student_id = f.get("student_id")
+        session_id = f.get("session_id")
+        date_str   = f.get("session_date") or ""
         if rating is None or not caterer_id or not session_id or not student_id:
             skipped += 1
             log.verbose(
@@ -235,14 +228,9 @@ def _build_feedback_index(
                 f"rating={rating} caterer={caterer_id} session={session_id}"
             )
             continue
-        explicit_date = f.get("Session Date")
-        if not explicit_date:
-            legacy_count += 1
-        date_str = explicit_date or session_to_date.get(session_id) or ""
         log.verbose(
             f"Feedback {fb.id}: session={session_id} caterer={caterer_id} "
-            f"rating={rating} date={date_str!r} "
-            f"{'(legacy date)' if not explicit_date else ''}"
+            f"rating={rating} date={date_str!r}"
         )
         index[(session_id, caterer_id)].append(FeedbackEntry(
             date_str=date_str, session_id=session_id,
@@ -254,7 +242,7 @@ def _build_feedback_index(
 
     log.verbose(
         f"Feedback index built: {sum(len(v) for v in index.values())} entries across "
-        f"{len(index)} (session, caterer) pair(s); {legacy_count} legacy-date, {skipped} skipped"
+        f"{len(index)} (session, caterer) pair(s); {skipped} skipped"
     )
     return index
 
@@ -365,11 +353,11 @@ def caterer_covers_all_students(
         f"{len(school_students)} student(s)"
     )
     for stu in school_students:
-        dietary_ids = stu.fields.get("Dietary Requirements") or []
+        dietary_ids = stu.fields.get("dietary_requirement_ids") or []
         if has_opted_out(dietary_ids, index.dietary_hierarchy):
             log.verbose(
                 f"    Skipping opted-out student "
-                f"'{stu.fields.get('Student Name', stu.id)}'"
+                f"'{stu.fields.get('name', stu.id)}'"
             )
             continue
         any_ok = any(
@@ -377,11 +365,11 @@ def caterer_covers_all_students(
             for item in caterer_menu
         )
         log.verbose(
-            f"    Student '{stu.fields.get('Student Name', stu.id)}' "
+            f"    Student '{stu.fields.get('name', stu.id)}' "
             f"({len(dietary_ids)} requirement(s)): {'OK' if any_ok else 'NO MATCH'}"
         )
         if not any_ok:
-            return False, stu.fields.get("Student Name", "unknown student")
+            return False, stu.fields.get("name", "unknown student")
 
     return True, None
 
@@ -452,7 +440,7 @@ def find_candidates(
         cid = cat.id
         if cid == outgoing_caterer_id:
             continue
-        able = cat.fields.get("Able to Serve Schools") or []
+        able = cat.fields.get("able_to_serve_school_ids") or []
         if school_id not in able:
             continue
 
@@ -483,11 +471,11 @@ def has_active_proposal(
     """True if a Pending / Approved / Executed proposal already exists."""
     for p in proposals:
         f = p.fields
-        if session_id not in (f.get("Session") or []):
+        if f.get("session_id") != session_id:
             continue
-        if caterer_id not in (f.get("Outgoing Caterer") or []):
+        if f.get("outgoing_caterer_id") != caterer_id:
             continue
-        if f.get("Status") in ("Pending", "Approved", "Executed"):
+        if f.get("status") in ("Pending", "Approved", "Executed"):
             return True
     return False
 
@@ -502,13 +490,13 @@ def was_rejected_this_term(
     term_start_str = term_start.isoformat()
     for p in proposals:
         f = p.fields
-        if session_id not in (f.get("Session") or []):
+        if f.get("session_id") != session_id:
             continue
-        if caterer_id not in (f.get("Outgoing Caterer") or []):
+        if f.get("outgoing_caterer_id") != caterer_id:
             continue
-        if f.get("Status") != "Rejected":
+        if f.get("status") != "Rejected":
             continue
-        if (f.get("Proposed On") or "") >= term_start_str:
+        if (f.get("proposed_on") or "") >= term_start_str:
             return True
     return False
 
@@ -531,7 +519,7 @@ def format_proposal_email(
     action_line = (
         f"[Review, approve, or reject this proposal]({proposal_url})"
         if proposal_url else
-        "Open **Caterer Switch Proposals** in Airtable to approve or reject."
+        "Open the Padea admin portal to approve or reject."
     )
     if forced:
         trigger_block = (
@@ -619,7 +607,6 @@ def create_proposal_and_email(
     effective_week:      date,
     recipient_email:     str | None,
     dry_run:             bool,
-    immediate:           bool,
     forced:              bool = False,
 ) -> None:
     today = date.today()
@@ -629,18 +616,18 @@ def create_proposal_and_email(
     )
 
     proposal_fields: CatererSwitchProposalFields = {
-        "Proposal ID":      proposal_id,
-        "Session":          [session_id],
-        "Outgoing Caterer": [outgoing_caterer_id],
-        "Incoming Caterer": [incoming_caterer_id],
-        "Proposed On":      today.isoformat(),
-        "Effective Week":   effective_week.isoformat(),
-        "Status":           "Pending",
+        "proposal_code":      proposal_id,
+        "session_id":         session_id,
+        "outgoing_caterer_id": outgoing_caterer_id,
+        "incoming_caterer_id": incoming_caterer_id,
+        "proposed_on":        today.isoformat(),
+        "effective_week":     effective_week.isoformat(),
+        "status":             "Pending",
     }
     if not forced:
-        proposal_fields["Avg Rating"]       = round(avg_rating, 2)
-        proposal_fields["Sessions Sampled"] = num_sessions
-        proposal_fields["Unique Raters"]    = num_raters
+        proposal_fields["avg_rating"]       = round(avg_rating, 2)
+        proposal_fields["sessions_sampled"] = num_sessions
+        proposal_fields["unique_raters"]    = num_raters
 
     subject = f"[Padea] Caterer switch proposed — {session_name}"
 
@@ -687,7 +674,6 @@ def create_proposal_and_email(
                 subject=subject,
                 body=body,
                 email_id=f"SWITCH-{proposal_id}",
-                immediate=immediate,
                 caterer_switch_proposal_id=rec_id,
             )
 
@@ -701,7 +687,7 @@ def queue_alert_email(
     dry_run:         bool,
 ) -> None:
     if dry_run:
-        log.info(f"[DRY RUN] Would queue alert email: {subject}")
+        log.info(f"[DRY RUN] Would send alert email: {subject}")
         return
     if not recipient_email:
         log.warning("No on-site manager email found — skipping alert email")
@@ -722,13 +708,10 @@ def queue_alert_email(
 # ---------------------------------------------------------------------------
 
 def evaluate(
-    db:        Database | None = None,
-    dry_run:   bool = False,
-    immediate: bool = False,
+    db:      Database | None = None,
+    dry_run: bool = False,
 ) -> None:
     db = db or Database.from_env()
-    if immediate:
-        log.info("Send immediately turned ON")
 
     data  = EvaluationData.load(db)
     index = EvaluationIndex.build(data)
@@ -857,7 +840,6 @@ def evaluate(
             effective_week=effective_week,
             recipient_email=recipient,
             dry_run=dry_run,
-            immediate=immediate,
         )
 
     log.info(f"Evaluation complete. {evaluated} (session, caterer) pair(s) had sufficient data.")
@@ -877,11 +859,11 @@ def _resolve_session_ref(
     treating ``ref`` as a raw record ID if no name match is found.
     """
     needle = ref.strip().lower()
-    matches = [s for s in sessions if s.fields.get("Session ID", "").lower() == needle]
+    matches = [s for s in sessions if s.fields.get("session_code", "").lower() == needle]
     if len(matches) == 1:
         return matches[0].id
     if len(matches) > 1:
-        names = ", ".join(s.fields.get("Session ID", s.id) for s in matches)
+        names = ", ".join(s.fields.get("session_code", s.id) for s in matches)
         log.error(f"Ambiguous session name {ref!r} — matched: {names}")
         return None
     # No name match — try as a raw record ID.
@@ -895,7 +877,6 @@ def force_proposal(
     incoming_caterer_id: str | None = None,
     db:                  Database | None = None,
     dry_run:             bool = False,
-    immediate:           bool = False,
 ) -> None:
     """Create a switch proposal directly, bypassing rating thresholds.
 
@@ -917,8 +898,8 @@ def force_proposal(
     if not session_id:
         log.error(
             f"No session found matching {session_ref!r}. "
-            "Pass the Session ID field value (e.g. 'MacGregor State High School - Thursday') "
-            "or the Airtable record ID."
+            "Pass the session_code field value (e.g. 'MacGregor State High School - Thursday') "
+            "or the record UUID."
         )
         sys.exit(1)
 
@@ -967,7 +948,6 @@ def force_proposal(
         effective_week=effective_week,
         recipient_email=recipient,
         dry_run=dry_run,
-        immediate=immediate,
         forced=True,
     )
 
@@ -984,11 +964,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--dry-run", action="store_true",
-        help="Log what would happen without writing to Airtable",
-    )
-    parser.add_argument(
-        "--immediate", action="store_true",
-        help="Flag the email as to be sent immediately",
+        help="Log what would happen without writing to the database",
     )
     parser.add_argument(
         "--force", action="store_true",
@@ -1028,7 +1004,6 @@ if __name__ == "__main__":
                 session_ref=args.session,
                 incoming_caterer_id=args.incoming,
                 dry_run=args.dry_run,
-                immediate=args.immediate,
             )
         else:
-            evaluate(dry_run=args.dry_run, immediate=args.immediate)
+            evaluate(dry_run=args.dry_run)

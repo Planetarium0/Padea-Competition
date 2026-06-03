@@ -1,6 +1,6 @@
 """
 MockTable and MockDatabase for testing Padea action scripts without
-connecting to Airtable. Every write is tracked on the table object so
+connecting to Supabase. Every write is tracked on the table object so
 tests can assert on what was created, updated, or deleted.
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ from support import Record
 class MockTable:
     """In-memory replacement for support.database.Table.
 
-    ``all()`` ignores the formula parameter — tests should pre-populate only
+    ``all()`` ignores the filter parameter — tests should pre-populate only
     the records they expect to appear, matching the Python-side filtering the
     calling code performs after fetching.
     """
@@ -31,7 +31,7 @@ class MockTable:
     # Reads
     # ------------------------------------------------------------------
 
-    def all(self, formula: str | None = None) -> list[Record]:
+    def all(self, filter=None) -> list[Record]:
         return list(self._records)
 
     def get(self, record_id: str) -> Record | None:
@@ -78,7 +78,12 @@ class MockTable:
     def batch_update(self, updates: Iterable[Mapping[str, Any]]) -> list[Record]:
         updates_list = list(updates)
         self.batch_update_calls.append(updates_list)
-        return [self.update(u["id"], u["fields"]) for u in updates_list]
+        results = []
+        for entry in updates_list:
+            entry = dict(entry)
+            record_id = entry.pop("id")
+            results.append(self.update(record_id, entry))
+        return results
 
     def delete(self, record_id: str) -> None:
         self.deleted_ids.append(record_id)

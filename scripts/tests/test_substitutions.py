@@ -35,7 +35,7 @@ class TestResolveManagerId(unittest.TestCase):
     def test_substitute_returned_when_session_and_date_match(self):
         mgr_id, is_sub = resolve_manager_id(
             fixtures.SESSION_MON_ID,
-            {"On-Site Manager": [fixtures.MANAGER_A_ID]},
+            {"on_site_manager_id": fixtures.MANAGER_A_ID},
             "2026-06-02",
             self._subs(),
         )
@@ -45,7 +45,7 @@ class TestResolveManagerId(unittest.TestCase):
     def test_fallback_to_regular_when_date_differs(self):
         mgr_id, is_sub = resolve_manager_id(
             fixtures.SESSION_MON_ID,
-            {"On-Site Manager": [fixtures.MANAGER_A_ID]},
+            {"on_site_manager_id": fixtures.MANAGER_A_ID},
             "2026-06-09",   # different week
             self._subs(),
         )
@@ -55,7 +55,7 @@ class TestResolveManagerId(unittest.TestCase):
     def test_fallback_to_regular_when_session_differs(self):
         mgr_id, is_sub = resolve_manager_id(
             fixtures.SESSION_WED_ID,   # not the session in subs
-            {"On-Site Manager": [fixtures.MANAGER_A_ID]},
+            {"on_site_manager_id": fixtures.MANAGER_A_ID},
             "2026-06-02",
             self._subs(),
         )
@@ -65,7 +65,7 @@ class TestResolveManagerId(unittest.TestCase):
     def test_fallback_to_regular_when_no_date_provided(self):
         mgr_id, is_sub = resolve_manager_id(
             fixtures.SESSION_MON_ID,
-            {"On-Site Manager": [fixtures.MANAGER_A_ID]},
+            {"on_site_manager_id": fixtures.MANAGER_A_ID},
             None,
             self._subs(),
         )
@@ -75,7 +75,7 @@ class TestResolveManagerId(unittest.TestCase):
     def test_returns_none_when_no_manager_anywhere(self):
         mgr_id, is_sub = resolve_manager_id(
             fixtures.SESSION_WED_ID,
-            {},             # no On-Site Manager field
+            {},             # no on_site_manager_id field
             "2026-06-04",
             {},             # no substitutions
         )
@@ -115,9 +115,9 @@ class TestLoadSubstitutions(unittest.TestCase):
         db.ManagerSubstitutions._records = [
             fixtures.substitution_monday("2026-06-02"),
             Record(id="subWed01", fields={
-                "Session":          [fixtures.SESSION_WED_ID],
-                "Date":             "2026-06-04",
-                "Substitute Manager": [fixtures.MANAGER_A_ID],
+                "session_id":            fixtures.SESSION_WED_ID,
+                "date":                  "2026-06-04",
+                "substitute_manager_id": fixtures.MANAGER_A_ID,
             }),
         ]
         result = load_substitutions(db, "2026-06-02", "2026-06-06")
@@ -129,9 +129,9 @@ class TestLoadSubstitutions(unittest.TestCase):
         db = MockDatabase()
         db.ManagerSubstitutions._records = [
             Record(id="subBad1", fields={
-                "Session": [fixtures.SESSION_MON_ID],
-                "Date":    "2026-06-02",
-                # Substitute Manager omitted
+                "session_id": fixtures.SESSION_MON_ID,
+                "date":       "2026-06-02",
+                # substitute_manager_id omitted
             }),
         ]
         result = load_substitutions(db, "2026-06-02", "2026-06-06")
@@ -141,9 +141,9 @@ class TestLoadSubstitutions(unittest.TestCase):
         db = MockDatabase()
         db.ManagerSubstitutions._records = [
             Record(id="subBad2", fields={
-                "Session":            [fixtures.SESSION_MON_ID],
-                "Substitute Manager": [fixtures.MANAGER_B_ID],
-                # Date omitted
+                "session_id":            fixtures.SESSION_MON_ID,
+                "substitute_manager_id": fixtures.MANAGER_B_ID,
+                # date omitted
             }),
         ]
         result = load_substitutions(db, "2026-06-02", "2026-06-06")
@@ -153,9 +153,9 @@ class TestLoadSubstitutions(unittest.TestCase):
         db = MockDatabase()
         db.ManagerSubstitutions._records = [
             Record(id="subBad3", fields={
-                "Date":               "2026-06-02",
-                "Substitute Manager": [fixtures.MANAGER_B_ID],
-                # Session omitted
+                "date":                  "2026-06-02",
+                "substitute_manager_id": fixtures.MANAGER_B_ID,
+                # session_id omitted
             }),
         ]
         result = load_substitutions(db, "2026-06-02", "2026-06-06")
@@ -168,8 +168,8 @@ class TestLoadSubstitutions(unittest.TestCase):
 
 def _ctx(manager_is_sub: bool = False) -> SessionContext:
     return SessionContext(
-        fields={"Session ID": "Alpha Academy - Monday", "Day": "Monday",
-                "Dinner Time": "6:30 PM", "Building": "Block B"},
+        fields={"session_code": "Alpha Academy - Monday", "day": "Monday",
+                "dinner_time": "6:30 PM", "building": "Block B"},
         school_name="Alpha Academy",
         manager_name="Dave Substitute",
         manager_mobile="0499999999",
@@ -179,9 +179,9 @@ def _ctx(manager_is_sub: bool = False) -> SessionContext:
 
 
 def _simple_body(manager_is_sub: bool) -> str:
-    wo  = {"Week Start": "2026-06-02", "Total Meals": 1}
-    cat = {"Caterer Name": "Café Deluxe", "Contact Name": "Alice Smith", "Delivery Fee": 0.0}
-    li  = LineItem(quantity=1, session=_ctx(manager_is_sub), menu_item={"Menu Item Name": "Pasta"})
+    wo  = {"week_start": "2026-06-02", "total_meals": 1}
+    cat = {"name": "Café Deluxe", "contact_name": "Alice Smith", "delivery_fee": 0.0}
+    li  = LineItem(quantity=1, session=_ctx(manager_is_sub), menu_item={"name": "Pasta"})
     return format_email_body(wo, cat, [li])
 
 
@@ -221,19 +221,19 @@ def _build_db(with_substitution: bool) -> MockDatabase:
 
     db.WeeklyOrders._records = [
         Record(id=WO_ID, fields={
-            "Order ID":    "Café Deluxe — 2026-W23",
-            "Caterer":     [fixtures.CATERER_A_ID],
-            "Week Start":  WEEK,
-            "Total Meals": 5,
+            "order_code":  "Café Deluxe — 2026-W23",
+            "caterer_id":  fixtures.CATERER_A_ID,
+            "week_start":  WEEK,
+            "total_meals": 5,
         }),
     ]
     db.Orders._records = [
         Record(id=ORDER_ID, fields={
-            "Weekly Order": [WO_ID],
-            "Session":      [fixtures.SESSION_MON_ID],
-            "Menu Item":    [fixtures.ITEM_CHICKEN_RICE_ID],
-            "Date":         WEEK,
-            "Quantity":     5,
+            "weekly_order_id": WO_ID,
+            "session_id":      fixtures.SESSION_MON_ID,
+            "menu_item_id":    fixtures.ITEM_CHICKEN_RICE_ID,
+            "date":            WEEK,
+            "quantity":        5,
         }),
     ]
 

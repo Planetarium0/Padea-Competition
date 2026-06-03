@@ -65,10 +65,10 @@ def _make_eval_index(
 
 def _proposal(session_id: str, caterer_id: str, status: str, proposed_on: str) -> Record:
     return Record(id=f"prop-{status[:3]}", fields={
-        "Session":          [session_id],
-        "Outgoing Caterer": [caterer_id],
-        "Status":           status,
-        "Proposed On":      proposed_on,
+        "session_id":          session_id,
+        "outgoing_caterer_id": caterer_id,
+        "status":              status,
+        "proposed_on":         proposed_on,
     })
 
 
@@ -194,9 +194,9 @@ class TestCatererCoversAllStudents(unittest.TestCase):
     def test_vegetarian_covered_by_vegan_tagged_item(self):
         # Vegan-tagged item satisfies Vegetarian via subset closure.
         vegan_item_only = [Record(id="iV", fields={
-            "Menu Item Name": "Vegan Bowl",
-            "Caterer": [fixtures.CATERER_B_ID],
-            "Dietary Tags": [fixtures.DIET_VEGAN_ID],
+            "name":            "Vegan Bowl",
+            "caterer_id":      fixtures.CATERER_B_ID,
+            "dietary_tag_ids": [fixtures.DIET_VEGAN_ID],
         })]
         school_students = [fixtures.student_vegetarian()]
         idx = _make_eval_index(
@@ -387,13 +387,13 @@ class TestFindCandidates(unittest.TestCase):
         # be the sole candidate returned.
         good_caterer_id = "cGood0001"
         good_caterer = Record(id=good_caterer_id, fields={
-            "Caterer Name":          "Good Eats",
-            "Able to Serve Schools": [fixtures.SCHOOL_A_ID],
+            "name":                     "Good Eats",
+            "able_to_serve_school_ids": [fixtures.SCHOOL_A_ID],
         })
         good_menu_item = Record(id="iGoodVgn", fields={
-            "Menu Item Name": "Vegan Curry",
-            "Caterer":        [good_caterer_id],
-            "Dietary Tags":   [fixtures.DIET_VEGAN_ID],
+            "name":            "Vegan Curry",
+            "caterer_id":      good_caterer_id,
+            "dietary_tag_ids": [fixtures.DIET_VEGAN_ID],
         })
 
         index = _build_eval_index(
@@ -418,13 +418,13 @@ class TestFindCandidates(unittest.TestCase):
     def test_all_candidates_excluded_returns_empty_list(self):
         # Both available caterers are meat-only — no valid replacement exists.
         caterer_2 = Record(id="cMeat0002", fields={
-            "Caterer Name":          "Burger Palace",
-            "Able to Serve Schools": [fixtures.SCHOOL_A_ID],
+            "name":                     "Burger Palace",
+            "able_to_serve_school_ids": [fixtures.SCHOOL_A_ID],
         })
         burger_item = Record(id="iBurger", fields={
-            "Menu Item Name": "Beef Burger",
-            "Caterer":        ["cMeat0002"],
-            "Dietary Tags":   [],
+            "name":            "Beef Burger",
+            "caterer_id":      "cMeat0002",
+            "dietary_tag_ids": [],
         })
 
         index = _build_eval_index(
@@ -453,8 +453,8 @@ class TestFindCandidates(unittest.TestCase):
         # anyway, but we explicitly test the skip-self logic with a caterer
         # that IS able to serve.
         caterer_self_able = Record(id=outgoing_id, fields={
-            "Caterer Name":          "Self Caterer",
-            "Able to Serve Schools": [fixtures.SCHOOL_A_ID],
+            "name":                     "Self Caterer",
+            "able_to_serve_school_ids": [fixtures.SCHOOL_A_ID],
         })
         index2 = _build_eval_index(
             caterers=[caterer_self_able],
@@ -473,13 +473,13 @@ class TestFindCandidates(unittest.TestCase):
         # Even a caterer with a perfect menu is excluded if the school isn't
         # in its Able to Serve Schools list.
         caterer_wrong_area = Record(id="cFarAway", fields={
-            "Caterer Name":          "Far Away Foods",
-            "Able to Serve Schools": [fixtures.SCHOOL_B_ID],  # wrong school
+            "name":                     "Far Away Foods",
+            "able_to_serve_school_ids": [fixtures.SCHOOL_B_ID],  # wrong school
         })
         far_menu = [Record(id="iFarVgn", fields={
-            "Menu Item Name": "Vegan Delight",
-            "Caterer":        ["cFarAway"],
-            "Dietary Tags":   [fixtures.DIET_VEGAN_ID],
+            "name":            "Vegan Delight",
+            "caterer_id":      "cFarAway",
+            "dietary_tag_ids": [fixtures.DIET_VEGAN_ID],
         })]
         index = _build_eval_index(
             caterers=[caterer_wrong_area],

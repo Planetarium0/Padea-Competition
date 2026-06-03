@@ -1,0 +1,18 @@
+{
+  "_comment": "Single source of truth for the negative-keyword fallback used by the dietary compatibility check. Read by scripts/support/compatibility.py (server-side, via file IO) and webapp/app.js (client-side, via fetch). Edit one place only.",
+  "negative_keywords": {
+    "No Beef":      ["beef", "bulgogi"],
+    "No Pork":      ["pork", "bacon", "ham"],
+    "No Lamb":      ["lamb"],
+    "No Seafood":   ["seafood", "shrimp", "prawn", "fish", "salmon", "tuna", "shellfish", "crab", "lobster"],
+    "No Shellfish": ["shellfish", "shrimp", "shrimps", "prawn", "crab", "lobster"],
+    "No Fish":      ["fish", "salmon", "tuna"],
+    "No Red Meat":  ["beef", "lamb", "pork", "bulgogi"],
+    "Vegetarian":   ["beef", "pork", "lamb", "chicken", "fish", "shrimp", "prawn", "salmon", "tuna", "seafood", "shellfish", "crab", "lobster", "bulgogi", "bacon", "ham"],
+    "Vegan":        ["beef", "pork", "lamb", "chicken", "fish", "shrimp", "prawn", "salmon", "tuna", "seafood", "shellfish", "crab", "lobster", "bulgogi", "bacon", "ham", "cheese", "milk", "butter", "cream", "yogurt"],
+    "Pescatarian":  ["beef", "pork", "lamb", "chicken", "bulgogi", "bacon", "ham"],
+    "Dairy Free":   ["cheese", "milk", "butter", "cream", "yogurt"],
+    "Halal":        ["pork", "bacon", "ham"],
+    "Kosher":       ["pork", "bacon", "ham", "shellfish", "shrimp", "prawn", "crab", "lobster"]
+  }
+}

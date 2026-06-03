@@ -70,11 +70,11 @@ def build_hierarchy(
 
     for r in restrictions:
         rid = r.id
-        name = r.fields.get("Restriction Name", "")
+        name = r.fields.get("name", "")
         id_to_name[rid] = name
         if name:
             name_to_id[name] = rid
-        supersets = list(r.fields.get("Supersets") or [])
+        supersets = list(r.fields.get("superset_ids") or [])
         parents[rid] = supersets
         for parent_id in supersets:
             children.setdefault(parent_id, []).append(rid)
@@ -163,8 +163,8 @@ def item_incompatibility_ids(
     if not dietary_ids:
         return []
 
-    item_tag_ids = set(item_fields.get("Dietary Tags") or [])
-    item_name_lower = item_fields.get("Menu Item Name", "").lower()
+    item_tag_ids = set(item_fields.get("dietary_tag_ids") or [])
+    item_name_lower = item_fields.get("name", "").lower()
     legend_ids = set(caterer_legend_tag_ids or [])
 
     failed: list[str] = []

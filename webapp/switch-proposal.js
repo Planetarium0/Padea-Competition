@@ -1,14 +1,11 @@
 /* switch-proposal.js — Review and act on a Caterer Switch Proposal.
  *
- * URL: /webapp/switch-proposal.html?id=<airtable_record_id>
+ * URL: /webapp/switch-proposal.html?id=<proposal_uuid>
  *
- * All Airtable access is handled server-side by host_webapp.py:
- *   GET  /api/proposal/<id>         — load proposal details
- *   POST /api/proposal/<id>/approve — execute the switch
- *   POST /api/proposal/<id>/reject  — reject with optional notes
- *
- * Requires the webapp to be served via ./run host.
+ * All data access goes directly to Supabase via supabase-js.
  */
+
+import { supabase } from './supabase_client.js'
 
 // ---------------------------------------------------------------------------
 // DOM helpers
@@ -76,7 +73,7 @@ const page = {
         if (!this.proposalId) {
             return this.showError(
                 'No proposal ID found in URL.\n' +
-                'Expected: switch-proposal.html?id=recXXXXXXXXXXXXXX'
+                'Expected: switch-proposal.html?id=<uuid>'
             );
         }
         try {
@@ -87,28 +84,36 @@ const page = {
     },
 
     async loadProposal() {
-        const res  = await fetch(`/api/proposal/${this.proposalId}`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        const { data: prop, error } = await supabase
+            .from('caterer_switch_proposals')
+            .select(`
+              *,
+              sessions(session_code, schools(name)),
+              caterers_out:caterers!outgoing_caterer_id(name),
+              caterers_in:caterers!incoming_caterer_id(name)
+            `)
+            .eq('id', this.proposalId)
+            .single();
+        if (error || !prop) throw new Error('Proposal not found');
 
-        this.sessionName  = data.sessionName;
-        this.outgoingName = data.outgoingName;
-        this.incomingName = data.incomingName;
+        this.sessionName  = prop.sessions ? `${prop.sessions.schools?.name || '?'} — ${prop.sessions.session_code || ''}` : '—';
+        this.outgoingName = prop.caterers_out?.name || '—';
+        this.incomingName = prop.caterers_in?.name  || '—';
 
-        setText('d-session',  data.sessionName);
-        setText('d-outgoing', data.outgoingName);
-        setText('d-incoming', data.incomingName);
-        setText('d-rating',   ratingDisplay(data.avgRating));
-        setText('d-sessions', data.sessionsSampled ?? '—');
-        setText('d-raters',   data.uniqueRaters    ?? '—');
-        setText('d-week',     formatDate(data.effectiveWeek));
+        setText('d-session',  this.sessionName);
+        setText('d-outgoing', this.outgoingName);
+        setText('d-incoming', this.incomingName);
+        setText('d-rating',   ratingDisplay(prop.avg_rating));
+        setText('d-sessions', prop.sessions_sampled ?? '—');
+        setText('d-raters',   prop.unique_raters    ?? '—');
+        setText('d-week',     formatDate(prop.effective_week));
 
-        if (data.notes) {
+        if (prop.notes) {
             document.getElementById('notes-row').classList.remove('hidden');
-            setText('d-notes', data.notes);
+            setText('d-notes', prop.notes);
         }
 
-        const status = data.status;
+        const status = prop.status || 'Pending';
         const badge  = document.getElementById('status-badge');
         badge.textContent = status;
         badge.className   = `status-badge status-${status}`;
@@ -118,8 +123,8 @@ const page = {
         } else {
             const notices = {
                 Approved: 'This switch is queued and will take effect at the next order run.',
-                Rejected: 'This proposal was rejected.',
-                Executed: 'This switch has already been executed.',
+                Rejected:  'This proposal was rejected.',
+                Executed:  'This switch has already been executed.',
             };
             const notice = document.getElementById('readonly-notice');
             notice.textContent = notices[status] ?? `Status: ${status}`;
@@ -147,9 +152,8 @@ const page = {
     async _doApprove() {
         showOnly('view-working');
         try {
-            const res  = await fetch(`/api/proposal/${this.proposalId}/approve`, { method: 'POST' });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            const { error } = await supabase.rpc('approve_caterer_switch', { p_proposal_id: this.proposalId });
+            if (error) throw new Error(error.message);
 
             document.getElementById('result-icon').className = 'result-icon icon-success';
             document.getElementById('result-icon').textContent = '✓';
@@ -159,7 +163,6 @@ const page = {
                 `for ${this.sessionName} from the next order run.`
             );
             showOnly('view-done');
-
         } catch (e) {
             this.showError(`Error during approval:\n${e.message}`);
         }
@@ -181,13 +184,13 @@ const page = {
     async confirmReject() {
         const notes = document.getElementById('reject-reason').value.trim();
         try {
-            const res  = await fetch(`/api/proposal/${this.proposalId}/reject`, {
-                method:  'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body:    JSON.stringify({ notes }),
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            const fields = { status: 'Rejected' };
+            if (notes) fields.notes = notes;
+            const { error } = await supabase
+                .from('caterer_switch_proposals')
+                .update(fields)
+                .eq('id', this.proposalId);
+            if (error) throw new Error(error.message);
 
             document.getElementById('result-icon').className = 'result-icon icon-rejected';
             document.getElementById('result-icon').textContent = '✕';
@@ -197,7 +200,6 @@ const page = {
                 `${this.sessionName} again this term.`
             );
             showOnly('view-done');
-
         } catch (e) {
             this.showError(`Failed to save rejection:\n${e.message}`);
         }
@@ -212,5 +214,8 @@ const page = {
         showOnly('view-error');
     },
 };
+
+// Expose page globally so onclick attributes in HTML still work with module scripts.
+window.page = page;
 
 page.init();

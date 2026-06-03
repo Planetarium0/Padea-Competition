@@ -19,10 +19,8 @@ _TESTS_DIR = Path(__file__).resolve().parent
 if str(_TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(_TESTS_DIR))
 
-import test_api
 import test_evaluate_caterers
 import test_execute_caterer_switch
-import test_manage_api
 import test_register_orders
 import test_send_orders
 import test_substitutions
@@ -33,8 +31,6 @@ def suite() -> unittest.TestSuite:
     loader = unittest.TestLoader()
     s = unittest.TestSuite()
     for module in (
-        test_api,
-        test_manage_api,
         test_register_orders,
         test_send_orders,
         test_substitutions,
