@@ -1,51 +1,137 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code (claude.ai/code) when working in this repository.
 
 ## What this project does
 
-This project is part of a larger set of projects aimed at fixing bottlenecks in a tutoring business (Padea).
-Schools partner with Padea to run weekly, small-group tutoring sessions on their campus after hours. Families enrol at the start of each term, so largely the same students attend every session that term (ignoring absences and rare mid-term enrolments). Each session includes a restaurant-catered dinner break in the middle.
-Padea contracts external caterers to cook and deliver individually boxed meals (one per student) to each session. The order should arrive 5–10 minutes before the dinner break so the on-site manager can set up the meals with the delivery driver’s help.
-The on-site manager may collect feedback and share it with us. The on-site manager is usually the same on a given day at a given school each week (e.g. Mondays at ACME School), though this can change on one-off occasions. The caterer may contact the on-site manager’s mobile to confirm arrival, report being late, or ask for help finding the
-session location (building and room).
-Each Thursday, our program coordinator emails each caterer an order for the following week’s meals, picking a few items off the caterer’s menu and making an educated guess at the best meals and quantities of each meal.
-Students often tell us the selected meals don’t match their taste preferences. Food quality also tends to decline over time with each caterer. Ordering meals is tedious for the program coordinator – and will become a bottleneck for the business.
+Padea runs after-school tutoring sessions at partner high schools. Each
+session includes a catered dinner. The program coordinator currently
+guesses the weekly meal order by hand from each caterer's menu — students
+dislike the picks, food quality drifts silently, and the workflow won't
+scale.
 
-This project is aimed at fixing this bottleneck - solving the problem from order to delivery.
+**This repo solves the order-to-delivery loop**: students rate today's
+caterer and pick next week's meal via a QR-code webapp; non-respondents
+get smart fallbacks; the system generates the weekly order, enforces
+dietary and minimum-quantity constraints, dispatches the caterer email,
+and flags declining caterers so the coordinator only steps in for swaps.
 
-## Python scripting
+This repo is **one of several Padea-bottleneck projects**; treat anything
+not in scope here (e.g. enrolment, payments, tutor scheduling) as
+delegated elsewhere.
 
-You are building on an arch linux system with an externally managed environment. If installing packages with pip you must use the system package manager or install locally with `pip install --user --break-system-packages [package]`
+## How to navigate this codebase
 
-## graphify
+There are two complementary indices. Use them in this order:
 
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+1. **`plans/current/`** — design rules, weekly workflow, and the dev
+   guide. **Read these first** for any non-trivial change; they hold the
+   project's philosophy and invariants, which the code cannot tell you.
 
-Rules:
-- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
-- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+   | File | Read when |
+   |---|---|
+   | [`plans/current/README.md`](../plans/current/README.md) | Orienting; deciding which other doc to read |
+   | [`plans/current/principles.md`](../plans/current/principles.md) | Before any non-trivial edit |
+   | [`plans/current/workflow.md`](../plans/current/workflow.md) | Touching `scripts/actions/` or the weekly order/feedback/switch flow |
+   | [`plans/current/dev-guide.md`](../plans/current/dev-guide.md) | Locating code, deciding where new code belongs, running tests |
 
-## Self-Healing & Agent-Ready Architecture Standards
+2. **`graphify-out/`** — a knowledge graph with god nodes, communities,
+   and cross-file relationships. Use it for *behavioural* questions
+   (where is X defined? what calls Y? what does Z import?).
 
-1. **Strict Data Validation (Pydantic Layer)**:
-   - All runtime Airtable data reads and writes must pass through the validation models defined in `scripts/support/schemas.py`.
-   - Never rely solely on static Typings/TypedDict for data loaded at active runtime boundaries.
+   - `graphify query "<question>"` — scoped subgraph, usually much
+     smaller than `GRAPH_REPORT.md` or raw grep output.
+   - `graphify path "<A>" "<B>"` — relationship between two symbols.
+   - `graphify explain "<concept>"` — focused subgraph around one node.
+   - `graphify-out/wiki/index.md` (if present) — broad navigation.
+   - `graphify-out/GRAPH_REPORT.md` — only for broad architecture review.
+   - After meaningful code edits run `graphify update .` (AST-only, no
+     API cost) to keep the graph current.
 
-2. **Automated State Capture & AI Prompting**:
-   - Wrap entrypoints of all active, recurring workflows in the `self_healing_error_handler` context manager (from `support` module).
-   - This handler serializes the localized database context and stack traces to `cache/failures/failure_<timestamp>.json`, and auto-generates a pre-formatted self-healing instruction prompt `cache/failures/patch_prompt_<timestamp>.md`.
-   - If you encounter a new failure JSON and prompt, load the state snapshot directly using the regression suite.
+> **Rule of thumb:** if the question is "how does this work / where is
+> it?", ask graphify. If the question is "why is it this way / what
+> should I do?", read `plans/current/`.
 
-3. **Regression Testing**:
-   - Write edge-case regression tests in `scripts/tests/test_edge_cases.py`.
-   - Before pushing or marking a task complete, **you MUST run the full test suite** using `./run test` and ensure all tests pass.
+## When to update `plans/current/`
 
-4. **Documentation Guidelines**:
-   - After modifying core logic, you **MUST** review and update the documentation under `plans/current/` (e.g. reflecting updated constraints, abstractions, or workflows). Single-use localized edge cases do not need separate plan documentation unless they alter system-wide contracts.
+Update **in the same commit as the code change** when you:
 
-5. **Good Coding Practices**:
-   - Implement descriptive log levels, robust error assertions, type-safe fallback assignments, and defense-in-depth bounds checking.
+- Add, remove, or rename a design principle or invariant
+  (`principles.md`).
+- Change the weekly workflow, decision points, or actor responsibilities
+  (`workflow.md`).
+- Change repo layout, `./run` verbs, the testing model, the
+  self-healing loop, or where new code belongs (`dev-guide.md`).
+- Resolve a "Known gap" — delete the bullet from `principles.md`.
+- Discover a new known gap — record it as one line in `principles.md §6`.
 
+Do **not** update `plans/current/` for pure code edits (renames, splits,
+new tests, bugfixes that don't change a contract). graphify picks those
+up via `graphify update .`.
+
+When in doubt, ask: *will the next agent make a different choice if this
+isn't written down?* If yes, write it down here.
+
+## Python environment
+
+Arch Linux with an externally-managed environment. To install packages
+with pip, use the system package manager or
+`pip install --user --break-system-packages <pkg>`.
+
+The repo includes a local `.venv/`; the agent harness
+(`scripts/support/run_claude_agent.py`) prefers it when present.
+
+## Self-healing & agent-ready architecture
+
+Spelled out in full in
+[`plans/current/principles.md`](../plans/current/principles.md). Headline
+rules:
+
+1. **Validate at every database boundary.** All Supabase reads/writes go
+   through `support.Database`, which runs Pydantic models from
+   `scripts/support/schemas.py` on every payload. Don't fall back to
+   bare TypedDict at runtime boundaries.
+2. **Wrap operational entrypoints in `self_healing_error_handler`** with
+   a `state_provider` that snapshots the relevant tables. Failures land
+   in `cache/failures/failure_<ts>_<workflow>.json` and a
+   `patch_prompt_<ts>_<workflow>.md` ready for an AI patcher.
+3. **Regress every failure** in `scripts/tests/test_edge_cases.py` using
+   `populate_mock_db` on the captured snapshot. Run `./run test` before
+   marking work complete.
+4. **The sandbox is the contract for agent edits**: file writes are
+   restricted to `scripts/`, `supabase/`, `webapp/`, `plans/`; bash to
+   a fixed allowlist (see `run_claude_agent.py`).
+
+## Coding standards (enforced — not preferences)
+
+- Type-hint every Python function signature crossing a module boundary.
+- Anything that can fail has a unit test. Tests are pure-in-memory
+  (`MockDatabase` in `scripts/tests/mock_db.py`); no real Supabase
+  calls in the suite.
+- One script = one operational goal (`scripts/actions/<verb>.py`).
+  Helpers used by more than one script move to `scripts/support/`.
+- All operations are invoked via `./run` — no ad-hoc paths in docs,
+  runbooks, or cron.
+- Use `support.log` (and `log.verbose` at level 5); avoid `print`.
+
+## Common operations
+
+```bash
+./run migrate                  # full destructive reseed
+./run orders                   # generate next week + send caterer emails
+./run orders generate --dry-run
+./run caterer evaluate         # rolling-rating check + propose switches
+./run forms qr [send]          # generate or email per-session QR codes
+./run test                     # full suite (pure in-memory)
+./run script <name>            # ad-hoc: scripts/actions/<name>.py
+```
+
+Self-healing harness:
+
+```bash
+python scripts/support/run_claude_agent.py --latest-error
+python scripts/support/run_claude_agent.py --run-and-heal "./run orders"
+```
+
+See [`plans/current/dev-guide.md`](../plans/current/dev-guide.md) for the
+full command surface, required env vars, and deployment notes.
