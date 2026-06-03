@@ -1,5 +1,5 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 export const supabase = createClient(
-  'SUPABASE_URL_PLACEHOLDER',
-  'SUPABASE_ANON_KEY_PLACEHOLDER'
+  'https://azdfsbvmrdshgtrkknse.supabase.co',
+  'sb_publishable_j8WWPBU6uyeTgnUi-mmV5A_RHLvmTgt'
 )
