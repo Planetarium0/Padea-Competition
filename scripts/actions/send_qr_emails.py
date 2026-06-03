@@ -29,6 +29,7 @@ from support import (
     SchoolFields,
     SessionFields,
     log,
+    schedule_email,
 )
 
 _DAY_ORDER = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4}
@@ -107,10 +108,9 @@ def format_manager_email(
 # ---------------------------------------------------------------------------
 
 def send_qr_emails(
-    immediate: bool = False,
-    dry_run:   bool = False,
-    first:     bool = False,
-    db:        Database | None = None,
+    dry_run: bool = False,
+    first:   bool = False,
+    db:      Database | None = None,
 ) -> None:
     db = db or Database.from_env()
 
@@ -121,9 +121,6 @@ def send_qr_emails(
             "  URL_ORIGIN=http://<server-ip>:8000"
         )
         sys.exit(1)
-
-    if immediate:
-        log.info("Send immediately: ON")
 
     all_sessions = db.Sessions.all()
     school_map   = {s.id: s for s in db.Schools.all()}
@@ -162,8 +159,6 @@ def send_qr_emails(
         log.warning("No sessions with on-site manager emails found.")
         return
 
-    from send_orders import schedule_email
-
     sent = 0
 
     for mgr_id, entries in by_manager.items():
@@ -188,7 +183,6 @@ def send_qr_emails(
                 subject=subject,
                 body=body,
                 email_id=email_id,
-                immediate=immediate,
             )
             log.info(f"Queued → {mgr_email} ({mgr_name or '?'}, {len(entries)} session(s))")
 
@@ -202,13 +196,10 @@ def send_qr_emails(
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    from support import self_healing_error_handler
+
     parser = argparse.ArgumentParser(
         description="Email site managers their sessions' QR codes"
-    )
-    parser.add_argument(
-        "--immediate",
-        action="store_true",
-        help="Flag emails for immediate sending (default: Status=Queued)",
     )
     parser.add_argument(
         "--dry-run",
@@ -221,4 +212,18 @@ if __name__ == "__main__":
         help="Append &first=1 to each link, hiding the caterer rating card in the webapp",
     )
     args = parser.parse_args()
-    send_qr_emails(immediate=args.immediate, dry_run=args.dry_run, first=args.first)
+
+    def db_state_provider():
+        try:
+            db = Database.from_env()
+            return {
+                "sessions":          db.Sessions.all(),
+                "schools":           db.Schools.all(),
+                "on_site_managers":  db.OnSiteManagers.all(),
+                "scheduled_emails":  db.ScheduledEmails.all(),
+            }
+        except Exception as e:
+            return {"error_loading_db_state": str(e)}
+
+    with self_healing_error_handler("send_qr_emails", state_provider=db_state_provider):
+        send_qr_emails(dry_run=args.dry_run, first=args.first)

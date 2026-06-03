@@ -13,9 +13,9 @@ from actions.send_orders import (
     LineItem,
     SessionContext,
     format_email_body,
-    schedule_email,
     subtract_minutes,
 )
+from support import schedule_email
 from mock_db import MockDatabase
 
 

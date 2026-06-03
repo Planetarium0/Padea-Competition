@@ -39,6 +39,7 @@ from support import (
     SessionFields,
     StudentFields,
     log,
+    schedule_email,
 )
 from support.compatibility import (
     DietaryHierarchy,
@@ -666,7 +667,6 @@ def create_proposal_and_email(
         )
 
         if recipient_email:
-            from send_orders import schedule_email
             schedule_email(
                 db,
                 to_email=recipient_email,
@@ -692,7 +692,6 @@ def queue_alert_email(
     if not recipient_email:
         log.warning("No on-site manager email found — skipping alert email")
         return
-    from send_orders import schedule_email
     schedule_email(
         db,
         to_email=recipient_email,

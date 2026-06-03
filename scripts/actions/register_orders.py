@@ -798,12 +798,11 @@ def _print_summary(
     index:           OrderingIndex,
     week_dates:      dict[str, date],
 ) -> None:
-    """Print a human-readable dry-run summary."""
     for caterer_id, batch in caterer_batches.items():
         caterer_name = index.caterer_by_id.get(caterer_id, {}).get("name", "?")
-        print(f"\n{'='*60}")
-        print(f"  {caterer_name} — {len(batch.assignments)} meals")
-        print(f"{'='*60}")
+        log.info(f"\n{'='*60}")
+        log.info(f"  {caterer_name} — {len(batch.assignments)} meals")
+        log.info(f"{'='*60}")
 
         by_session: dict[str, list[Assignment]] = defaultdict(list)
         for a in batch.assignments:
@@ -814,7 +813,7 @@ def _print_summary(
             sess_label = sf.get("session_code", sess_id)
             day        = sf.get("day", "?")
             date_      = week_dates.get(day, "?")
-            print(f"\n  {day} {date_} — {sess_label}")
+            log.info(f"\n  {day} {date_} — {sess_label}")
 
             item_counts: dict[str, int] = defaultdict(int)
             for a in orders:
@@ -822,7 +821,7 @@ def _print_summary(
 
             for item_id, count in sorted(item_counts.items(), key=lambda x: -x[1]):
                 item_name = index.menu_item_by_id.get(item_id, {}).get("name", "?")
-                print(f"    {item_name:40s} ×{count}")
+                log.info(f"    {item_name:40s} ×{count}")
 
 
 # ---------------------------------------------------------------------------

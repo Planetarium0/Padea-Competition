@@ -46,6 +46,7 @@ code, not before.
 │   │   ├── schemas.py             Pydantic models. Validate on every I/O.
 │   │   ├── records.py             TypedDicts mirroring view shapes.
 │   │   ├── compatibility.py       Dietary verdict (mirrored in webapp/app.js).
+│   │   ├── email.py               schedule_email — audit-log + Resend dispatch.
 │   │   ├── error_handler.py       self_healing_error_handler context manager.
 │   │   ├── run_claude_agent.py    Sandboxed agent harness.
 │   │   └── support.py             log, ask_llm, env bootstrap.

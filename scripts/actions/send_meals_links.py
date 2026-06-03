@@ -31,6 +31,7 @@ from support import (
     SessionFields,
     StudentFields,
     log,
+    schedule_email,
 )
 
 
@@ -137,11 +138,10 @@ def format_student_email(
 # ---------------------------------------------------------------------------
 
 def send_links(
-    target:    str,
-    immediate: bool = False,
-    dry_run:   bool = False,
-    first:     bool = False,
-    db:        Database | None = None,
+    target:  str,
+    dry_run: bool = False,
+    first:   bool = False,
+    db:      Database | None = None,
 ) -> None:
     db = db or Database.from_env()
 
@@ -153,9 +153,6 @@ def send_links(
         )
         sys.exit(1)
 
-    if immediate:
-        log.info("Send immediately: ON")
-
     all_students = db.Students.all()
     session_map  = {s.id: s for s in db.Sessions.all()}
     school_map   = {s.id: s for s in db.Schools.all()}
@@ -164,8 +161,6 @@ def send_links(
     if not all_students:
         log.warning("No students found.")
         return
-
-    from send_orders import schedule_email
 
     sent = skipped = 0
 
@@ -237,7 +232,6 @@ def send_links(
                 subject=subject,
                 body=body,
                 email_id=email_id,
-                immediate=immediate,
             )
             log.info(f"Queued → {to_email} ({student_name}, {len(links)} session(s))")
 
@@ -261,11 +255,6 @@ if __name__ == "__main__":
         help="Who to send to",
     )
     parser.add_argument(
-        "--immediate",
-        action="store_true",
-        help="Flag emails for immediate sending (default: Status=Queued)",
-    )
-    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print what would be sent without writing to Airtable",
@@ -276,7 +265,20 @@ if __name__ == "__main__":
         help="Append &first=1 to each link, hiding the caterer rating in the webapp",
     )
     args = parser.parse_args()
-    try:
-        send_links(target=args.target, immediate=args.immediate, dry_run=args.dry_run, first=args.first)
-    except KeyboardInterrupt:
-        log.error("Quitting early due to keyboard interrupt")
+
+    def db_state_provider():
+        try:
+            db = Database.from_env()
+            return {
+                "students":         db.Students.all(),
+                "sessions":         db.Sessions.all(),
+                "schools":          db.Schools.all(),
+                "caterers":         db.Caterers.all(),
+                "scheduled_emails": db.ScheduledEmails.all(),
+            }
+        except Exception as e:
+            return {"error_loading_db_state": str(e)}
+
+    from support import self_healing_error_handler
+    with self_healing_error_handler("send_meals_links", state_provider=db_state_provider):
+        send_links(target=args.target, dry_run=args.dry_run, first=args.first)

@@ -144,8 +144,6 @@ intentional design. Resolve a bullet, delete it.
   is gone. Don't reintroduce queue semantics by accident (e.g.
   watching for `Status='Queued'` rows expecting something else to
   send them).
-- **`schedule_email` lives in the wrong place.** See principle 3 —
-  extract it before adding another caller.
 
 If you add a new known gap, give it a one-line description and a
 pointer to the affected file(s). Don't write a roadmap here.

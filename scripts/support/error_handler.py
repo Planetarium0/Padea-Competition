@@ -154,6 +154,13 @@ Use the attached context and instructions below to automatically reproduce, patc
 
 ## Instructions for the Self-Healing AI Agent:
 
+0. **Load Project Context**:
+   - Read `plans/current/principles.md` (design rules + known gaps).
+   - Read `plans/current/workflow.md` if the failure is in an action script
+     under `scripts/actions/` (it maps the weekly rhythm + decision points).
+   - For "where is X?" questions, prefer `graphify query "<question>"`
+     over raw grep.
+
 1. **Load State Snapshot**:
    - Read the serialized state from [failure_{failure_id}.json](file://{json_path}).
    - Use the variables and database records captured under the `"state_snapshot"` key to understand the exact runtime state at the moment of failure.
@@ -161,20 +168,28 @@ Use the attached context and instructions below to automatically reproduce, patc
 2. **Replicate via Regression Test**:
    - Open `scripts/tests/test_edge_cases.py`.
    - Add a new regression test (e.g., `test_failure_{failure_id}`) to the suite.
-   - Use the database snapshot records in the JSON to initialize a `MockDatabase` context, and call the failing workflow matching sys_argv or the target function.
+   - Use the database snapshot records in the JSON to initialize a `MockDatabase` context via `populate_mock_db`, and call the failing workflow matching sys_argv or the target function.
    - Verify that this test fails with the exact same error: `{error_type}`.
 
 3. **Implement Code Patch**:
    - Identify the source script (indicated by the stack trace) where the failure occurred.
    - Implement a safe, robust, and clean code patch that resolves this edge case (e.g. adding fallback checks, validation, or modifying the logical rules).
-   - Ensure the code adheres to clean architectural principles and does not break other existing test scenarios.
+   - Adhere to the principles in `plans/current/principles.md` — especially:
+     validate at DB boundaries (Pydantic), one script = one goal, type-hint
+     module-boundary signatures, every failing branch has a test.
 
 4. **Verify the Fix**:
    - Run the regression test suite: `./run test test_edge_cases` (or the full suite: `./run test`).
    - Confirm that the new test passes successfully.
 
-5. **Update Documentation**:
-   - If this code change introduces any significant architectural or operational changes, update the files under `plans/current/` (e.g. `07-edge-cases.md` or similar).
+5. **Update Documentation (only if you changed a contract)**:
+   - If this patch changes a design principle, invariant, decision point,
+     or `./run` verb, update the relevant file under `plans/current/`
+     (`principles.md`, `workflow.md`, or `dev-guide.md`) in the same change.
+   - If it surfaces a previously-unknown gap, add a one-line bullet to
+     `principles.md §6 (Known gaps)`.
+   - Pure bugfixes that don't move a contract need no doc update —
+     `graphify update .` after the patch will refresh the code map.
 
 6. **Report Back**:
    - Once successfully healed, summarize what caused the error and provide a diff of the code changes made.

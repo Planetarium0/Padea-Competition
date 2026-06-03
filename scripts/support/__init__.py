@@ -26,6 +26,7 @@ from .records import (
 )
 from .support import VERBOSE, ask_llm, log
 from .error_handler import UnhandledEdgeCaseError, self_healing_error_handler
+from .email import schedule_email
 
 __all__ = [
     "AbsenceFields",
@@ -57,6 +58,7 @@ __all__ = [
     "load_substitutions",
     "log",
     "resolve_manager_id",
+    "schedule_email",
     "UnhandledEdgeCaseError",
     "self_healing_error_handler",
 ]
