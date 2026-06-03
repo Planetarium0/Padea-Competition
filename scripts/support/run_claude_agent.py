@@ -251,6 +251,24 @@ def escalate_latest_failure(reason: str, suggested_action: str | None = None) ->
     return 0
 
 
+def resolve_failure(prompt_path: Path) -> None:
+    """Move a resolved failure's artifacts from cache/failures/ to cache/resolved/."""
+    resolved_dir = Path("./cache/resolved")
+    resolved_dir.mkdir(parents=True, exist_ok=True)
+
+    for path in (prompt_path,):
+        if path.exists():
+            shutil.move(str(path), resolved_dir / path.name)
+            print(f"[+] Resolved: moved {path.name} → cache/resolved/")
+
+    # Derive and move the matching failure_<id>.json
+    failure_id = prompt_path.stem.removeprefix("patch_prompt_")
+    failure_json = prompt_path.parent / f"failure_{failure_id}.json"
+    if failure_json.exists():
+        shutil.move(str(failure_json), resolved_dir / failure_json.name)
+        print(f"[+] Resolved: moved {failure_json.name} → cache/resolved/")
+
+
 def orchestrate_self_healing(prompt: str, modified_before: list[str]) -> bool:
     """Orchestrates the sandbox environment execution, file audit, and test runs."""
     # Create temporary directory for restricted PATH
@@ -341,6 +359,7 @@ def main():
             sys.exit(1)
 
     target_prompt = None
+    prompt_path: Path | None = None
 
     if args.prompt:
         target_prompt = args.prompt
@@ -358,22 +377,24 @@ def main():
         if res.returncode == 0:
             print("[+] Command completed successfully! No self-healing required.")
             sys.exit(0)
-            
+
         print(f"[-] Command failed with status {res.returncode}. Initiating self-healing...")
         # Brief pause to ensure OS writes files to cache/failures/
         import time
         time.sleep(0.5)
-        
+
         latest = get_latest_error_prompt()
         if not latest:
             print("[-] Error: Command failed, but no self-healing prompt was found under cache/failures/.", file=sys.stderr)
             sys.exit(res.returncode)
-            
+
         target_prompt, prompt_path = latest
         print(f"[+] Located self-healing prompt: {prompt_path.name}")
 
     if target_prompt:
         success = orchestrate_self_healing(target_prompt, modified_before)
+        if success and prompt_path is not None:
+            resolve_failure(prompt_path)
         sys.exit(0 if success else 1)
 
 
