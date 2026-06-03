@@ -11,7 +11,7 @@ from support import Database, Region, SchoolFields, log
 
 def run(db: Database | None = None) -> None:
     db = db or Database.from_env()
-    log.info("Seeding Schools from sessions.xlsx → Airtable")
+    log.info("Seeding Schools from sessions.xlsx → Supabase")
     db.Schools.clear()
 
     xlsx_path = Path.cwd() / "resources" / "sessions.xlsx"
@@ -34,9 +34,9 @@ def run(db: Database | None = None) -> None:
 
     records: list[SchoolFields] = []
     for name, region in seen.items():
-        record: SchoolFields = {"School Name": name}
+        record: SchoolFields = {"name": name}
         if region:
-            record["Region"] = cast(Region, region)
+            record["region"] = cast(Region, region)
         records.append(record)
 
     log.info(f"Seeding {len(records)} school(s)...")

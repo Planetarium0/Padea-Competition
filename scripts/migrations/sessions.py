@@ -50,7 +50,7 @@ def _parse_date(val: Any) -> str | None:
 
 def run(db: Database | None = None) -> None:
     db = db or Database.from_env()
-    log.info("Migrating sessions.xlsx → Airtable")
+    log.info("Migrating sessions.xlsx → Supabase")
     db.Sessions.clear()
     db.OnSiteManagers.clear()
 
@@ -82,27 +82,27 @@ def run(db: Database | None = None) -> None:
 
     managers_records: list[OnSiteManagerFields] = []
     for name, mobile in managers_data.items():
-        manager_record: OnSiteManagerFields = {"Manager Name": name}
+        manager_record: OnSiteManagerFields = {"name": name}
         if mobile:
-            manager_record["Mobile"] = mobile
+            manager_record["mobile"] = mobile
         managers_records.append(manager_record)
     log.info(f"Migrating {len(managers_records)} On-Site Managers...")
     db.OnSiteManagers.create(managers_records)
 
     school_name_to_id = {
-        r.fields["School Name"]: r.id
+        r.fields["name"]: r.id
         for r in db.Schools.all()
-        if "School Name" in r.fields
+        if "name" in r.fields
     }
     caterer_name_to_id = {
-        r.fields["Caterer Name"]: r.id
+        r.fields["name"]: r.id
         for r in db.Caterers.all()
-        if "Caterer Name" in r.fields
+        if "name" in r.fields
     }
     manager_name_to_id = {
-        r.fields["Manager Name"]: r.id
+        r.fields["name"]: r.id
         for r in db.OnSiteManagers.all()
-        if "Manager Name" in r.fields
+        if "name" in r.fields
     }
 
     sessions_records: list[SessionFields] = []
@@ -131,28 +131,27 @@ def run(db: Database | None = None) -> None:
         session_id = f"{school_name} - {day_name}"
 
         record: SessionFields = {
-            "Session ID": session_id,
-            "School":     [school_id],
-            "Date":       session_date,
+            "session_code": session_id,
+            "school_id":    school_id,
         }
         if day_name:
-            record["Day"] = cast(DayName, day_name)
+            record["day"] = cast(DayName, day_name)
         if caterer_id:
-            record["Caterer"] = [caterer_id]
+            record["caterer_id"] = caterer_id
         if manager_id:
-            record["On-Site Manager"] = [manager_id]
+            record["on_site_manager_id"] = manager_id
         for field_name, col in (
-            ("Start Time",  "start-time"),
-            ("End Time",    "end-time"),
-            ("Dinner Time", "dinner-time"),
-            ("Building",    "Building"),
+            ("start_time",  "start-time"),
+            ("end_time",    "end-time"),
+            ("dinner_time", "dinner-time"),
+            ("building",    "Building"),
         ):
             value = _clean_str(row[col])
             if value:
                 record[field_name] = value
         year_levels_raw = _clean_str(row["year-levels"])
         if year_levels_raw:
-            record["Year Levels"] = _parse_year_levels(year_levels_raw)
+            record["year_levels"] = _parse_year_levels(year_levels_raw)
         sessions_records.append(record)
 
     log.info(f"Migrating {len(sessions_records)} Sessions...")

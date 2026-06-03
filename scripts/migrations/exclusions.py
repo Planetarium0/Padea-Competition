@@ -84,7 +84,7 @@ def _extract_json_block(resp: str) -> str:
 
 def run(db: Database | None = None) -> None:
     db = db or Database.from_env()
-    log.info("Migrating exclusions.pdf → Airtable")
+    log.info("Migrating exclusions.pdf → Supabase")
     db.Exclusions.clear()
 
     txt_path = Path.cwd() / "cache" / "exclusions.txt"
@@ -97,8 +97,8 @@ def run(db: Database | None = None) -> None:
     if not schools:
         log.error("No Schools found in Airtable. Run schools migration first.")
         sys.exit(1)
-    canonical_schools = [r.fields["School Name"] for r in schools if "School Name" in r.fields]
-    school_name_to_id = {r.fields["School Name"]: r.id for r in schools if "School Name" in r.fields}
+    canonical_schools = [r.fields["name"] for r in schools if "name" in r.fields]
+    school_name_to_id = {r.fields["name"]: r.id for r in schools if "name" in r.fields}
 
     parsed_exclusions: list[dict[str, Any]] | None = None
     key = os.environ.get("CLAUDE_CODE_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
@@ -148,11 +148,11 @@ Raw Text:
             years = [y.strip() for y in years.replace("and", ",").split(",") if y.strip()]
 
         records.append({
-            "Exclusion ID":         f"{school_name} - {data['Date']}",
-            "School":               [school_id],
-            "Date":                 data["Date"],
-            "Affected Year Levels": cast(list[YearLevel], years),
-            "Reason":               data["Reason"],
+            "exclusion_code": f"{school_name} - {data['Date']}",
+            "school_id":      school_id,
+            "date":           data["Date"],
+            "year_levels":    cast(list[YearLevel], years),
+            "reason":         data["Reason"],
         })
 
     if records:

@@ -35,14 +35,14 @@ def _clean_str(val: Any) -> str | None:
 
 def run(db: Database | None = None) -> None:
     db = db or Database.from_env()
-    log.info("Migrating students.xlsx → Airtable")
+    log.info("Migrating students.xlsx → Supabase")
     db.Students.clear()
 
     schools = db.Schools.all()
     if not schools:
         log.error("No Schools found in Airtable. Run schools migration first.")
         sys.exit(1)
-    canonical_schools = [r.fields["School Name"] for r in schools if "School Name" in r.fields]
+    canonical_schools = [r.fields["name"] for r in schools if "name" in r.fields]
 
     xlsx_path = Path.cwd() / "resources" / "students.xlsx"
     if not xlsx_path.is_file():
@@ -95,26 +95,27 @@ def run(db: Database | None = None) -> None:
 
     # Pass 3: fetch linked records.
     sessions = db.Sessions.all()
-    school_name_by_id = {r.id: r.fields.get("School Name", "") for r in schools}
 
     diet_records = db.DietaryRestrictions.all()
     diet_name_to_id = {
-        r.fields["Restriction Name"]: r.id
+        r.fields["name"]: r.id
         for r in diet_records
-        if "Restriction Name" in r.fields
+        if "name" in r.fields
     }
     if not diet_name_to_id:
         log.error("No Dietary Restrictions found. Run dietary_restrictions migration first.")
         sys.exit(1)
 
+    school_id_to_name = {r.id: r.fields.get("name", "") for r in schools}
+
     session_lookup: dict[tuple[str, str], list[str]] = {}
     for sess in sessions:
         fields = sess.fields
-        sess_day = fields.get("Day")
-        school_links = fields.get("School") or []
-        if not school_links or not sess_day:
+        sess_day = fields.get("day")
+        school_id = fields.get("school_id")
+        if not school_id or not sess_day:
             continue
-        school_name = school_name_by_id.get(school_links[0])
+        school_name = school_id_to_name.get(school_id)
         if not school_name:
             continue
         session_lookup.setdefault((school_name, sess_day), []).append(sess.id)
@@ -156,24 +157,24 @@ def run(db: Database | None = None) -> None:
                         f"— student '{student_name}' will be missing this link."
                     )
 
-            record: StudentFields = {"Student Name": student_name}
+            record: StudentFields = {"name": student_name}
             year_level = _clean_int(row["Year Level"])
             if year_level is not None:
-                record["Year Level"] = year_level
+                record["year_level"] = year_level
             for field_name, source in (
-                ("Subjects",      row["Subjects"]),
-                ("Student Email", row["Student Email"]),
-                ("Parent Name",   row.get("Parent")),
-                ("Parent Email",  row.get("Parent Email")),
-                ("Parent Mobile", row.get("Parent Mobile")),
+                ("subjects",      row["Subjects"]),
+                ("email",         row["Student Email"]),
+                ("parent_name",   row.get("Parent")),
+                ("parent_email",  row.get("Parent Email")),
+                ("parent_mobile", row.get("Parent Mobile")),
             ):
                 value = _clean_str(source)
                 if value:
                     record[field_name] = value
             if dietary_ids:
-                record["Dietary Requirements"] = dietary_ids
+                record["dietary_requirement_ids"] = dietary_ids
             if student_sessions:
-                record["Sessions"] = student_sessions
+                record["session_ids"] = student_sessions
             records.append(record)
 
     log.info(f"Migrating {len(records)} Students...")

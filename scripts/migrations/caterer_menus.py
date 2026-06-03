@@ -105,7 +105,7 @@ def _extract_json_block(resp: str) -> str:
 
 def run(db: Database | None = None) -> None:
     db = db or Database.from_env()
-    log.info("Migrating caterer-menus.pdf → Airtable (Menu Items)")
+    log.info("Migrating caterer-menus.pdf → Supabase (Menu Items)")
     db.MenuItems.clear()
 
     txt_path = Path.cwd() / "cache" / "caterer-menus.txt"
@@ -154,16 +154,16 @@ Raw Menu Text:
 
     caterers_records = db.Caterers.all()
     caterer_name_to_id = {
-        c.fields["Caterer Name"]: c.id
+        c.fields["name"]: c.id
         for c in caterers_records
-        if "Caterer Name" in c.fields
+        if "name" in c.fields
     }
 
     diet_records = db.DietaryRestrictions.all()
     diet_name_to_id = {
-        r.fields["Restriction Name"]: r.id
+        r.fields["name"]: r.id
         for r in diet_records
-        if "Restriction Name" in r.fields
+        if "name" in r.fields
     }
     if not diet_name_to_id:
         log.error("No Dietary Restrictions found. Run dietary_restrictions migration first.")
@@ -192,14 +192,15 @@ Raw Menu Text:
         price = float(menu["Price per Item"])
         if not menu["Price Includes GST"]:
             price = round(price * 1.10, 2)
-        update_fields: dict[str, Any] = {
-            "Delivery Fee":           menu["Delivery Fee"],
-            "Delivery Fee Structure": menu["Delivery Fee Structure"],
-            "Price per Item":         price,
+        caterer_update: dict[str, Any] = {
+            "id":                     caterer_id,
+            "delivery_fee":           menu["Delivery Fee"],
+            "delivery_fee_structure": menu["Delivery Fee Structure"],
+            "price_per_item":         price,
         }
         if legend_tag_ids:
-            update_fields["Dietary Legend Tags"] = legend_tag_ids
-        caterer_updates.append({"id": caterer_id, "fields": update_fields})
+            caterer_update["legend_tag_ids"] = legend_tag_ids
+        caterer_updates.append(caterer_update)
 
         for item in menu["Items"]:
             tag_ids: list[str] = []
@@ -210,13 +211,13 @@ Raw Menu Text:
                 else:
                     log.warning(f"Dietary tag '{tag}' on '{item['Menu Item Name']}' not found — link dropped.")
             menu_record: MenuItemFields = {
-                "Menu Item Name": item["Menu Item Name"],
-                "Caterer":        [caterer_id],
-                "Dietary Tags":   tag_ids,
+                "name":              item["Menu Item Name"],
+                "caterer_id":        caterer_id,
+                "dietary_tag_ids":   tag_ids,
             }
             note = item.get("Notes")
             if note:
-                menu_record["Notes"] = note
+                menu_record["notes"] = note
             has_vo = bool(item.get("Has Vegetarian Option"))
             pending_items.append((menu_record, has_vo, tag_ids))
 
@@ -242,14 +243,13 @@ Raw Menu Text:
         variant_tag_ids = list(base_tag_ids)  # inherit GF/DF/NF/Halal from base
         if veg_id and veg_id not in variant_tag_ids:
             variant_tag_ids.append(veg_id)
-        variant_name = f"{created_rec.fields['Menu Item Name']} (Vegetarian Option)"
-        caterer_link = created_rec.fields.get("Caterer") or []
+        variant_name = f"{created_rec.fields['name']} (Vegetarian Option)"
         variant_records.append({
-            "Menu Item Name": variant_name,
-            "Caterer":        caterer_link,
-            "Dietary Tags":   variant_tag_ids,
-            "Is Variant":     True,
-            "Variant Of":     [created_rec.id],
+            "name":              variant_name,
+            "caterer_id":        created_rec.fields.get("caterer_id"),
+            "dietary_tag_ids":   variant_tag_ids,
+            "is_variant":        True,
+            "variant_of_id":     created_rec.id,
         })
 
     if variant_records:

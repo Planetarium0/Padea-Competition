@@ -116,7 +116,7 @@ def _extract_json_block(resp: str) -> str:
 
 def run(db: Database | None = None) -> None:
     db = db or Database.from_env()
-    log.info("Migrating caterer-contacts.pdf → Airtable")
+    log.info("Migrating caterer-contacts.pdf → Supabase")
 
     txt_path = Path.cwd() / "cache" / "caterer-contacts.txt"
     if not txt_path.is_file():
@@ -128,8 +128,8 @@ def run(db: Database | None = None) -> None:
     if not schools_records:
         log.error("No Schools found in Airtable. Run schools migration first.")
         sys.exit(1)
-    canonical_schools = [r.fields["School Name"] for r in schools_records if "School Name" in r.fields]
-    school_name_to_id = {r.fields["School Name"]: r.id for r in schools_records if "School Name" in r.fields}
+    canonical_schools = [r.fields["name"] for r in schools_records if "name" in r.fields]
+    school_name_to_id = {r.fields["name"]: r.id for r in schools_records if "name" in r.fields}
 
     parsed_data: list[dict[str, Any]] | None = None
     key = os.environ.get("CLAUDE_CODE_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
@@ -170,9 +170,9 @@ Raw Text:
 
     caterers_records = db.Caterers.all()
     caterer_name_to_id = {
-        c.fields["Caterer Name"]: c.id
+        c.fields["name"]: c.id
         for c in caterers_records
-        if "Caterer Name" in c.fields
+        if "name" in c.fields
     }
 
     update_batch: list[dict[str, Any]] = []
@@ -186,16 +186,14 @@ Raw Text:
         able_ids = [school_name_to_id[n] for n in data["Able to Serve Schools"] if n in school_name_to_id]
 
         update_batch.append({
-            "id": rec_id,
-            "fields": {
-                "Contact Name":          data["Contact Name"],
-                "Contact Email":         data["Contact Email"],
-                "Chef Name":             data["Chef Name"],
-                "Chef Email":            data["Chef Email"],
-                "Chef Wants CC":         bool(data["Chef Wants CC"]),
-                "Notes":                 data["Notes"],
-                "Able to Serve Schools": able_ids,
-            },
+            "id":                    rec_id,
+            "contact_name":          data["Contact Name"],
+            "contact_email":         data["Contact Email"],
+            "chef_name":             data["Chef Name"],
+            "chef_email":            data["Chef Email"],
+            "chef_wants_cc":         bool(data["Chef Wants CC"]),
+            "notes":                 data["Notes"],
+            "able_to_serve_school_ids": able_ids,
         })
 
     if update_batch:

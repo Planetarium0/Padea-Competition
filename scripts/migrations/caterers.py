@@ -22,7 +22,7 @@ def _clean_int(val: Any) -> int | None:
 
 def run(db: Database | None = None) -> None:
     db = db or Database.from_env()
-    log.info("Migrating caterers.xlsx → Airtable")
+    log.info("Migrating caterers.xlsx → Supabase")
     db.Caterers.clear()
 
     xlsx_path = Path.cwd() / "resources" / "caterers.xlsx"
@@ -61,18 +61,18 @@ def run(db: Database | None = None) -> None:
             log.warning(f"Unexpected region '{region}' for caterer '{caterer_name}' — mapping anyway")
 
         record: CatererFields = {
-            "Caterer Name": caterer_name,
-            "Region": cast(Region, region),
+            "name": caterer_name,
+            "region": cast(Region, region),
         }
         min4 = _clean_int(row["minimum order quantity for 4 menu items"])
         min5 = _clean_int(row["minimum order quantity for 5 menu items"])
         min6 = _clean_int(row["minimum order quantity for 6 menu items"])
         if min4 is not None:
-            record["Min Qty 4 Items"] = min4
+            record["min_qty_4_items"] = min4
         if min5 is not None:
-            record["Min Qty 5 Items"] = min5
+            record["min_qty_5_items"] = min5
         if min6 is not None:
-            record["Min Qty 6 Items"] = min6
+            record["min_qty_6_items"] = min6
         records.append(record)
 
     log.info(f"Migrating {len(records)} caterer(s)...")

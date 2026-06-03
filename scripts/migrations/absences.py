@@ -51,7 +51,7 @@ def _parse_absences(raw_text: str) -> list[_ParsedAbsence]:
 
 def run(db: Database | None = None) -> None:
     db = db or Database.from_env()
-    log.info("Migrating absences.pdf → Airtable")
+    log.info("Migrating absences.pdf → Supabase")
     db.Absences.clear()
 
     txt_path = Path.cwd() / "cache" / "absences.txt"
@@ -64,14 +64,14 @@ def run(db: Database | None = None) -> None:
     log.info(f"Parsed {len(parsed_absences)} student absences from PDF.")
 
     student_name_to_id = {
-        r.fields["Student Name"]: r.id
+        r.fields["name"]: r.id
         for r in db.Students.all()
-        if "Student Name" in r.fields
+        if "name" in r.fields
     }
     session_id_to_rec_id = {
-        r.fields["Session ID"]: r.id
+        r.fields["session_code"]: r.id
         for r in db.Sessions.all()
-        if "Session ID" in r.fields
+        if "session_code" in r.fields
     }
 
     records: list[AbsenceFields] = []
@@ -92,11 +92,11 @@ def run(db: Database | None = None) -> None:
             continue
 
         records.append({
-            "Absence ID": f"{abs_data.student_name} - {abs_data.school_name} - {abs_data.date}",
-            "Student":    [student_id],
-            "Session":    [sess_rec_id],
-            "Date":       abs_data.date,
-            "Reason":     "Absent",
+            "absence_code": f"{abs_data.student_name} - {abs_data.school_name} - {abs_data.date}",
+            "student_id":   student_id,
+            "session_id":   sess_rec_id,
+            "date":         abs_data.date,
+            "reason":       "Absent",
         })
 
     if records:

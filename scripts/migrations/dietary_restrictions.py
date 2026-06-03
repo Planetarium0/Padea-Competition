@@ -6,7 +6,7 @@ from data.dietary_data import DIETARY_HIERARCHY, all_restriction_names
 
 def run(db: Database | None = None) -> None:
     db = db or Database.from_env()
-    log.info("Migrating Dietary Restrictions → Airtable")
+    log.info("Migrating Dietary Restrictions → Supabase")
     db.DietaryRestrictions.clear()
 
     # Pass 1: create every restriction by name so every record exists before
@@ -14,7 +14,7 @@ def run(db: Database | None = None) -> None:
     names = all_restriction_names()
     log.info(f"Creating {len(names)} Dietary Restriction records...")
     seed_records: list[DietaryRestrictionFields] = [
-        {"Restriction Name": n}
+        {"name": n}
         for n in names
     ]
     db.DietaryRestrictions.create(seed_records)
@@ -22,9 +22,9 @@ def run(db: Database | None = None) -> None:
     # Pass 2: build name → id map, then patch the Supersets self-links.
     records = db.DietaryRestrictions.all()
     name_to_id: dict[str, str] = {
-        r.fields["Restriction Name"]: r.id
+        r.fields["name"]: r.id
         for r in records
-        if "Restriction Name" in r.fields
+        if "name" in r.fields
     }
 
     updates: list[dict[str, object]] = []
@@ -37,7 +37,7 @@ def run(db: Database | None = None) -> None:
             continue
         super_ids = [name_to_id[sn] for sn in supersets if sn in name_to_id]
         if super_ids:
-            updates.append({"id": rec_id, "fields": {"Supersets": super_ids}})
+            updates.append({"id": rec_id, "superset_ids": super_ids})
 
     if updates:
         log.info(f"Linking Supersets on {len(updates)} restrictions...")

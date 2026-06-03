@@ -13,21 +13,18 @@ export PYTHONPATH=$PYTHONPATH:"$PWD":"$PWD"/"$SCRIPTS_DIR"
 usage() {
     cat <<EOF
 Usage:
-  $0 migrate [resource|schema]
+  $0 migrate [resource]
   $0 orders [generate [--dry-run]|preview|send]
   $0 forms qr [--origin URL] [--base-url URL] [--session ID] [--first]
   $0 forms qr send [--immediate] [--dry-run] [--first]
   $0 forms send {parents|students} [--immediate] [--dry-run] [--first]
   $0 caterer evaluate [--dry-run]
   $0 caterer switch <proposal_id> [--approve] [--dry-run]
-  $0 host [--port PORT]
   $0 test [name]
   $0 script [name]
 
 migrate resources:
   diet, schools, caterers, contacts, menus, sessions, students, absences, exclusions, all
-
-  migrate schema — sync Airtable schema against schema.py (idempotent, run before first migration)
 
 If no resource is supplied to migrate, all migrations run in dependency order.
 EOF
@@ -73,8 +70,7 @@ case "$COMMAND" in
         RESOURCE="${2:-all}"
         case "$RESOURCE" in
             schema)
-                echo "Updating schema..."
-                python "scripts/actions/update_schema.py"
+                echo "[INFO] 'migrate schema' is not applicable with Supabase — schema is managed via supabase/migrations/."
                 ;;
             all)
                 echo "Migrating all resources (dependency order)..."
@@ -182,10 +178,6 @@ case "$COMMAND" in
                 exit 1
                 ;;
         esac
-        ;;
-
-    host)
-        python scripts/actions/host_webapp.py "${@:2}"
         ;;
 
     test)
