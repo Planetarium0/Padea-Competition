@@ -1,4 +1,10 @@
-"""Pydantic validation schemas for the Padea Supabase database."""
+"""Pydantic validation schemas for the Padea Supabase database.
+
+All non-aggregate fields are ``Optional`` so the same model can validate both
+full reads and partial-payload updates. Postgres ``NOT NULL`` constraints
+still enforce presence at insert time; Pydantic's role here is type/enum
+validation, not field-presence checking.
+"""
 
 from __future__ import annotations
 
@@ -19,21 +25,21 @@ class _Base(BaseModel):
 
 
 class School(_Base):
-    id: str
-    name: str
+    id: Optional[str] = None
+    name: Optional[str] = None
     region: Optional[Region] = None
 
 
 class OnSiteManager(_Base):
-    id: str
-    name: str
+    id: Optional[str] = None
+    name: Optional[str] = None
     mobile: Optional[str] = None
     email: Optional[str] = None
 
 
 class Caterer(_Base):
-    id: str
-    name: str
+    id: Optional[str] = None
+    name: Optional[str] = None
     region: Optional[Region] = None
     min_qty_4_items: Optional[int] = None
     min_qty_5_items: Optional[int] = None
@@ -43,7 +49,7 @@ class Caterer(_Base):
     contact_email: Optional[str] = None
     chef_name: Optional[str] = None
     chef_email: Optional[str] = None
-    chef_wants_cc: bool = False
+    chef_wants_cc: Optional[bool] = None
     delivery_fee: Optional[float] = None
     delivery_fee_structure: Optional[DeliveryFeeStructure] = None
     notes: Optional[str] = None
@@ -53,10 +59,10 @@ class Caterer(_Base):
 
 
 class MenuItem(_Base):
-    id: str
-    name: str
-    caterer_id: str
-    is_variant: bool = False
+    id: Optional[str] = None
+    name: Optional[str] = None
+    caterer_id: Optional[str] = None
+    is_variant: Optional[bool] = None
     variant_of_id: Optional[str] = None
     notes: Optional[str] = None
     # View-aggregated
@@ -64,16 +70,16 @@ class MenuItem(_Base):
 
 
 class DietaryRestriction(_Base):
-    id: str
-    name: str
+    id: Optional[str] = None
+    name: Optional[str] = None
     # View-aggregated
     superset_ids: List[str] = Field(default_factory=list)
     subset_ids: List[str] = Field(default_factory=list)
 
 
 class Student(_Base):
-    id: str
-    name: str
+    id: Optional[str] = None
+    name: Optional[str] = None
     year_level: Optional[int] = None
     subjects: Optional[str] = None
     email: Optional[str] = None
@@ -88,10 +94,10 @@ class Student(_Base):
 
 
 class Session(_Base):
-    id: str
-    session_code: str
-    school_id: str
-    caterer_id: str
+    id: Optional[str] = None
+    session_code: Optional[str] = None
+    school_id: Optional[str] = None
+    caterer_id: Optional[str] = None
     incoming_caterer_id: Optional[str] = None
     on_site_manager_id: Optional[str] = None
     day: Optional[DayName] = None
@@ -104,65 +110,65 @@ class Session(_Base):
 
 
 class Absence(_Base):
-    id: str
+    id: Optional[str] = None
     absence_code: Optional[str] = None
-    student_id: str
-    session_id: str
-    date: str
+    student_id: Optional[str] = None
+    session_id: Optional[str] = None
+    date: Optional[str] = None
     reason: Optional[str] = None
 
 
 class Exclusion(_Base):
-    id: str
+    id: Optional[str] = None
     exclusion_code: Optional[str] = None
-    school_id: str
-    date: str
+    school_id: Optional[str] = None
+    date: Optional[str] = None
     reason: Optional[str] = None
     # View-aggregated
     year_levels: List[YearLevel] = Field(default_factory=list)
 
 
 class CatererFeedback(_Base):
-    id: str
+    id: Optional[str] = None
     feedback_code: Optional[str] = None
-    student_id: str
-    session_id: str
-    caterer_id: str
-    rating: int
+    student_id: Optional[str] = None
+    session_id: Optional[str] = None
+    caterer_id: Optional[str] = None
+    rating: Optional[int] = None
     comment: Optional[str] = None
-    session_date: str
+    session_date: Optional[str] = None
 
 
 class WeeklyOrder(_Base):
-    id: str
+    id: Optional[str] = None
     order_code: Optional[str] = None
-    caterer_id: str
-    week_start: str
+    caterer_id: Optional[str] = None
+    week_start: Optional[str] = None
     total_meals: Optional[int] = None
     total_cost: Optional[float] = None
     notes: Optional[str] = None
 
 
 class Order(_Base):
-    id: str
+    id: Optional[str] = None
     order_code: Optional[str] = None
-    weekly_order_id: str
-    menu_item_id: str
-    session_id: str
-    date: str
-    quantity: int
+    weekly_order_id: Optional[str] = None
+    menu_item_id: Optional[str] = None
+    session_id: Optional[str] = None
+    date: Optional[str] = None
+    quantity: Optional[int] = None
     # View-aggregated
     student_ids: List[str] = Field(default_factory=list)
 
 
 class ScheduledEmail(_Base):
-    id: str
+    id: Optional[str] = None
     email_code: Optional[str] = None
-    to_address: str
+    to_address: Optional[str] = None
     cc_address: Optional[str] = None
-    subject: str
-    body: str
-    status: EmailStatus = "Queued"
+    subject: Optional[str] = None
+    body: Optional[str] = None
+    status: Optional[EmailStatus] = None
     weekly_order_id: Optional[str] = None
     caterer_switch_proposal_id: Optional[str] = None
     send_date: Optional[str] = None
@@ -170,25 +176,25 @@ class ScheduledEmail(_Base):
 
 
 class ManagerSubstitution(_Base):
-    id: str
+    id: Optional[str] = None
     substitution_code: Optional[str] = None
-    session_id: str
-    date: str
-    substitute_manager_id: str
+    session_id: Optional[str] = None
+    date: Optional[str] = None
+    substitute_manager_id: Optional[str] = None
 
 
 class CatererSwitchProposal(_Base):
-    id: str
+    id: Optional[str] = None
     proposal_code: Optional[str] = None
-    session_id: str
-    outgoing_caterer_id: str
-    incoming_caterer_id: str
+    session_id: Optional[str] = None
+    outgoing_caterer_id: Optional[str] = None
+    incoming_caterer_id: Optional[str] = None
     avg_rating: Optional[float] = None
     sessions_sampled: Optional[int] = None
     unique_raters: Optional[int] = None
     proposed_on: Optional[str] = None
     effective_week: Optional[str] = None
-    status: ProposalStatus = "Pending"
+    status: Optional[ProposalStatus] = None
     notes: Optional[str] = None
 
 

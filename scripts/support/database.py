@@ -29,6 +29,7 @@ from typing import Any, Callable, Generic, Iterable, Mapping, TypeVar, cast
 
 from supabase import Client, create_client
 
+from .schemas import MODEL_MAP
 from .records import (
     AbsenceFields,
     CatererFeedbackFields,
@@ -146,7 +147,6 @@ class Table(Generic[FieldsT]):
             _log.error("Error fetching from %s: %s", self._view, e)
             return []
 
-        from .schemas import MODEL_MAP
         model = MODEL_MAP.get(self._table)
         records: list[Record[FieldsT]] = []
         for row in result.data:
@@ -170,7 +170,6 @@ class Table(Generic[FieldsT]):
         if not result.data:
             return None
 
-        from .schemas import MODEL_MAP
         model = MODEL_MAP.get(self._table)
         row = result.data[0]
         if model:
@@ -189,7 +188,6 @@ class Table(Generic[FieldsT]):
         if not records_list:
             return []
 
-        from .schemas import MODEL_MAP
         model = MODEL_MAP.get(self._table)
 
         inserted: list[Record[FieldsT]] = []
@@ -221,7 +219,6 @@ class Table(Generic[FieldsT]):
 
     def update(self, record_id: str, fields: Mapping[str, Any]) -> "Record[FieldsT]":
         fields = dict(fields)
-        from .schemas import MODEL_MAP
         model = MODEL_MAP.get(self._table)
         if model:
             model.model_validate(fields)
