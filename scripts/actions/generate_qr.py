@@ -82,13 +82,13 @@ def main(
     sessions = db.Sessions.all()
 
     if not sessions:
-        log.warning("No sessions found in Airtable.")
+        log.warning("No sessions found.")
         return
 
     if filter_session:
         sessions = [
             sess for sess in sessions
-            if sess.id == filter_session or sess.fields.get("Session ID") == filter_session
+            if sess.id == filter_session or sess.fields.get("session_code") == filter_session
         ]
         if not sessions:
             log.error(f"Session '{filter_session}' not found.")
@@ -99,7 +99,7 @@ def main(
     log.info(f"Generating QR codes for {len(sessions)} session(s) → {OUTPUT_DIR}")
 
     for sess in sessions:
-        sess_label = sess.fields.get("Session ID", sess.id)
+        sess_label = sess.fields.get("session_code", sess.id)
 
         url = make_session_url(sess.id, base_url=base_url, origin=origin, first=first)
         safe_name = sess_label.replace(" ", "_").replace("/", "-")

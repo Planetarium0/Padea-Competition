@@ -123,11 +123,13 @@ publishable anon key (today: everything; eventually: gated by RLS).
 
 ```
 SUPABASE_URL=…
-SUPABASE_SERVICE_KEY=…   # service key bypasses RLS for backend scripts
-RESEND_API_KEY=…         # email send
-URL_ORIGIN=https://…     # used in QR codes + preference links
-ANTHROPIC_API_KEY=…      # optional, only for LLM-assisted migrations
-LOG_LEVEL=info           # verbose|info|warning|error
+SUPABASE_SERVICE_KEY=…       # service key bypasses RLS for backend scripts
+RESEND_API_KEY=…             # email send
+RESEND_FROM="Padea <orders@padea.com.au>"   # optional; default shown
+DEV_NOTIFICATION_EMAIL=…     # where escalate_to_dev sends "agent stuck" alerts
+URL_ORIGIN=https://…         # used in QR codes + preference links
+ANTHROPIC_API_KEY=…          # optional, only for LLM-assisted migrations
+LOG_LEVEL=info               # verbose|info|warning|error
 ```
 
 **Webapp** auto-deploys to GitHub Pages on push to `main` that changes
@@ -145,6 +147,12 @@ LOG_LEVEL=info           # verbose|info|warning|error
 4. Run `./run test test_edge_cases` (or the full suite). Must pass.
 5. If the patch changes a principle or invariant in `principles.md` /
    `workflow.md`, update those files in the same commit.
+6. **Or, if the failure is environmental and you've ruled out a
+   logical fix (see `principles.md §2`), escalate**:
+   `python scripts/support/run_claude_agent.py --escalate "<reason>"
+   [--suggested-action "<text>"]`. This writes
+   `cache/failures/escalation_<id>.md` and best-effort notifies
+   `DEV_NOTIFICATION_EMAIL`. Dedupes by failure_id.
 
 The harness `scripts/support/run_claude_agent.py` automates steps 1–4
 under a sandbox (PATH allowlist + edit-path guard + post-edit

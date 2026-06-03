@@ -6,6 +6,13 @@
 MIGRATION_DIR="scripts/migrations"
 SCRIPTS_DIR="scripts"
 
+# Prefer the project-local venv; fall back to whatever is on PATH.
+if [[ -f ".venv/bin/python" ]]; then
+    PYTHON=".venv/bin/python"
+else
+    PYTHON="python"
+fi
+
 # Make both `scripts/` (so `support`, `actions`, etc. resolve as packages)
 # and the project root (so `data.*` resolves) importable.
 export PYTHONPATH=$PYTHONPATH:"$PWD":"$PWD"/"$SCRIPTS_DIR"
@@ -16,8 +23,8 @@ Usage:
   $0 migrate [resource]
   $0 orders [generate [--dry-run]|preview|send]
   $0 forms qr [--origin URL] [--base-url URL] [--session ID] [--first]
-  $0 forms qr send [--immediate] [--dry-run] [--first]
-  $0 forms send {parents|students} [--immediate] [--dry-run] [--first]
+  $0 forms qr send [--dry-run] [--first]
+  $0 forms send {parents|students} [--dry-run] [--first]
   $0 caterer evaluate [--dry-run]
   $0 caterer switch <proposal_id> [--approve] [--dry-run]
   $0 test [name]
@@ -49,7 +56,7 @@ run_one() {
     local name
     name="$(basename "$script_path" .py)"
     echo "Migrating $name"
-    python "$script_path"
+    $PYTHON "$script_path"
     local status=$?
     if (( status != 0 )); then
         echo "[WARNING] Migration of $script_path failed with exit code $status"
@@ -74,7 +81,7 @@ case "$COMMAND" in
                 ;;
             all)
                 echo "Migrating all resources (dependency order)..."
-                python "$MIGRATION_DIR/migrate.py"
+                $PYTHON "$MIGRATION_DIR/migrate.py"
                 ;;
             *)
                 script_file="${RES_MAP[$RESOURCE]}"
@@ -99,21 +106,21 @@ case "$COMMAND" in
         case "$SUBCOMMAND" in
             "")
                 echo "Generating orders..."
-                python scripts/actions/register_orders.py
+                $PYTHON scripts/actions/register_orders.py
                 echo "Logging order emails..."
-                python scripts/actions/send_orders.py
+                $PYTHON scripts/actions/send_orders.py
                 ;;
             generate)
                 echo "Generating orders..."
-                python scripts/actions/register_orders.py "$@"
+                $PYTHON scripts/actions/register_orders.py "$@"
                 ;;
             preview)
                 echo "Previewing order emails..."
-                python scripts/actions/send_orders.py --preview
+                $PYTHON scripts/actions/send_orders.py --preview
                 ;;
             send)
                 echo "Logging order emails..."
-                python scripts/actions/send_orders.py
+                $PYTHON scripts/actions/send_orders.py
                 ;;
             *)
                 echo "[ERROR] Unknown orders subcommand: $SUBCOMMAND"
@@ -129,10 +136,10 @@ case "$COMMAND" in
             qr)
                 if [[ "${3:-}" == "send" ]]; then
                     echo "Sending QR codes to site managers..."
-                    python scripts/actions/send_qr_emails.py "${@:4}"
+                    $PYTHON scripts/actions/send_qr_emails.py "${@:4}"
                 else
                     echo "Generating QR codes..."
-                    python scripts/actions/generate_qr.py "${@:3}"
+                    $PYTHON scripts/actions/generate_qr.py "${@:3}"
                 fi
                 ;;
             send)
@@ -140,7 +147,7 @@ case "$COMMAND" in
                 case "$TARGET" in
                     parents|students)
                         echo "Sending meal preference links to ${TARGET}..."
-                        python scripts/actions/send_meals_links.py --target "$TARGET" "${@:4}"
+                        $PYTHON scripts/actions/send_meals_links.py --target "$TARGET" "${@:4}"
                         ;;
                     *)
                         echo "[ERROR] Usage: $0 forms send {parents|students} [--immediate] [--dry-run]"
@@ -161,7 +168,7 @@ case "$COMMAND" in
         case "$SUBCOMMAND" in
             evaluate)
                 echo "Evaluating caterer ratings..."
-                python scripts/actions/evaluate_caterers.py "${@:3}"
+                $PYTHON scripts/actions/evaluate_caterers.py "${@:3}"
                 ;;
             switch)
                 PROPOSAL_ID="${3:-}"
@@ -170,7 +177,7 @@ case "$COMMAND" in
                     exit 1
                 fi
                 echo "Executing caterer switch for proposal $PROPOSAL_ID..."
-                python scripts/actions/execute_caterer_switch.py "$PROPOSAL_ID" "${@:4}"
+                $PYTHON scripts/actions/execute_caterer_switch.py "$PROPOSAL_ID" "${@:4}"
                 ;;
             *)
                 echo "[ERROR] Unknown caterer subcommand: ${SUBCOMMAND:-<none>}"
@@ -182,14 +189,14 @@ case "$COMMAND" in
 
     test)
         if [[ -z "${2:-}" ]]; then
-            python scripts/tests/run_all.py
+            $PYTHON scripts/tests/run_all.py
         else
-            python "scripts/tests/$2.py"
+            $PYTHON "scripts/tests/$2.py"
         fi
         ;;
 
     script)
-        python "scripts/actions/${2:-}.py"
+        $PYTHON "scripts/actions/${2:-}.py"
         ;;
 
     *)

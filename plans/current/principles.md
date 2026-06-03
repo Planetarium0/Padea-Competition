@@ -62,6 +62,23 @@ minimal human intervention.
   `plans/` and bash commands to a fixed allowlist. If you want an agent
   to touch something outside those paths, that is a deliberate change to
   the harness, not an exception to make in passing.
+- **Escalate, don't guess, on environmental failures.** When the agent
+  has ruled out a logical bug and the failure is environmental (invalid
+  third-party credential, network outage, schema drift in an upstream
+  system, business decision that requires human judgement), call
+  `support.email.escalate_to_dev` (or invoke the harness with
+  `--escalate "<reason>"`). This writes
+  `cache/failures/escalation_<failure_id>.md` first — so the escalation
+  survives even if the notification email itself is the thing failing —
+  then best-effort emails `DEV_NOTIFICATION_EMAIL` with a one-line
+  pointer. Escalations dedupe by `failure_id`; a retry loop won't spam.
+
+  **Escalate only after:** (a) consulting graphify and reading
+  `principles.md` + the relevant `workflow.md` decision points,
+  (b) reproducing the failure in `test_edge_cases.py` via
+  `populate_mock_db`, (c) confirming the failure is *not* reproducible
+  in pure-memory — i.e. it depends on something the test harness cannot
+  see. If any of those still has an open path, keep patching.
 
 ## 3. One dispatcher, one entrypoint per goal
 

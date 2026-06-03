@@ -20,10 +20,13 @@ if str(_TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(_TESTS_DIR))
 
 import test_database
+import test_email
 import test_evaluate_caterers
 import test_execute_caterer_switch
 import test_register_orders
+import test_send_meals_links
 import test_send_orders
+import test_send_qr_emails
 import test_substitutions
 import test_edge_cases
 
@@ -33,8 +36,11 @@ def suite() -> unittest.TestSuite:
     s = unittest.TestSuite()
     for module in (
         test_database,
+        test_email,
         test_register_orders,
+        test_send_meals_links,
         test_send_orders,
+        test_send_qr_emails,
         test_substitutions,
         test_evaluate_caterers,
         test_execute_caterer_switch,

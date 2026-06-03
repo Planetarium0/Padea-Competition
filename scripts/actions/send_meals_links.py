@@ -166,13 +166,13 @@ def send_links(
 
     for student in all_students:
         sf: StudentFields = student.fields
-        student_name = sf.get("Student Name") or "(no name)"
+        student_name = sf.get("name") or "(no name)"
 
         if target == "parents":
-            to_email     = sf.get("Parent Email") or ""
-            display_name = sf.get("Parent Name") or ""
+            to_email     = sf.get("parent_email") or ""
+            display_name = sf.get("parent_name") or ""
         else:
-            to_email     = sf.get("Student Email") or ""
+            to_email     = sf.get("email") or ""
             display_name = student_name
 
         if not to_email:
@@ -180,7 +180,7 @@ def send_links(
             skipped += 1
             continue
 
-        session_ids: list[str] = sf.get("Sessions") or []
+        session_ids: list[str] = sf.get("session_ids") or []
         if not session_ids:
             log.warning(f"Skipping {student_name}: no sessions enrolled")
             skipped += 1
@@ -193,13 +193,13 @@ def send_links(
                 continue
             sess_f: SessionFields = sess_rec.fields
 
-            school_id   = (sess_f.get("School") or [None])[0]
-            school_name = school_map[school_id].fields.get("School Name", "?") if school_id and school_id in school_map else "?"
+            school_id   = sess_f.get("school_id")
+            school_name = school_map[school_id].fields.get("name", "?") if school_id and school_id in school_map else "?"
 
-            caterer_id   = (sess_f.get("Caterer") or [None])[0]
-            caterer_name = caterer_map[caterer_id].fields.get("Caterer Name", "") if caterer_id and caterer_id in caterer_map else ""
+            caterer_id   = sess_f.get("caterer_id")
+            caterer_name = caterer_map[caterer_id].fields.get("name", "") if caterer_id and caterer_id in caterer_map else ""
 
-            day   = sess_f.get("Day", "?")
+            day   = sess_f.get("day", "?")
             label = f"{day} — {school_name}"
             if caterer_name:
                 label += f" ({caterer_name})"

@@ -27,8 +27,9 @@ ALLOWED_EDIT_DIRS = [
 # Strict allowlist of binaries that Claude's bash tool is permitted to run
 ALLOWED_BINARIES = [
     "git",
-    "python",
     "./run",
+    ".venv/bin/python",
+    "python",
     "python3",
     "uv",
     "node",        # Required for Claude CLI itself to run
@@ -197,6 +198,61 @@ def get_latest_error_prompt() -> tuple[str, Path] | None:
         return None
 
 
+def get_latest_failure_id() -> str | None:
+    """Return the failure_id from the most recent patch_prompt_*.md filename, or None."""
+    failures_dir = Path("./cache/failures")
+    if not failures_dir.exists():
+        return None
+    prompts = list(failures_dir.glob("patch_prompt_*.md"))
+    if not prompts:
+        return None
+    prompts.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    # patch_prompt_<YYYYMMDD_HHMMSS>_<workflow>.md  →  <YYYYMMDD_HHMMSS>_<workflow>
+    return prompts[0].stem.removeprefix("patch_prompt_")
+
+
+def escalate_latest_failure(reason: str, suggested_action: str | None = None) -> int:
+    """Write an escalation artifact + best-effort notify for the latest failure.
+
+    Returns 0 on success (artifact written), 1 if no failure was found.
+    """
+    failure_id = get_latest_failure_id()
+    if not failure_id:
+        print(
+            "[-] No recent failure found under cache/failures/ — nothing to escalate.",
+            file=sys.stderr,
+        )
+        return 1
+
+    workflow = failure_id.split("_", 2)[-1] if "_" in failure_id else None
+
+    # Pull the traceback from the captured failure JSON if available.
+    traceback_text: str | None = None
+    failure_json = Path("./cache/failures") / f"failure_{failure_id}.json"
+    if failure_json.exists():
+        try:
+            import json
+            data = json.loads(failure_json.read_text(encoding="utf-8"))
+            traceback_text = data.get("error", {}).get("traceback")
+        except Exception:
+            pass
+
+    # Import lazily so this harness still runs in environments without
+    # the full support package installed.
+    sys.path.insert(0, str(Path("./scripts").resolve()))
+    from support.email import escalate_to_dev  # noqa: WPS433
+
+    path = escalate_to_dev(
+        failure_id=failure_id,
+        reason=reason,
+        workflow=workflow,
+        suggested_action=suggested_action,
+        traceback_text=traceback_text,
+    )
+    print(f"[+] Escalation artifact: {path}")
+    return 0
+
+
 def orchestrate_self_healing(prompt: str, modified_before: list[str]) -> bool:
     """Orchestrates the sandbox environment execution, file audit, and test runs."""
     # Create temporary directory for restricted PATH
@@ -251,7 +307,26 @@ def main():
         metavar="COMMAND",
         help="Run a command, and if it fails, auto-heal using the captured failure state"
     )
+    group.add_argument(
+        "--escalate",
+        metavar="REASON",
+        help=(
+            "Escalate the most recent captured failure to the developer "
+            "(writes cache/failures/escalation_<id>.md and best-effort emails). "
+            "Use only after ruling out logical fixes per principles.md §2."
+        ),
+    )
+    parser.add_argument(
+        "--suggested-action",
+        metavar="TEXT",
+        default=None,
+        help="Optional concrete instruction for the developer (paired with --escalate).",
+    )
     args = parser.parse_args()
+
+    # --escalate exits without running Claude; no working-directory check needed.
+    if args.escalate:
+        sys.exit(escalate_latest_failure(args.escalate, args.suggested_action))
 
     # Pre-flight check: ensure clean working directory
     modified_before = get_git_modified_files()

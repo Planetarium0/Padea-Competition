@@ -131,22 +131,22 @@ def send_qr_emails(
 
     for sess_rec in all_sessions:
         sf: SessionFields = sess_rec.fields
-        sess_label = sf.get("Session ID", sess_rec.id)
+        sess_label = sf.get("session_code", sess_rec.id)
 
-        mgr_id = (sf.get("On-Site Manager") or [None])[0]
+        mgr_id = sf.get("on_site_manager_id")
         if not mgr_id:
             log.warning(f"Session {sess_label!r}: no on-site manager — skipping")
             continue
 
         mgr_rec = manager_map.get(mgr_id)
-        if not mgr_rec or not mgr_rec.fields.get("Email"):
-            mgr_name = mgr_rec.fields.get("Manager Name", mgr_id) if mgr_rec else mgr_id
+        if not mgr_rec or not mgr_rec.fields.get("email"):
+            mgr_name = mgr_rec.fields.get("name", mgr_id) if mgr_rec else mgr_id
             log.warning(f"Manager {mgr_name!r} has no email — skipping their sessions")
             continue
 
-        school_id   = (sf.get("School") or [None])[0]
-        school_name = school_map[school_id].fields.get("School Name", "?") if school_id and school_id in school_map else "?"
-        day         = sf.get("Day", "?")
+        school_id   = sf.get("school_id")
+        school_name = school_map[school_id].fields.get("name", "?") if school_id and school_id in school_map else "?"
+        day         = sf.get("day", "?")
 
         by_manager.setdefault(mgr_id, []).append(
             SessionEntry(
@@ -163,8 +163,8 @@ def send_qr_emails(
 
     for mgr_id, entries in by_manager.items():
         mgr_fields: OnSiteManagerFields = manager_map[mgr_id].fields
-        mgr_name  = mgr_fields.get("Manager Name") or ""
-        mgr_email = mgr_fields.get("Email", "")
+        mgr_name  = mgr_fields.get("name") or ""
+        mgr_email = mgr_fields.get("email", "")
 
         entries.sort(key=lambda e: _DAY_ORDER.get(e.label.split(" — ")[0], 99))
 

@@ -74,12 +74,19 @@ isn't written down?* If yes, write it down here.
 
 ## Python environment
 
-Arch Linux with an externally-managed environment. To install packages
-with pip, use the system package manager or
-`pip install --user --break-system-packages <pkg>`.
+All Python work uses the local `.venv/` at the project root (Python 3.13).
+Always activate it or invoke it directly:
 
-The repo includes a local `.venv/`; the agent harness
-(`scripts/support/run_claude_agent.py`) prefers it when present.
+```bash
+source .venv/bin/activate        # activate in shell
+.venv/bin/python <script>        # or invoke directly
+.venv/bin/pip install <pkg>      # install packages
+```
+
+Do not use the system `pip` or `python` — the system environment is
+externally managed and packages installed there won't be visible to `.venv/`.
+The agent harness (`scripts/support/run_claude_agent.py`) already prefers
+`.venv/` when present.
 
 ## Self-healing & agent-ready architecture
 
@@ -129,8 +136,8 @@ rules:
 Self-healing harness:
 
 ```bash
-python scripts/support/run_claude_agent.py --latest-error
-python scripts/support/run_claude_agent.py --run-and-heal "./run orders"
+.venv/bin/python scripts/support/run_claude_agent.py --latest-error
+.venv/bin/python scripts/support/run_claude_agent.py --run-and-heal "./run orders"
 ```
 
 See [`plans/current/dev-guide.md`](../plans/current/dev-guide.md) for the
