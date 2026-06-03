@@ -189,12 +189,12 @@ class TestFormatEmailBodySubstituteLabel(unittest.TestCase):
 
     def test_regular_manager_uses_plain_label(self):
         body = _simple_body(manager_is_sub=False)
-        self.assertIn("**On-site manager:** Dave Substitute", body)
-        self.assertNotIn("**On-site manager (substitute):**", body)
+        self.assertIn("On-site manager:", body)
+        self.assertNotIn("(substitute)", body)
 
     def test_substitute_manager_uses_substitute_label(self):
         body = _simple_body(manager_is_sub=True)
-        self.assertIn("**On-site manager (substitute):** Dave Substitute", body)
+        self.assertIn("On-site manager (substitute):", body)
 
     def test_substitute_mobile_included_in_label(self):
         body = _simple_body(manager_is_sub=True)

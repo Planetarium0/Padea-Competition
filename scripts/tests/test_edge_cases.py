@@ -6,6 +6,8 @@ by loading serialized failure JSON states directly into MockDatabase.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -216,7 +218,8 @@ class TestSendMealsLinksResendApiKeyMissing(unittest.TestCase):
         tmp = Path(tempfile.mkdtemp(prefix="padea_regression_resend_"))
         try:
             with mock.patch.object(eh_module, "_FAILURES_DIR", tmp), \
-                 mock.patch.dict(os.environ, {"URL_ORIGIN": "http://test:8000"}, clear=False):
+                 mock.patch.dict(os.environ, {"URL_ORIGIN": "http://test:8000"}, clear=False), \
+                 contextlib.redirect_stderr(io.StringIO()):
                 os.environ.pop("RESEND_API_KEY", None)
                 os.environ.pop("APP_ENV", None)
                 with self_healing_error_handler("send_meals_links"):

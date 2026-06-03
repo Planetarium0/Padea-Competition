@@ -31,6 +31,7 @@ from support import (
     SchoolFields,
     SessionFields,
     StudentFields,
+    html_email,
     log,
     schedule_email,
 )
@@ -81,23 +82,30 @@ def format_parent_email(
             f"{student_name} can rate their recent meal and update their preference "
             "for next week using the link(s) below."
         )
-        cta     = "Rate & update preference"
+        cta     = "Rate &amp; update preference"
         closing = "These preferences help us order meals your child will actually enjoy."
-    lines = [
-        f"Hi {greeting},",
-        "",
-        intro,
-        "",
-        f"**Dietary requirements:** If {student_name} has any dietary requirements we should know about, "
-        f"please update them here: [{student_name}'s dietary requirements →]({diet_url})",
-        "",
-    ]
-    for link in links:
-        lines.append(f"**{link.label}**")
-        lines.append(f"[{cta}]({link.url})")
-        lines.append("")
-    lines += [closing, "", "Thanks,", "Padea"]
-    return subject, "\n".join(lines)
+
+    link_blocks = "".join(
+        f'<div style="border:1px solid #ECE6E2;border-radius:8px;padding:16px 20px;margin:0 0 12px;">'
+        f'<p style="margin:0 0 10px;font-weight:700;color:#1A1614;">{link.label}</p>'
+        f'<a href="{link.url}" style="display:inline-block;background-color:#A51C30;color:#FFFFFF;'
+        f'padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">{cta}</a>'
+        f'</div>'
+        for link in links
+    )
+
+    content = (
+        f'<p style="margin:0 0 16px;">Hi {greeting},</p>'
+        f'<p style="margin:0 0 20px;">{intro}</p>'
+        f'<div style="background-color:#FAF7F5;border:1px solid #ECE6E2;border-radius:8px;padding:14px 18px;margin:0 0 24px;font-size:15px;">'
+        f'<strong>Dietary requirements:</strong> If {student_name} has any dietary requirements we should know about, '
+        f'please update them here: <a href="{diet_url}" style="color:#A51C30;">{student_name}\'s dietary requirements</a>'
+        f'</div>'
+        f'{link_blocks}'
+        f'<p style="margin:16px 0 0;color:#6F655F;">{closing}</p>'
+        f'<p style="margin:16px 0 0;color:#6F655F;">Thanks,<br>Padea</p>'
+    )
+    return subject, html_email(content)
 
 
 def format_student_email(
@@ -115,23 +123,30 @@ def format_student_email(
     else:
         subject = "Padea Meals — update your meal preference"
         intro   = "You can rate your recent meal and update your preference for next week."
-        cta     = "Rate & update preference"
+        cta     = "Rate &amp; update preference"
         closing = "Your preference helps us order meals you'll actually enjoy."
-    lines = [
-        f"Hi {greeting},",
-        "",
-        intro,
-        "",
-        f"**Dietary requirements:** Need to update your dietary requirements? "
-        f"[Update them here →]({diet_url})",
-        "",
-    ]
-    for link in links:
-        lines.append(f"**{link.label}**")
-        lines.append(f"[{cta}]({link.url})")
-        lines.append("")
-    lines += [closing, "", "Thanks,", "Padea"]
-    return subject, "\n".join(lines)
+
+    link_blocks = "".join(
+        f'<div style="border:1px solid #ECE6E2;border-radius:8px;padding:16px 20px;margin:0 0 12px;">'
+        f'<p style="margin:0 0 10px;font-weight:700;color:#1A1614;">{link.label}</p>'
+        f'<a href="{link.url}" style="display:inline-block;background-color:#A51C30;color:#FFFFFF;'
+        f'padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">{cta}</a>'
+        f'</div>'
+        for link in links
+    )
+
+    content = (
+        f'<p style="margin:0 0 16px;">Hi {greeting},</p>'
+        f'<p style="margin:0 0 20px;">{intro}</p>'
+        f'<div style="background-color:#FAF7F5;border:1px solid #ECE6E2;border-radius:8px;padding:14px 18px;margin:0 0 24px;font-size:15px;">'
+        f'<strong>Dietary requirements:</strong> Need to update your dietary requirements? '
+        f'<a href="{diet_url}" style="color:#A51C30;">Update them here</a>'
+        f'</div>'
+        f'{link_blocks}'
+        f'<p style="margin:16px 0 0;color:#6F655F;">{closing}</p>'
+        f'<p style="margin:16px 0 0;color:#6F655F;">Thanks,<br>Padea</p>'
+    )
+    return subject, html_email(content)
 
 
 # ---------------------------------------------------------------------------

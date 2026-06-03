@@ -8,11 +8,13 @@ Python automation harness for Claude Code (run_claude_agent.py).
 from __future__ import annotations
 
 import argparse
+import io
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 from pathlib import Path
 
 # ==================== CONFIGURATION ====================
@@ -137,16 +139,28 @@ def setup_restricted_path(temp_dir_path: Path) -> dict[str, str]:
     return new_env
 
 
-def run_claude(prompt: str, env: dict[str, str]) -> bool:
-    """Invokes Claude Code in the restricted environment."""
+def _tee(src: io.RawIOBase, dst, buf: list[bytes]) -> None:
+    """Read src line-by-line, write to dst and accumulate in buf."""
+    for chunk in iter(lambda: src.read(4096), b""):
+        dst.buffer.write(chunk)
+        dst.buffer.flush()
+        buf.append(chunk)
+    src.close()
+
+
+def run_claude(prompt: str, env: dict[str, str]) -> tuple[bool, str]:
+    """Invokes Claude Code in the restricted environment.
+
+    Returns (success, captured_output).
+    """
     claude_path = shutil.which("claude")
     if not claude_path:
         # If 'claude' is not in the restricted PATH, find it in the host PATH
         claude_path = shutil.which("claude", path=os.environ.get("PATH"))
-    
+
     if not claude_path:
         print("[-] Error: 'claude' command-line interface was not found.", file=sys.stderr)
-        return False
+        return False, ""
 
     claude_cmd = [
         claude_path,
@@ -156,18 +170,22 @@ def run_claude(prompt: str, env: dict[str, str]) -> bool:
 
     print(f"[+] Launching Claude Code...")
     print(f"    Command: {' '.join(claude_cmd)}")
-    
-    # Run the process, keeping standard stdin/stdout connected for interactive TTY prompts
+
+    buf: list[bytes] = []
     process = subprocess.Popen(
         claude_cmd,
         stdin=sys.stdin,
-        stdout=sys.stdout,
-        stderr=sys.stderr,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,  # merge stderr so both streams land in the log
         env=env
     )
-    
+    tee_thread = threading.Thread(target=_tee, args=(process.stdout, sys.stdout, buf))
+    tee_thread.start()
     process.wait()
-    return process.returncode == 0
+    tee_thread.join()
+
+    log = b"".join(buf).decode("utf-8", errors="replace")
+    return process.returncode == 0, log
 
 
 def run_test_suite() -> bool:
@@ -238,6 +256,7 @@ def escalate_latest_failure(reason: str, suggested_action: str | None = None) ->
     # Import lazily so this harness still runs in environments without
     # the full support package installed.
     sys.path.insert(0, str(Path("./scripts").resolve()))
+    # pyrefly: ignore [missing-import]
     from support.email import escalate_to_dev  # noqa: WPS433
 
     path = escalate_to_dev(
@@ -251,33 +270,40 @@ def escalate_latest_failure(reason: str, suggested_action: str | None = None) ->
     return 0
 
 
-def resolve_failure(prompt_path: Path) -> None:
+def resolve_failure(prompt_path: Path, log: str = "") -> None:
     """Move a resolved failure's artifacts from cache/failures/ to cache/resolved/."""
     resolved_dir = Path("./cache/resolved")
     resolved_dir.mkdir(parents=True, exist_ok=True)
 
-    for path in (prompt_path,):
-        if path.exists():
-            shutil.move(str(path), resolved_dir / path.name)
-            print(f"[+] Resolved: moved {path.name} → cache/resolved/")
+    if prompt_path.exists():
+        shutil.move(str(prompt_path), resolved_dir / prompt_path.name)
+        print(f"[+] Resolved: moved {prompt_path.name} → cache/resolved/")
 
-    # Derive and move the matching failure_<id>.json
     failure_id = prompt_path.stem.removeprefix("patch_prompt_")
+
     failure_json = prompt_path.parent / f"failure_{failure_id}.json"
     if failure_json.exists():
         shutil.move(str(failure_json), resolved_dir / failure_json.name)
         print(f"[+] Resolved: moved {failure_json.name} → cache/resolved/")
 
+    if log:
+        log_path = resolved_dir / f"solution_{failure_id}.log"
+        log_path.write_text(log, encoding="utf-8")
+        print(f"[+] Resolved: wrote agent log → {log_path}")
 
-def orchestrate_self_healing(prompt: str, modified_before: list[str]) -> bool:
-    """Orchestrates the sandbox environment execution, file audit, and test runs."""
+
+def orchestrate_self_healing(prompt: str, modified_before: list[str]) -> tuple[bool, str]:
+    """Orchestrates the sandbox environment execution, file audit, and test runs.
+
+    Returns (success, captured_agent_log).
+    """
     # Create temporary directory for restricted PATH
     with tempfile.TemporaryDirectory(prefix="claude_safe_bin_") as temp_dir:
         temp_dir_path = Path(temp_dir)
         restricted_env = setup_restricted_path(temp_dir_path)
 
         # 1. Run Claude Code inside the restricted sandbox environment
-        success = run_claude(prompt, restricted_env)
+        success, log = run_claude(prompt, restricted_env)
         if not success:
             print("[-] Claude Code completed with errors or was interrupted.")
 
@@ -293,7 +319,7 @@ def orchestrate_self_healing(prompt: str, modified_before: list[str]) -> bool:
     if unauthorized_edits:
         print("\n[!] SECURITY ALERT: Claude attempted to edit files outside allowed directories!")
         revert_unauthorized_changes(unauthorized_edits)
-        return False
+        return False, log
     else:
         print("\n[+] Verification: All file modifications were within authorized directories.")
 
@@ -301,10 +327,10 @@ def orchestrate_self_healing(prompt: str, modified_before: list[str]) -> bool:
     test_success = run_test_suite()
     if test_success:
         print("\n[+] Success: Test suite passed successfully!")
-        return True
+        return True, log
     else:
         print("\n[-] Error: Test suite failed after edits.")
-        return False
+        return False, log
 
 
 def main():
@@ -392,9 +418,9 @@ def main():
         print(f"[+] Located self-healing prompt: {prompt_path.name}")
 
     if target_prompt:
-        success = orchestrate_self_healing(target_prompt, modified_before)
+        success, log = orchestrate_self_healing(target_prompt, modified_before)
         if success and prompt_path is not None:
-            resolve_failure(prompt_path)
+            resolve_failure(prompt_path, log)
         sys.exit(0 if success else 1)
 
 

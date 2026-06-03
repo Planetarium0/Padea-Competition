@@ -28,6 +28,23 @@ if TYPE_CHECKING:
     from .database import Database, Record
 
 
+def html_email(content: str) -> str:
+    """Wrap HTML content in a minimal email shell with Padea base styles."""
+    f = "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif"
+    return (
+        '<!DOCTYPE html>'
+        '<html lang="en">'
+        '<head>'
+        '<meta charset="UTF-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1.0">'
+        '</head>'
+        f'<body lang="en" style="margin:0;padding:20px;font-family:{f};font-size:16px;line-height:1.5;color:#1A1614;">'
+        f'{content}'
+        '</body>'
+        '</html>'
+    )
+
+
 def schedule_email(
     db:                          Database,
     to_email:                    str,
@@ -83,7 +100,7 @@ def schedule_email(
         "from": from_addr,
         "to": [actual_to],
         "subject": subject,
-        "text": body,
+        "html": body,
     }
     if actual_cc:
         send_params["cc"] = actual_cc

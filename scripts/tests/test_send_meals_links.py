@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import unittest
+from unittest import mock
 
 import fixtures
 from actions.send_meals_links import (
@@ -94,6 +95,16 @@ class TestFormatStudentEmail(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestSendLinksPipeline(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self._send_patch = mock.patch("support.email.resend.Emails.send")
+        self._send_patch.start()
+        self._env_patch = mock.patch.dict(os.environ, {"RESEND_API_KEY": "test-key"}, clear=False)
+        self._env_patch.start()
+
+    def tearDown(self) -> None:
+        self._send_patch.stop()
+        self._env_patch.stop()
 
     def _make_db(
         self,

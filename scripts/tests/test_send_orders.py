@@ -6,7 +6,9 @@ and schedule_email (field writing).
 """
 from __future__ import annotations
 
+import os
 import unittest
+from unittest import mock
 
 import fixtures
 from actions.send_orders import (
@@ -159,6 +161,16 @@ class TestFormatEmailBody(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestScheduleEmail(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self._send_patch = mock.patch("support.email.resend.Emails.send")
+        self._send_patch.start()
+        self._env_patch = mock.patch.dict(os.environ, {"RESEND_API_KEY": "test-key"}, clear=False)
+        self._env_patch.start()
+
+    def tearDown(self) -> None:
+        self._send_patch.stop()
+        self._env_patch.stop()
 
     def test_creates_queued_record_with_weekly_order_link(self):
         db = MockDatabase()

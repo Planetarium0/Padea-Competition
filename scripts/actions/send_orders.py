@@ -26,6 +26,7 @@ from support import (
     SchoolFields,
     SessionFields,
     WeeklyOrderFields,
+    html_email,
     load_substitutions,
     log,
     resolve_manager_id,
@@ -204,7 +205,7 @@ def format_email_body(
     caterer_fields: CatererFields,
     line_items:     list[LineItem],
 ) -> str:
-    """Return a Markdown email body using only Airtable-supported formatting."""
+    """Return an HTML email body for a caterer meal order."""
     week_start  = wo_fields.get("week_start", "?")
     total_meals = wo_fields.get("total_meals", 0)
 
@@ -224,7 +225,7 @@ def format_email_body(
         by_session[li.session.fields.get("session_code", "unknown")].append(li)
 
     num_deliveries = 0
-    blocks: list[str] = []
+    session_blocks: list[str] = []
 
     for sess_key in sorted(by_session):
         items = by_session[sess_key]
@@ -237,32 +238,33 @@ def format_email_body(
         manager_name   = sess.manager_name or ""
         manager_mobile = sess.manager_mobile or ""
 
-        deliver_by = subtract_minutes(dinner_time)
-
+        deliver_by     = subtract_minutes(dinner_time)
         manager_is_sub = sess.manager_is_sub
 
-        block = [f"## {day} — {school_name}"]
-        block.append(f"**Deliver by:** {deliver_by}")
+        meta = [f'<p style="margin:0 0 4px;font-size:15px;"><strong>Deliver by:</strong> {deliver_by}</p>']
         if building:
-            block.append(f"**Building:** {building}")
+            meta.append(f'<p style="margin:0 0 4px;font-size:15px;"><strong>Building:</strong> {building}</p>')
         if manager_name:
             mgr = manager_name
             if manager_mobile:
                 mgr += f" ({manager_mobile})"
             label = "On-site manager (substitute)" if manager_is_sub else "On-site manager"
-            block.append(f"**{label}:** {mgr}")
+            meta.append(f'<p style="margin:0 0 4px;font-size:15px;"><strong>{label}:</strong> {mgr}</p>')
 
-        block.append("")
-        session_total = 0
-        for li in sorted(items, key=lambda x: -x.quantity):
-            item_name = li.menu_item.get("name", "?")
-            session_total += li.quantity
-            block.append(f"- {item_name} ×{li.quantity}")
+        session_total = sum(li.quantity for li in items)
+        meal_rows = "".join(
+            f'<li style="margin:4px 0;font-size:15px;">{li.menu_item.get("name", "?")} ×{li.quantity}</li>'
+            for li in sorted(items, key=lambda x: -x.quantity)
+        )
 
-        block.append("")
-        block.append(f"**Subtotal: {session_total} meals**")
-
-        blocks.append("\n".join(block))
+        session_blocks.append(
+            f'<div style="background-color:#FAF7F5;border:1px solid #ECE6E2;border-radius:8px;padding:16px 20px;margin:0 0 16px;">'
+            f'<h2 style="margin:0 0 12px;font-size:17px;font-weight:700;color:#A51C30;">{day} — {school_name}</h2>'
+            + "".join(meta)
+            + f'<ul style="margin:12px 0 0;padding-left:20px;">{meal_rows}</ul>'
+            + f'<p style="margin:12px 0 0;font-size:15px;font-weight:700;">Subtotal: {session_total} meals</p>'
+            + '</div>'
+        )
         num_deliveries += 1
 
     if fee_structure == "Per school per trip":
@@ -272,18 +274,18 @@ def format_email_body(
         total_delivery = delivery_fee
         fee_note = f"${delivery_fee:.2f} per trip"
 
-    sections = "\n\n".join(blocks)
-
-    return (
-        f"Hi {first_name},\n\n"
-        f"Here is the meal order for **{caterer_name}** for the week of **{week_display}**:\n\n"
-        f"{sections}\n\n"
-        f"---\n\n"
-        f"**Grand total: {total_meals} meals**\n"
-        f"**Delivery fee:** ${total_delivery:.2f} ({fee_note})\n\n"
-        f"Thanks,\n"
-        f"Padea"
+    content = (
+        f'<p style="margin:0 0 16px;">Hi {first_name},</p>'
+        f'<p style="margin:0 0 24px;">Here is the meal order for <strong>{caterer_name}</strong> '
+        f'for the week of <strong>{week_display}</strong>:</p>'
+        + "".join(session_blocks)
+        + '<div style="border-top:2px solid #ECE6E2;padding-top:16px;margin-top:8px;">'
+        + f'<p style="margin:0 0 4px;font-size:16px;font-weight:700;">Grand total: {total_meals} meals</p>'
+        + f'<p style="margin:0;font-size:15px;"><strong>Delivery fee:</strong> ${total_delivery:.2f} ({fee_note})</p>'
+        + '</div>'
+        + '<p style="margin:24px 0 0;color:#6F655F;">Thanks,<br>Padea</p>'
     )
+    return html_email(content)
 
 
 # ---------------------------------------------------------------------------
