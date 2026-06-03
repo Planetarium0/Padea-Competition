@@ -14,9 +14,6 @@ Students often tell us the selected meals don’t match their taste preferences.
 
 This project is aimed at fixing this bottleneck - solving the problem from order to delivery.
 
-The current state of the project is stored in `plans/current/*.md`, and you should defer to that for up-to-date information on the current state of the project.
-Another critical file is `data/schema.py`, which represents the schema for the Airtable database.
-
 ## Python scripting
 
 You are building on an arch linux system with an externally managed environment. If installing packages with pip you must use the system package manager or install locally with `pip install --user --break-system-packages [package]`

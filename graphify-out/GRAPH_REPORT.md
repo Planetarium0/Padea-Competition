@@ -1,533 +1,379 @@
-# Graph Report - Padea  (2026-06-02)
+# Graph Report - .  (2026-06-03)
 
 ## Corpus Check
-- 88 files · ~72,459 words
+- 106 files · ~75,747 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1436 nodes · 2282 edges · 122 communities (98 shown, 24 thin omitted)
-- Extraction: 81% EXTRACTED · 19% INFERRED · 0% AMBIGUOUS · INFERRED: 435 edges (avg confidence: 0.75)
-- Token cost: 0 input · 0 output
-
-## Graph Freshness
-- Built from commit: `88e6263c`
-- Run `git rev-parse HEAD` and compare to check if the graph is stale.
-- Run `graphify update .` after code changes (no API cost).
+- 952 nodes · 1782 edges · 81 communities (60 shown, 21 thin omitted)
+- Extraction: 74% EXTRACTED · 26% INFERRED · 0% AMBIGUOUS · INFERRED: 455 edges (avg confidence: 0.72)
+- Token cost: 2,800 input · 1,950 output
 
 ## Community Hubs (Navigation)
-- [[_COMMUNITY_Meal Resolution & Order Generation|Meal Resolution & Order Generation]]
-- [[_COMMUNITY_Data Migration Pipeline|Data Migration Pipeline]]
-- [[_COMMUNITY_Dietary Requirements Data|Dietary Requirements Data]]
-- [[_COMMUNITY_Business Logic & System Overview|Business Logic & System Overview]]
-- [[_COMMUNITY_Caterer Directory|Caterer Directory]]
-- [[_COMMUNITY_Design Decisions & Rationale|Design Decisions & Rationale]]
-- [[_COMMUNITY_Community 7|Community 7]]
-- [[_COMMUNITY_Order Email Dispatch|Order Email Dispatch]]
-- [[_COMMUNITY_Schema Architecture|Schema Architecture]]
-- [[_COMMUNITY_Absence Records|Absence Records]]
-- [[_COMMUNITY_School Exclusion Records|School Exclusion Records]]
-- [[_COMMUNITY_Claude Settings|Claude Settings]]
-- [[_COMMUNITY_Session Date Parsing|Session Date Parsing]]
-- [[_COMMUNITY_QR Code Instance|QR Code Instance]]
-- [[_COMMUNITY_Community 15|Community 15]]
-- [[_COMMUNITY_Community 16|Community 16]]
-- [[_COMMUNITY_Community 17|Community 17]]
-- [[_COMMUNITY_Community 21|Community 21]]
-- [[_COMMUNITY_Community 22|Community 22]]
-- [[_COMMUNITY_Community 23|Community 23]]
-- [[_COMMUNITY_Community 24|Community 24]]
-- [[_COMMUNITY_Community 25|Community 25]]
-- [[_COMMUNITY_Community 26|Community 26]]
-- [[_COMMUNITY_Community 27|Community 27]]
-- [[_COMMUNITY_Community 28|Community 28]]
-- [[_COMMUNITY_Community 29|Community 29]]
-- [[_COMMUNITY_Community 30|Community 30]]
-- [[_COMMUNITY_Community 31|Community 31]]
-- [[_COMMUNITY_Community 32|Community 32]]
-- [[_COMMUNITY_Community 33|Community 33]]
-- [[_COMMUNITY_Community 34|Community 34]]
-- [[_COMMUNITY_Community 35|Community 35]]
-- [[_COMMUNITY_Community 37|Community 37]]
-- [[_COMMUNITY_Community 38|Community 38]]
-- [[_COMMUNITY_Community 39|Community 39]]
-- [[_COMMUNITY_Community 40|Community 40]]
-- [[_COMMUNITY_Community 41|Community 41]]
-- [[_COMMUNITY_Community 42|Community 42]]
-- [[_COMMUNITY_Community 43|Community 43]]
-- [[_COMMUNITY_Community 44|Community 44]]
-- [[_COMMUNITY_Community 45|Community 45]]
-- [[_COMMUNITY_Community 46|Community 46]]
-- [[_COMMUNITY_Community 47|Community 47]]
-- [[_COMMUNITY_Community 48|Community 48]]
-- [[_COMMUNITY_Community 49|Community 49]]
-- [[_COMMUNITY_Community 50|Community 50]]
-- [[_COMMUNITY_Community 51|Community 51]]
-- [[_COMMUNITY_Community 52|Community 52]]
-- [[_COMMUNITY_Community 53|Community 53]]
-- [[_COMMUNITY_Community 54|Community 54]]
-- [[_COMMUNITY_Community 55|Community 55]]
-- [[_COMMUNITY_Community 56|Community 56]]
-- [[_COMMUNITY_Community 57|Community 57]]
-- [[_COMMUNITY_Community 58|Community 58]]
-- [[_COMMUNITY_Community 59|Community 59]]
-- [[_COMMUNITY_Community 60|Community 60]]
-- [[_COMMUNITY_Community 61|Community 61]]
-- [[_COMMUNITY_Community 62|Community 62]]
-- [[_COMMUNITY_Community 63|Community 63]]
-- [[_COMMUNITY_Community 64|Community 64]]
-- [[_COMMUNITY_Community 65|Community 65]]
-- [[_COMMUNITY_Community 66|Community 66]]
-- [[_COMMUNITY_Community 67|Community 67]]
-- [[_COMMUNITY_Community 68|Community 68]]
-- [[_COMMUNITY_Community 69|Community 69]]
-- [[_COMMUNITY_Community 70|Community 70]]
-- [[_COMMUNITY_Community 71|Community 71]]
-- [[_COMMUNITY_Community 72|Community 72]]
-- [[_COMMUNITY_Community 73|Community 73]]
-- [[_COMMUNITY_Community 74|Community 74]]
-- [[_COMMUNITY_Community 75|Community 75]]
-- [[_COMMUNITY_Community 76|Community 76]]
-- [[_COMMUNITY_Community 77|Community 77]]
-- [[_COMMUNITY_Community 78|Community 78]]
-- [[_COMMUNITY_Community 79|Community 79]]
-- [[_COMMUNITY_Community 80|Community 80]]
-- [[_COMMUNITY_Community 81|Community 81]]
-- [[_COMMUNITY_Community 82|Community 82]]
-- [[_COMMUNITY_Community 83|Community 83]]
-- [[_COMMUNITY_Community 84|Community 84]]
-- [[_COMMUNITY_Community 85|Community 85]]
-- [[_COMMUNITY_Community 86|Community 86]]
-- [[_COMMUNITY_Community 87|Community 87]]
-- [[_COMMUNITY_Community 88|Community 88]]
-- [[_COMMUNITY_Community 89|Community 89]]
-- [[_COMMUNITY_Community 90|Community 90]]
-- [[_COMMUNITY_Community 91|Community 91]]
-- [[_COMMUNITY_Community 92|Community 92]]
-- [[_COMMUNITY_Community 93|Community 93]]
-- [[_COMMUNITY_Community 94|Community 94]]
-- [[_COMMUNITY_Community 95|Community 95]]
-- [[_COMMUNITY_Community 96|Community 96]]
-- [[_COMMUNITY_Community 97|Community 97]]
-- [[_COMMUNITY_Community 98|Community 98]]
-- [[_COMMUNITY_Community 99|Community 99]]
-- [[_COMMUNITY_Community 100|Community 100]]
-- [[_COMMUNITY_Community 101|Community 101]]
-- [[_COMMUNITY_Community 102|Community 102]]
-- [[_COMMUNITY_Community 103|Community 103]]
-- [[_COMMUNITY_Community 104|Community 104]]
-- [[_COMMUNITY_Community 105|Community 105]]
-- [[_COMMUNITY_Community 107|Community 107]]
-- [[_COMMUNITY_Community 108|Community 108]]
-- [[_COMMUNITY_Community 110|Community 110]]
-- [[_COMMUNITY_Community 111|Community 111]]
-- [[_COMMUNITY_Community 116|Community 116]]
-- [[_COMMUNITY_Community 117|Community 117]]
-- [[_COMMUNITY_Community 118|Community 118]]
-- [[_COMMUNITY_Community 119|Community 119]]
-- [[_COMMUNITY_Community 120|Community 120]]
-- [[_COMMUNITY_Community 121|Community 121]]
+- [[_COMMUNITY_Order Registration Pipeline|Order Registration Pipeline]]
+- [[_COMMUNITY_Webapp Meal Selection|Webapp Meal Selection]]
+- [[_COMMUNITY_Migration & Notification|Migration & Notification]]
+- [[_COMMUNITY_Order Email Generation|Order Email Generation]]
+- [[_COMMUNITY_Session & Caterer Data|Session & Caterer Data]]
+- [[_COMMUNITY_Self-Healing Error Infrastructure|Self-Healing Error Infrastructure]]
+- [[_COMMUNITY_Schema & Resolved Issues|Schema & Resolved Issues]]
+- [[_COMMUNITY_Pydantic Data Schemas|Pydantic Data Schemas]]
+- [[_COMMUNITY_Manage Page UI|Manage Page UI]]
+- [[_COMMUNITY_Caterer Switch Execution|Caterer Switch Execution]]
+- [[_COMMUNITY_Caterer Evaluation Engine|Caterer Evaluation Engine]]
+- [[_COMMUNITY_Caterer Proposal Lifecycle|Caterer Proposal Lifecycle]]
+- [[_COMMUNITY_Caterer Scoring & Filtering|Caterer Scoring & Filtering]]
+- [[_COMMUNITY_Database Access Layer|Database Access Layer]]
+- [[_COMMUNITY_Meal Assignment Logic|Meal Assignment Logic]]
+- [[_COMMUNITY_Claude Agent Harness|Claude Agent Harness]]
+- [[_COMMUNITY_Database Utilities|Database Utilities]]
+- [[_COMMUNITY_Dietary Negative Keywords|Dietary Negative Keywords]]
+- [[_COMMUNITY_Idempotent Order Registration|Idempotent Order Registration]]
+- [[_COMMUNITY_Webapp Dietary Keywords|Webapp Dietary Keywords]]
+- [[_COMMUNITY_Manager ID Resolution|Manager ID Resolution]]
+- [[_COMMUNITY_Student Exclusion Check|Student Exclusion Check]]
+- [[_COMMUNITY_Scheduling & Cron Targets|Scheduling & Cron Targets]]
+- [[_COMMUNITY_Database Table Tests|Database Table Tests]]
+- [[_COMMUNITY_Switch Proposal UI|Switch Proposal UI]]
+- [[_COMMUNITY_Candidate Discovery|Candidate Discovery]]
+- [[_COMMUNITY_Feedback & Rolling Stats|Feedback & Rolling Stats]]
+- [[_COMMUNITY_Order Batch Building|Order Batch Building]]
+- [[_COMMUNITY_Minimum Quantity Enforcement|Minimum Quantity Enforcement]]
+- [[_COMMUNITY_Order Constraints & Models|Order Constraints & Models]]
+- [[_COMMUNITY_Pydantic Schema Tests|Pydantic Schema Tests]]
+- [[_COMMUNITY_Variety Optimization|Variety Optimization]]
+- [[_COMMUNITY_Webapp Architecture Docs|Webapp Architecture Docs]]
+- [[_COMMUNITY_Order Timing & Constraints|Order Timing & Constraints]]
+- [[_COMMUNITY_Dietary Hierarchy Build|Dietary Hierarchy Build]]
+- [[_COMMUNITY_QR Email Generation|QR Email Generation]]
+- [[_COMMUNITY_Manage UI Navigation|Manage UI Navigation]]
+- [[_COMMUNITY_Dietary UI Compatibility|Dietary UI Compatibility]]
+- [[_COMMUNITY_Manager Override Flow|Manager Override Flow]]
+- [[_COMMUNITY_Meal Link Emails|Meal Link Emails]]
+- [[_COMMUNITY_Caterer Data Models|Caterer Data Models]]
+- [[_COMMUNITY_Database Test Infrastructure|Database Test Infrastructure]]
+- [[_COMMUNITY_Keyword Fallback System|Keyword Fallback System]]
+- [[_COMMUNITY_Webapp Variant Cache|Webapp Variant Cache]]
+- [[_COMMUNITY_Term Boundary Logic|Term Boundary Logic]]
+- [[_COMMUNITY_Project Overview & Goals|Project Overview & Goals]]
+- [[_COMMUNITY_Error Handling Module|Error Handling Module]]
+- [[_COMMUNITY_Allergy & Constraint Rules|Allergy & Constraint Rules]]
+- [[_COMMUNITY_Junction Field Tests|Junction Field Tests]]
+- [[_COMMUNITY_Meal Selection Modal|Meal Selection Modal]]
+- [[_COMMUNITY_Edge Cases Docs|Edge Cases Docs]]
+- [[_COMMUNITY_Compatibility Records|Compatibility Records]]
+- [[_COMMUNITY_QR Code Generation|QR Code Generation]]
+- [[_COMMUNITY_Student Data Migration|Student Data Migration]]
+- [[_COMMUNITY_User Interaction Utilities|User Interaction Utilities]]
+- [[_COMMUNITY_Sandbox Safety Guards|Sandbox Safety Guards]]
+- [[_COMMUNITY_Order Data Structures|Order Data Structures]]
+- [[_COMMUNITY_Database Reset|Database Reset]]
+- [[_COMMUNITY_Digital Ticket & Override|Digital Ticket & Override]]
+- [[_COMMUNITY_LLM & Logging Utils|LLM & Logging Utils]]
+- [[_COMMUNITY_Airtable Query Memory|Airtable Query Memory]]
+- [[_COMMUNITY_Caterer Contacts PDF|Caterer Contacts PDF]]
+- [[_COMMUNITY_Caterer Menus PDF|Caterer Menus PDF]]
+- [[_COMMUNITY_Exclusions PDF|Exclusions PDF]]
+- [[_COMMUNITY_Absences PDF|Absences PDF]]
+- [[_COMMUNITY_Webapp Index|Webapp Index]]
+- [[_COMMUNITY_Variety Threshold|Variety Threshold]]
+- [[_COMMUNITY_Switch Threshold|Switch Threshold]]
+- [[_COMMUNITY_Rolling Window|Rolling Window]]
+- [[_COMMUNITY_Proposal Status|Proposal Status]]
+- [[_COMMUNITY_Verbose Log|Verbose Log]]
+- [[_COMMUNITY_All Restriction Names|All Restriction Names]]
+- [[_COMMUNITY_Business Context|Business Context]]
+- [[_COMMUNITY_Diet Docs|Diet Docs]]
+- [[_COMMUNITY_Chdir Fix|Chdir Fix]]
+- [[_COMMUNITY_Duplicate Reviews|Duplicate Reviews]]
+- [[_COMMUNITY_Vegetarian Option|Vegetarian Option]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `Record` - 72 edges
-2. `MockDatabase` - 70 edges
-3. `register_orders()` - 24 edges
-4. `Tables (14)` - 17 edges
-5. `Assignment` - 16 edges
-6. `Webapp — Student Meal Form` - 16 edges
-7. `generate_orders()` - 15 edges
-8. `cacheGet()` - 14 edges
-9. `cacheSet()` - 14 edges
-10. `evaluate()` - 14 edges
+1. `Record` - 63 edges
+2. `MockDatabase` - 49 edges
+3. `Table` - 35 edges
+4. `register_orders()` - 28 edges
+5. `Database` - 22 edges
+6. `TestPydanticSchemas` - 19 edges
+7. `evaluate()` - 17 edges
+8. `_Base` - 17 edges
+9. `Assignment` - 16 edges
+10. `load_substitutions()` - 15 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `atFetch()` --semantically_similar_to--> `airtable_get()`  [INFERRED] [semantically similar]
-  webapp/app.js → scripts/support.py
-- `atPost()` --semantically_similar_to--> `airtable_post()`  [INFERRED] [semantically similar]
-  output/webapp/app.js → scripts/support.py
-- `QR Code → Session-Scoped Webapp URL Pattern` --conceptually_related_to--> `app`  [INFERRED]
-  scripts/generate_qr.py → webapp/app.js
-- `is_item_compatible()` --semantically_similar_to--> `isItemCompatible()`  [INFERRED] [semantically similar]
-  scripts/generate_orders.py → output/webapp/app.js
-- `LLM-with-Heuristic-Fallback Pattern` --rationale_for--> `_parse_contacts_heuristic()`  [INFERRED]
-  migrations/students.py → scripts/migrations/caterer_contacts.py
+- `OOP Refactor Instruction` --rationale_for--> `Database`  [INFERRED]
+  .old/resolved/refactor.md → scripts/support/database.py
+- `DIETARY_HIERARCHY Data Constant` --semantically_similar_to--> `DietaryHierarchy`  [INFERRED] [semantically similar]
+  data/dietary_data.py → scripts/support/compatibility.py
+- `TABLES_SCHEMA Airtable Schema Definition` --semantically_similar_to--> `Initial Supabase Schema Migration SQL`  [INFERRED] [semantically similar]
+  data/schema.py → supabase/migrations/20260602230008_initial_schema.sql
+- `send_meals_links.send_links — Email Meal Preference Links` --references--> `meals.html — Student Meal Rating & Preference Page`  [INFERRED]
+  scripts/actions/send_meals_links.py → webapp/meals.html
+- `send_meals_links.send_links — Email Meal Preference Links` --references--> `manage.html — Student Management Page`  [INFERRED]
+  scripts/actions/send_meals_links.py → webapp/manage.html
 
 ## Hyperedges (group relationships)
-- **Full Migration Pipeline: PDF Cache → Parse (LLM/Heuristic) → Airtable Post** — scripts_cache_pdf_cache_pdf, scripts_support_ask_llm, scripts_support_airtable_post [INFERRED 0.85]
-- **Order Generation Flow: Resolve Meals → Enforce Min Qty → Write to Airtable → Format Email** — scripts_generate_orders_resolve_student_meal, scripts_generate_orders_enforce_min_qty, scripts_generate_orders_write_orders_to_airtable, scripts_send_orders_format_email [INFERRED 0.85]
-- **Student Interaction Loop: QR Scan → Webapp → Select Meal + Rate → Informs Next Order** — scripts_generate_qr_main, webapp_app_selectmeal, webapp_app_submitrating, scripts_generate_orders_resolve_student_meal [INFERRED 0.75]
-- **Catering Pipeline: Student Selection → Order Engine → Caterer Email** — webapp_index_spa, plans_impl_plan_ai_gap_filling, concept_caterer_email_format [EXTRACTED 0.95]
-- **Caterer Data Flow: PDF → Cache → Airtable** — resources_caterer_menus_pdf, cache_caterer_menus_lakehouse, converted_caterers_lakehouse [EXTRACTED 0.95]
-- **Order Validation: Dietary + Min Qty + Fallback Logic** — plans_impl_plan_dietary_filtering, plans_impl_plan_min_qty_enforcement, plans_impl_revised_fallback_logic [INFERRED 0.85]
+- **Dietary Compatibility System — Hierarchy Maps + Keyword Fallback + Legend Tags** — webapp_app_buildhierarchymaps, webapp_app_checkcompatibility, data_dietary_keywords, concept_caterer_legend_tags, concept_negative_keyword_fallback [EXTRACTED 0.95]
+- **Migration Pipeline — All Migration Modules Orchestrated in Order** — migrations_migrate_run, migrations_dietary_restrictions_run, migrations_schools_run, migrations_caterers_run, migrations_caterer_contacts_run, migrations_caterer_menus_run, migrations_sessions_run, migrations_students_run, migrations_absences_run, migrations_exclusions_run [EXTRACTED 1.00]
+- **Webapp Pages — All Share Supabase Client for Data Access** — webapp_app_appinit, webapp_manage_init, webapp_switch_proposal_page, webapp_supabase_client [EXTRACTED 0.95]
+- **Caterer Switch Pipeline: Evaluate → Execute → Flip** — actions_evaluate_caterers_evaluate, actions_execute_caterer_switch_execute, actions_register_orders_flip_incoming_caterers [INFERRED 0.85]
+- **Order Registration Pipeline: Data → Index → Assign → Enforce → Write** — actions_register_orders_orderingdata, actions_register_orders_orderingindex, actions_register_orders_register_orders [EXTRACTED 1.00]
+- **Self-Healing Infrastructure: Handler → Failure JSON → Regression Test** — support_error_handler_self_healing_error_handler, tests_test_edge_cases_testselfhealingregression, tests_test_edge_cases_populate_mock_db [INFERRED 0.85]
+- **Dietary Compatibility Check Pipeline** — support_compatibility_buildhierarchy, support_compatibility_isitemcompatible, data_dietary_keywords_negativekeywords [EXTRACTED 0.95]
+- **Typed Database Access Layer** — support_database_database, support_database_table, support_database_record [EXTRACTED 0.95]
+- **Self-Healing Claude Sandbox Execution Flow** — support_run_claude_agent_claudeharness, support_run_claude_agent_pathisolation, support_run_claude_agent_gitguard [EXTRACTED 0.95]
+- **End-to-End Ordering Pipeline: register_orders → send_orders → Scheduled Emails → Airtable Automation** — current_05_ordering_pipeline_registerorders, current_05_ordering_pipeline_sendorders, current_02_data_model_scheduledemails [EXTRACTED 1.00]
+- **Shared Dietary Compatibility: Taxonomy + is_item_compatible + dietary_keywords.json used by both webapp and order generator** — current_06_dietary_system_dietarytaxonomy, current_06_dietary_system_compatibilitycheck, current_04_webapp_webapp [EXTRACTED 1.00]
+- **Prank Prevention System: One-Way Lockout + Server-Side Roster Filter + Last Submitted Field** — current_04_webapp_onewaylockout, current_02_data_model_students, old_resolved_26_no_auth_student_picker_pranks_onewayroster [INFERRED 0.85]
+- **Session Identity: Sessions Data, Caterer Assignment, and QR Ticket Generation** — converted_sessions_sessions_sheet, converted_caterers_caterers_sheet, concept_session_qr_digital_ticket [INFERRED 0.85]
+- **Indooroopilly State High School: Multi-day Sessions, Kenko Sushi House, QR Codes** — converted_caterers_kenko_sushi_house, converted_sessions_indooroopilly_state_high_school_monday, converted_sessions_indooroopilly_state_high_school_tuesday, converted_sessions_indooroopilly_state_high_school_thursday, qrcodes_indooroopilly_state_high_school_monday_qrcode, qrcodes_indooroopilly_state_high_school_tuesday_qrcode, qrcodes_indooroopilly_state_high_school_thursday_qrcode [INFERRED 0.85]
+- **Guzman y Gomez: Loreto and Cannon Hill Sessions in Central Brisbane** — converted_caterers_guzman_y_gomez, converted_sessions_loreto_college_monday, converted_sessions_loreto_college_tuesday, converted_sessions_cannon_hill_anglican_college_monday, converted_sessions_cannon_hill_anglican_college_wednesday [EXTRACTED 0.95]
 
-## Communities (122 total, 24 thin omitted)
+## Communities (81 total, 21 thin omitted)
 
-### Community 1 - "Meal Resolution & Order Generation"
-Cohesion: 0.10
-Nodes (27): 3-Step Meal Resolution: Explicit Selection → Previous Week → AI Assigned, ai_assign_meal(), build_lookups(), determine_round(), enforce_min_qty(), find_previous_selection(), generate_orders(), get_next_week_monday() (+19 more)
-
-### Community 2 - "Data Migration Pipeline"
-Cohesion: 0.23
-Nodes (20): dietary_mappings.json — Dietary String Translation Cache, Clear-Parse-Link-Post Migration Pattern, absences.py — Absences Migration, caterer_contacts.py — Caterer Contacts Migration, caterer_menus.py — Caterer Menus Migration, caterers.py — Caterers & Schools Migration, exclusions.py — Exclusions Migration, sessions.py — Sessions & On-Site Managers Migration (+12 more)
-
-### Community 3 - "Dietary Requirements Data"
-Cohesion: 0.11
-Nodes (18): Dairy Free, Gluten Free, Gluten Free, Dairy Free, Halal, Halal, Vegetarian, No Beef, No Beef, No Pork, No Fish (+10 more)
-
-### Community 4 - "Business Logic & System Overview"
-Cohesion: 0.06
-Nodes (33): Dietary Legend (GF, DF, NF, VO + Halal rule), LLM Fallback Behaviour (Claude API vs heuristics), Padea Project Overview, Caterer Order Email Format (per session, school, delivery), Dietary Tag System (GF, DF, NF, VO, Halal, No Beef, No Pork, etc.), QR Code Session URL Pattern (meals.padea.com.au/s/{id}), Upsert Pattern for Meal Selections (overwrite on re-scan), AI Gap-Filling Scoring Function for Non-Respondents (+25 more)
-
-### Community 5 - "Caterer Directory"
-Cohesion: 0.13
-Nodes (18): Guzman y Gomez Contact: Big Chicken + Medium Giraffe, Kenko Sushi House Contact: Big Mom (contact + chef), Lakehouse VP Contact: Carmen Gabrielle, Terrific Noodles Contact: Dylan + James Chern, Guzman y Gomez Menu, Kenko Sushi House Menu, Lakehouse Victoria Point Menu, Terrific Noodles Menu (+10 more)
-
-### Community 6 - "Design Decisions & Rationale"
-Cohesion: 0.07
-Nodes (30): bestVariantSeverity(), checkCompatibility(), clearKnownStudent(), clearOptedOutLock(), CONSTRAINT_PHRASE, el, getKnownStudent(), getSubmittedFlag() (+22 more)
-
-### Community 7 - "Community 7"
-Cohesion: 0.33
-Nodes (4): Seed the Dietary Restrictions table from `scripts/dietary_data.py`.  This MUST r, all_restriction_names(), Hard-coded dietary-restriction hierarchy.  Each restriction lists its *direct* S, Flat list of all restriction names, including those only referenced     as super
-
-### Community 8 - "Order Email Dispatch"
-Cohesion: 0.06
-Nodes (30): Automated Tests, Automating Padea's Catering Pipeline, code:mermaid (flowchart LR), code:block2 (https://meals.padea.com.au/s/{session_airtable_id}), code:block3 (1. Determine "next week" date range (Mon–Fri of the followin), code:block4 (score(item, student) =), code:block5 (1. Cron Trigger: Thursday 09:00 AEST), code:block6 (Subject: Padea Meal Order — Week of 4 May 2026) (+22 more)
-
-### Community 9 - "Schema Architecture"
-Cohesion: 0.50
-Nodes (4): Migration Dependency Order, Migration Pattern (clear/parse/llm/link/post), Normalized Relational Schema Design (10 tables), Two-Pass Schema Creation (resolves circular links)
-
-### Community 10 - "Absence Records"
-Cohesion: 0.50
-Nodes (4): Absences: ISHS 02/05/2026 (Charlie Morris, Jack Carter, Charlie Mitchell), Absences: JPC 02/05/2026 (Christina Hu, Nathan Smith), Absences: MBBC 02/05/2026 (Noah Baker), Absences PDF (source resource)
-
-### Community 11 - "School Exclusion Records"
-Cohesion: 0.50
-Nodes (4): Exclusion: CHAC School Camp (Years 12, 10), Exclusion: ISHS Open Day (all year levels), Exclusion: Loreto College Parent Teacher Interviews, Exclusions PDF (source resource)
-
-### Community 13 - "Session Date Parsing"
-Cohesion: 0.60
-Nodes (4): _clean_str(), _parse_date(), _parse_year_levels(), run()
-
-### Community 14 - "QR Code Instance"
-Cohesion: 1.00
-Nodes (3): QR Code - Moreton Bay Boys' College (2026-05-02), Moreton Bay Boys' College, Tutoring Session - Moreton Bay Boys' College 2026-05-02
-
-### Community 15 - "Community 15"
-Cohesion: 0.53
-Nodes (4): _parse_absences(), _parse_date(), _ParsedAbsence, run()
-
-### Community 22 - "Community 22"
-Cohesion: 0.08
-Nodes (23): Automating Padea's Catering Pipeline (Revised), code:mermaid (flowchart LR), code:block2 (1. Determine ordering round (R1=Thu for Mon–Wed, R2=Sat for ), code:python (def resolve_meal(student, session, caterer_menu_items):), code:bash (./run orders generate          # compile orders for next rou), code:block5 (Subject: Padea Meal Order — Week of 4 May 2026 (Mon–Wed)), Decisions Made, File Summary (+15 more)
-
-### Community 23 - "Community 23"
-Cohesion: 0.10
-Nodes (20): Automated Tests, code:mermaid (erDiagram), Implementation Plan - Migrating Padea Data to Airtable, Migration Scripts, [MODIFY] [absences.py](file:///home/daniel/Downloads/Padea/migrations/absences.py), [MODIFY] [caterer_contacts.py](file:///home/daniel/Downloads/Padea/migrations/caterer_contacts.py), [MODIFY] [caterer_menus.py](file:///home/daniel/Downloads/Padea/migrations/caterer_menus.py), [MODIFY] [caterers.py](file:///home/daniel/Downloads/Padea/migrations/caterers.py) (+12 more)
-
-### Community 24 - "Community 24"
-Cohesion: 0.11
-Nodes (18): 1. Schema initialisation (`./run schema update`), 2. Caterers (`./run migrate caterers`), 3. Caterer contacts (`./run migrate contacts`), 4. Caterer menus (`./run migrate menus`), 5. Sessions (`./run migrate sessions`), 6. Students (`./run migrate students`), 7. Absences (`./run migrate absences`), 8. Exclusions (`./run migrate exclusions`) (+10 more)
-
-### Community 25 - "Community 25"
-Cohesion: 0.12
-Nodes (15): Airtable record linking, Architecture, code:bash (# Migrate all resources), code:block2 (AIRTABLE_API_KEY=...), code:block3 (resources/*.xlsx + resources/*.pdf), code:block4 (caterers → caterer_contacts → caterer_menus), Commands, Core modules (+7 more)
-
-### Community 26 - "Community 26"
-Cohesion: 0.17
-Nodes (11): Sheet: CHAC - Monday, Sheet: CHAC - Wednesday, Sheet: ISHS - Monday, Sheet: ISHS - Thursday, Sheet: ISHS - Tuesday, Sheet: JPC - Tuesday, Sheet: JPC - Wednesday, Sheet: LC - Monday (+3 more)
-
-### Community 27 - "Community 27"
-Cohesion: 0.12
-Nodes (20): Dietary Compatibility Filter (Positive + Negative Requirements), is_item_compatible(), Check if a menu item is compatible with a student's dietary requirements., apiKey(), app, atGetRecord(), atPatch(), atPost() (+12 more)
-
-### Community 28 - "Community 28"
-Cohesion: 0.33
-Nodes (5): Phase 1: Schema + Order Engine, Phase 2: Student Web App, Phase 3: Email + QR, Phase 4: Verification, Tasks
-
-### Community 29 - "Community 29"
-Cohesion: 0.40
-Nodes (3): Answer, Q: Why does airtable_get() connect Data Migration Pipeline to Order Email Dispatch, Meal Resolution & Order Generation, Student Webapp & QR System?, Source Nodes
-
-### Community 34 - "Community 34"
-Cohesion: 0.50
-Nodes (3): 1st Iteration, 2nd Iteration, 3rd Iteration
-
-### Community 35 - "Community 35"
-Cohesion: 0.27
-Nodes (8): all_restriction_names(), Hard-coded dietary-restriction hierarchy.  Each restriction lists its *direct* S, Flat list of all restriction names, including those only referenced     as super, run(), _clean_int(), _clean_str(), _resolve_school_name(), run()
-
-### Community 37 - "Community 37"
+### Community 0 - "Order Registration Pipeline"
 Cohesion: 0.05
-Nodes (45): format_parent_email(), format_student_email(), manage_url(), meals_url(), send_meals_links.py — Email parents or students a personalised meal-preference l, send_links(), SessionLink, format_email_body() (+37 more)
+Nodes (42): flip_incoming_caterers(), Commit any pending caterer switches before this week's order is built.      If a, load_substitutions(), A read-only database record envelope with typed ``fields``., Return a (session_id, date) → substitute_manager_id mapping.      Queries manage, Record, caterer_a(), caterer_b() (+34 more)
 
-### Community 38 - "Community 38"
+### Community 1 - "Webapp Meal Selection"
 Cohesion: 0.06
-Nodes (60): ALL_VIEWS, allRestrictions, apiFetch(), backToSessions(), bestVariantSeverity(), buildHierarchyMaps(), buildVariantMap(), _cache (+52 more)
+Nodes (58): Caterer Switch Transition — Incoming Caterer Menu During Switch, Device Lockout — One Submission Per Device Per Day, Dietary Hierarchy Closure — Subset/Superset Closure Concept, app, app.init — Webapp Bootstrap, applyOptedOutLock(), buildHierarchyMaps(), cacheBust() (+50 more)
 
-### Community 39 - "Community 39"
-Cohesion: 0.07
-Nodes (40): api_approve_proposal(), api_get_caterer(), api_get_caterer_menu(), api_get_dietary_restrictions(), api_get_feedback(), api_get_proposal(), api_get_session(), api_get_session_students() (+32 more)
-
-### Community 40 - "Community 40"
+### Community 2 - "Migration & Notification"
 Cohesion: 0.06
-Nodes (36): Exception, Absences(), base(), CatererFeedback(), Caterers(), CatererSwitchProposals(), Database, DietaryRestrictions() (+28 more)
+Nodes (47): send_meals_links.send_links — Email Meal Preference Links, LLM-then-Heuristic Fallback — LLM Parse with Local Fallback Pattern, Migration Pipeline — Ordered Data Migration Dependency Chain, all_restriction_names(), Hard-coded dietary-restriction hierarchy.  Each restriction lists its *direct* S, Flat list of all restriction names, including those only referenced     as super, _parse_absences(), _parse_date() (+39 more)
 
-### Community 41 - "Community 41"
-Cohesion: 0.10
-Nodes (31): A read-only Airtable record envelope with typed ``fields``.      Construct via :, Record, caterer_a(), caterer_b(), caterer_meat_only(), dietary_records(), make_students(), manager_alpha() (+23 more)
-
-### Community 42 - "Community 42"
-Cohesion: 0.11
-Nodes (12): dispatch(), Invoke *func* with kwargs built from URL groups, payload, and db.      Named cap, local_ip(), main(), PadeaHandler, host_webapp.py — Serve the Padea webapp over the local network.  Binds to 0.0.0., Best-guess LAN IP by connecting a UDP socket (never actually sends)., Serves static webapp files and handles /api/proposal/* routes. (+4 more)
-
-### Community 43 - "Community 43"
+### Community 3 - "Order Email Generation"
 Cohesion: 0.08
-Nodes (25): 1. Picker — "Who are you?", 2. Form, 3. Meal picker, 4. Done, 5. Locked, API endpoints, Brand, Caching strategy (+17 more)
+Nodes (27): format_email_body(), LineItem, load_order_details(), load_pending_orders(), process_orders(), send_orders.py — Format and send caterer order emails for next week.  Reads all, Aggregate individual Orders records for a Weekly Order into line items., Return a Markdown email body using only Airtable-supported formatting. (+19 more)
 
-### Community 44 - "Community 44"
-Cohesion: 0.14
-Nodes (14): build(), _CatererBatch, clear_existing_orders(), get_next_week_dates(), get_week_label(), load(), _print_summary(), register_orders.py — Snapshot student meal preferences into the Orders table.  F (+6 more)
+### Community 4 - "Session & Caterer Data"
+Cohesion: 0.12
+Nodes (30): Session QR Code Digital Ticket System, Caterers Data Sheet, Caterer: Guzman y Gomez, Caterer: Kenko Sushi House, Caterer: Lakehouse Victoria Point, Minimum Order Quantity by Menu Item Count, Caterer: Terrific Noodles, Session: Cannon Hill Anglican College - Monday (+22 more)
 
-### Community 45 - "Community 45"
+### Community 5 - "Self-Healing Error Infrastructure"
+Cohesion: 0.09
+Nodes (16): Self-Healing Failure Capture Pattern, Coerce complex objects (like Dataclasses, Sets, custom Records) to JSON-serializ, Context manager to catch, serialize, and prompt-heal failures in active workflow, self_healing_error_handler, UnhandledEdgeCaseError Exception, support Package __init__, Test runner for all Padea action-script unit tests.  Usage (from the project roo, suite() (+8 more)
+
+### Community 6 - "Schema & Resolved Issues"
+Cohesion: 0.09
+Nodes (24): TABLES_SCHEMA Airtable Schema Definition, Problem 11: API Key Exposed in Webapp, Problem 28: MIN_SESSIONS Zero Bug, Problem 30: Send Immediately Email Status, OOP Refactor Instruction, approve_caterer_switch RPC Function, Initial Supabase Schema Migration SQL, Database (+16 more)
+
+### Community 7 - "Pydantic Data Schemas"
+Cohesion: 0.17
+Nodes (21): BaseModel, Absence, _Base, Caterer, CatererFeedback, CatererSwitchProposal, DietaryRestriction, Exclusion (+13 more)
+
+### Community 8 - "Manage Page UI"
+Cohesion: 0.08
+Nodes (18): ALL_VIEWS, allRestrictions, _cache, checkedDietIds, CONSTRAINT_PHRASE, DIET_DISPLAY_ORDER, filteredStudents, initialDietIds (+10 more)
+
+### Community 9 - "Caterer Switch Execution"
 Cohesion: 0.15
 Nodes (11): execute(), execute_caterer_switch.py — Execute a caterer switch proposal.  Reads the named, Mark a Caterer Switch Proposal as Rejected with optional coordinator notes., Resolved view of an approved Caterer Switch Proposal., reject(), _resolve_context(), SwitchContext, _approved_proposal() (+3 more)
 
-### Community 46 - "Community 46"
-Cohesion: 0.09
-Nodes (21): Caterer management, code:bash (# .env at project root (not committed):), code:bash (# Post-order constraints (min-qty + session totals)), code:bash (./run migrate schema         # idempotent — diffs schema.py ), code:bash (./run migrate                # full clean-slate import (all ), code:bash (# PDF extraction (run if a resources/*.pdf changes)), code:bash (./run orders                       # generate then queue ema), code:bash (# Generate QR code PNGs (one per session) in output/qrcodes/) (+13 more)
+### Community 10 - "Caterer Evaluation Engine"
+Cohesion: 0.16
+Nodes (19): build(), create_proposal_and_email(), evaluate(), EvaluationIndex, force_proposal(), format_no_candidate_email(), format_proposal_email(), format_watch_email() (+11 more)
 
-### Community 47 - "Community 47"
-Cohesion: 0.10
-Nodes (20): Absences, Caterer Feedback, Caterer Switch Proposals, Caterers, code:block1 (Schools ──< Sessions >── Caterers ──< Menu Items >── Dietary), Data Model, Dietary Restrictions, Exclusions (+12 more)
+### Community 11 - "Caterer Proposal Lifecycle"
+Cohesion: 0.20
+Nodes (8): has_active_proposal(), True if a Pending / Approved / Executed proposal already exists., True if a Rejected proposal for this pair exists since ``term_start``., was_rejected_this_term(), _proposal(), Tests for scripts/actions/evaluate_caterers.py.  Covers: get_rolling_stats (wind, TestHasActiveProposal, TestWasRejectedThisTerm
 
-### Community 48 - "Community 48"
-Cohesion: 0.10
-Nodes (20): Algorithm, Behaviour, code:block1 (1. Flip any pending caterer switches: for every Session with), code:block2 (Hi <First name>,), code:bash (python scripts/tests/order_constraints.py), Constraint verification, Email format, Explicit preference override (+12 more)
+### Community 12 - "Caterer Scoring & Filtering"
+Cohesion: 0.18
+Nodes (11): caterer_covers_all_students(), Return ``(True, None)`` if every non-opted-out student at the school has     at, ``score = 0.6 * avg_at_this_school + 0.4 * avg_overall`` (or just     overall wh, score_candidate(), Dietary Hard Filter for Caterer Candidates, _make_eval_index(), Feedback index is keyed by (session_id, caterer_id); the school-scoped     avera, Minimal namespace sufficient for the pure evaluation functions. (+3 more)
 
-### Community 49 - "Community 49"
+### Community 13 - "Database Access Layer"
 Cohesion: 0.19
-Nodes (16): build(), create_proposal_and_email(), evaluate(), force_proposal(), format_no_candidate_email(), format_proposal_email(), format_watch_email(), get_effective_week() (+8 more)
+Nodes (16): Absences(), CatererFeedback(), Caterers(), CatererSwitchProposals(), DietaryRestrictions(), Exclusions(), ManagerSubstitutions(), MenuItems() (+8 more)
 
-### Community 50 - "Community 50"
+### Community 14 - "Meal Assignment Logic"
+Cohesion: 0.15
+Nodes (10): assign_fallback_meal(), assign_variety_meal(), Pick the best compatible meal weighted by:       - Current batch popularity (80%, Pick the least-ordered compatible meal to spread variety across the     batch. U, is_item_compatible(), Check that a menu item can be assigned to a student with the given     Dietary R, Minimal namespace that satisfies assign_*meal — only dietary_hierarchy., _simple_index() (+2 more)
+
+### Community 15 - "Claude Agent Harness"
+Cohesion: 0.17
+Nodes (17): get_git_modified_files(), get_latest_error_prompt(), is_file_allowed(), main(), orchestrate_self_healing(), Invokes Claude Code in the restricted environment., Runs the post-execution test suite., Finds the most recent patch_prompt_*.md in cache/failures/ and returns its conte (+9 more)
+
+### Community 16 - "Database Utilities"
 Cohesion: 0.19
-Nodes (10): caterer_covers_all_students(), Return ``(True, None)`` if every non-opted-out student at the school has     at, ``score = 0.6 * avg_at_this_school + 0.4 * avg_overall`` (or just     overall wh, score_candidate(), _make_eval_index(), Tests for scripts/actions/evaluate_caterers.py.  Covers: get_rolling_stats (wind, Feedback index is keyed by (session_id, caterer_id); the school-scoped     avera, Minimal namespace sufficient for the pure evaluation functions. (+2 more)
+Nodes (7): from_env(), from_row(), Junction Map Configuration, Typed wrapper around a single Supabase table/view pair., Pop view-only junction fields from fields dict; return them separately., Table, View Map Configuration
 
-### Community 51 - "Community 51"
-Cohesion: 0.10
-Nodes (26): BaseModel, Absence, Caterer, CatererFeedback, CatererSwitchProposal, Config, DietaryRestriction, Exclusion (+18 more)
-
-### Community 52 - "Community 52"
-Cohesion: 0.22
-Nodes (7): has_active_proposal(), True if a Pending / Approved / Executed proposal already exists., True if a Rejected proposal for this pair exists since ``term_start``., was_rejected_this_term(), _proposal(), TestHasActiveProposal, TestWasRejectedThisTerm
-
-### Community 53 - "Community 53"
-Cohesion: 0.12
-Nodes (16): A "next term" reset workflow, Actually sending email, Calendar export, Caterer email format A/B with the coordinator, Idempotency for outbound emails, Live hosting for the webapp, Multi-meal orders, Planned but unbuilt (+8 more)
-
-### Community 54 - "Community 54"
-Cohesion: 0.12
-Nodes (16): Action Script Tests, Adding tests, code:bash (# Run the full suite), code:bash (PYTHONPATH=$PWD:$PWD/scripts python scripts/tests/run_all.py), code:block3 (scripts/tests/), `evaluate_caterers.py`, `execute_caterer_switch.py`, File layout (+8 more)
-
-### Community 55 - "Community 55"
+### Community 17 - "Dietary Negative Keywords"
 Cohesion: 0.12
 Nodes (15): _comment, negative_keywords, Dairy Free, Halal, Kosher, No Beef, No Fish, No Lamb (+7 more)
 
-### Community 56 - "Community 56"
-Cohesion: 0.33
-Nodes (16): apiFetch(), atGet(), atList(), cacheGet(), cacheSet(), loadCaterer(), loadDietaryRestrictions(), loadExistingFeedback() (+8 more)
+### Community 18 - "Idempotent Order Registration"
+Cohesion: 0.24
+Nodes (9): clear_existing_orders(), Delete any existing Orders and draft Weekly Orders for next week., register_orders(), Idempotent Order Registration, has_opted_out(), Convert dietary record IDs to their restriction-name strings., True if any of the student's dietary IDs is the 'Opted out of Catering' tag., resolve_dietary_names() (+1 more)
 
-### Community 57 - "Community 57"
-Cohesion: 0.29
-Nodes (6): api_get_manager_sessions(), api_update_dietary_requirements(), MockDatabase, In-memory replacement for support.database.Database.      Instantiate once per t, TestApiGetManagerSessions, TestApiUpdateDietaryRequirements
-
-### Community 58 - "Community 58"
-Cohesion: 0.25
-Nodes (8): is_student_excluded(), OrderingData, Check if a student is excluded from this session on this specific date.      ``s, Raw records loaded once from Airtable for the order build., _make_data(), _make_index(), Tests for scripts/actions/register_orders.py.  Covers: is_student_excluded, assi, TestIsStudentExcluded
-
-### Community 59 - "Community 59"
-Cohesion: 0.17
-Nodes (3): MockTable, MockTable and MockDatabase for testing Padea action scripts without connecting t, In-memory replacement for support.database.Table.      ``all()`` ignores the for
-
-### Community 60 - "Community 60"
-Cohesion: 0.14
-Nodes (13): Allergy-grade restrictions, code:block1 (Vegan), Compatibility check (order generator), Compatibility check (webapp implementation), Dietary System, Edge cases worth knowing, Explicit override and hard block, Halal-by-default (+5 more)
-
-### Community 61 - "Community 61"
-Cohesion: 0.42
-Nodes (3): api_override_order(), _order(), TestApiOverrideOrder
-
-### Community 62 - "Community 62"
-Cohesion: 0.27
-Nodes (8): _build_feedback_index(), FeedbackEntry, get_rolling_stats(), Group feedback by (session_id, caterer_id), sorted by date ascending., Return rolling-window statistics for the most recent ROLLING_WINDOW     distinct, RollingStats, _fb(), TestGetRollingStats
-
-### Community 63 - "Community 63"
-Cohesion: 0.27
-Nodes (8): EvaluationData, find_candidates(), Return sorted ``(score, caterer_id, caterer_name)`` for eligible     replacement, Raw records loaded from Airtable for the evaluation pass., _build_eval_index(), Build a real EvaluationIndex from minimal test data., Verify find_candidates applies the dietary hard filter end-to-end,     not just, TestFindCandidates
-
-### Community 64 - "Community 64"
-Cohesion: 0.17
-Nodes (11): Sheet: CHAC - Monday, Sheet: CHAC - Wednesday, Sheet: ISHS - Monday, Sheet: ISHS - Thursday, Sheet: ISHS - Tuesday, Sheet: JPC - Tuesday, Sheet: JPC - Wednesday, Sheet: LC - Monday (+3 more)
-
-### Community 65 - "Community 65"
+### Community 19 - "Webapp Dietary Keywords"
 Cohesion: 0.12
-Nodes (15): 1. Pydantic Runtime Validation, 2. State-Capture Exception Serialization, 3. Test-Driven Regression & Healing Loop, Absences, Caterers, Edge Cases, Email pipeline, Exclusions (+7 more)
+Nodes (15): _comment, negative_keywords, Dairy Free, Halal, Kosher, No Beef, No Fish, No Lamb (+7 more)
 
-### Community 66 - "Community 66"
-Cohesion: 0.27
-Nodes (9): _clean_school_names(), _extract_json_block(), _parse_contacts_heuristic(), _ParsedContact, Case-insensitive substring match of a raw school name against     the canonical, Fallback high-fidelity parser for caterer contacts using regex/heuristics., _resolve_school(), run() (+1 more)
+### Community 20 - "Manager ID Resolution"
+Cohesion: 0.26
+Nodes (4): Return the effective on-site manager ID and whether it is a substitute.      Che, resolve_manager_id(), TestResolveManagerId, TestResolveManagerId
 
-### Community 67 - "Community 67"
-Cohesion: 0.38
-Nodes (5): Assignment, enforce_min_qty(), Enforce caterer per-item min-qty by dissolving under-populated items.      For e, One student's (session, item) tuple ready to write to Orders., TestEnforceMinQty
+### Community 21 - "Student Exclusion Check"
+Cohesion: 0.26
+Nodes (7): is_student_excluded(), Check if a student is excluded from this session on this specific date.      ``s, _make_data(), _make_index(), Tests for scripts/actions/register_orders.py.  Covers: is_student_excluded, assi, TestIsStudentExcluded, TestIsStudentExcluded Test Class
 
-### Community 68 - "Community 68"
+### Community 22 - "Scheduling & Cron Targets"
+Cohesion: 0.18
+Nodes (13): Scheduled Emails Table, OrderingData Dataclass, Planned Cron Targets (Wed 8PM register, Thu 3PM send), Email Idempotency (Unbuilt), Live Hosting (Public URL, Hosted Python Runtime), Scheduled Cron Triggers (Unbuilt), Unfinished Work & Planned Features, Problems Index (Bug Catalogue) (+5 more)
+
+### Community 23 - "Database Table Tests"
+Cohesion: 0.22
+Nodes (5): _make_table(), Return (Table, client_mock, chain_mock) for the given table name., TestTableClear, TestTableCreate, TestTableUpdate
+
+### Community 24 - "Switch Proposal UI"
+Cohesion: 0.17
+Nodes (3): supabase, switch-proposal.html — Caterer Switch Proposal Review, page
+
+### Community 25 - "Candidate Discovery"
+Cohesion: 0.29
+Nodes (8): EvaluationData, find_candidates(), Return sorted ``(score, caterer_id, caterer_name)`` for eligible     replacement, Raw records loaded from the database for the evaluation pass., _build_eval_index(), Build a real EvaluationIndex from minimal test data., Verify find_candidates applies the dietary hard filter end-to-end,     not just, TestFindCandidates
+
+### Community 26 - "Feedback & Rolling Stats"
+Cohesion: 0.32
+Nodes (7): _build_feedback_index(), FeedbackEntry, get_rolling_stats(), Group feedback by (session_id, caterer_id), sorted by date ascending., Return rolling-window statistics for the most recent ROLLING_WINDOW     distinct, _fb(), TestGetRollingStats
+
+### Community 27 - "Order Batch Building"
+Cohesion: 0.18
+Nodes (8): build(), _CatererBatch, get_week_label(), load(), _print_summary(), register_orders.py — Snapshot student meal preferences into the Orders table.  F, Mutable working set of assignments + popularity counts for one caterer., Print a human-readable dry-run summary.
+
+### Community 28 - "Minimum Quantity Enforcement"
+Cohesion: 0.35
+Nodes (6): Assignment, enforce_min_qty(), Enforce caterer per-item min-qty by dissolving under-populated items.      For e, One student's (session, item) tuple ready to write to Orders., Caterer Min-Qty Enforcement, TestEnforceMinQty
+
+### Community 29 - "Order Constraints & Models"
+Cohesion: 0.22
+Nodes (11): Orders Table, Weekly Orders Table, Order Constraint Verification (order_constraints.py), POPULARITY Fallback Mode (10+ explicit preferences), register_orders.py Script, send_orders.py Script, VARIETY Fallback Mode (under 10 explicit preferences), ./run Bash Dispatcher Script (+3 more)
+
+### Community 31 - "Variety Optimization"
 Cohesion: 0.25
 Nodes (5): compute_max_variety(), _find_min_qty(), Return the most distinct items we can order while still satisfying the     cater, Return the per-item minimum quantity for the given number of distinct     items,, TestComputeMaxVariety
 
-### Community 69 - "Community 69"
-Cohesion: 0.18
-Nodes (11): applyOptedOutLock(), hasOptedOut(), isInTransition(), loadFormData(), loadPickerData(), menuCatererId(), refreshFormFromState(), renderStudentList() (+3 more)
+### Community 32 - "Webapp Architecture Docs"
+Cohesion: 0.20
+Nodes (10): Webapp API Endpoints (api.py), Two-Tier Caching Strategy (Server + Client), On-Site Manager Page (manage.html), Student Meal Form Webapp (meals.html), Allergy-Grade Restrictions Hard Block, is_item_compatible Compatibility Check (3-step ladder), Dietary System (Taxonomy, Compatibility Checks), Dietary Restriction Taxonomy (Superset DAG) (+2 more)
 
-### Community 70 - "Community 70"
+### Community 33 - "Order Timing & Constraints"
 Cohesion: 0.29
-Nodes (4): Tests for the manage-page API endpoints added to scripts/actions/api.py.  Covers, Monday session pre-populated with the given student IDs in its Students field., _session_with_students(), TestApiGetSessionStudentsAll
+Nodes (9): get_next_week_dates(), Return {day_name: date} for Mon–Fri of next week., check_min_qty(), check_session_totals(), expected_eating_count(), load(), main(), order_constraints.py — Verify that registered Orders for next week:   1. Satisfy (+1 more)
 
-### Community 71 - "Community 71"
-Cohesion: 0.24
-Nodes (5): assign_variety_meal(), Pick the least-ordered compatible meal to spread variety across the     batch. U, Minimal namespace that satisfies assign_*meal — only dietary_hierarchy., _simple_index(), TestAssignVarietyMeal
+### Community 34 - "Dietary Hierarchy Build"
+Cohesion: 0.22
+Nodes (9): RollingStats, DIETARY_HIERARCHY Data Constant, build_hierarchy(), build_hierarchy Function, DietaryHierarchy, has_opted_out Function, Pre-computed lookup tables built from the Dietary Restrictions table.      A res, Build a :class:`DietaryHierarchy` from a list of restriction records. (+1 more)
 
-### Community 72 - "Community 72"
-Cohesion: 0.18
-Nodes (13): build_hierarchy(), DietaryHierarchy, has_opted_out(), is_item_compatible(), item_incompatibility_ids(), Shared dietary-compatibility logic.  Used by:   - scripts/actions/register_order, Convert dietary record IDs to their restriction-name strings., True if any of the student's dietary IDs is the 'Opted out of Catering' tag. (+5 more)
-
-### Community 74 - "Community 74"
-Cohesion: 0.31
-Nodes (5): assign_fallback_meal(), OrderingIndex, Pre-computed lookups derived from :class:`OrderingData`., Pick the best compatible meal weighted by:       - Current batch popularity (80%, TestAssignFallbackMeal
-
-### Community 75 - "Community 75"
-Cohesion: 0.33
-Nodes (8): check_min_qty(), check_session_totals(), ConstraintsData, expected_eating_count(), load(), main(), order_constraints.py — Verify that registered Orders for next week:   1. Satisfy, Count enrolled students at this session who are not absent, excluded, or opted o
-
-### Community 76 - "Community 76"
+### Community 35 - "QR Email Generation"
 Cohesion: 0.36
-Nodes (3): load_substitutions(), Return a (session_record_id, date) → substitute_manager_record_id mapping., TestLoadSubstitutions
+Nodes (8): format_manager_email(), manage_url(), qr_image_url(), send_qr_emails.py — Email each on-site manager their sessions' QR codes.  Groups, URL that generates a QR code PNG via the qrserver.com public API., send_qr_emails(), session_url(), SessionEntry
 
-### Community 77 - "Community 77"
-Cohesion: 0.39
-Nodes (3): flip_incoming_caterers(), Commit any pending caterer switches before this week's order is built.      If a, TestFlipIncomingCaterers
+### Community 36 - "Manage UI Navigation"
+Cohesion: 0.28
+Nodes (9): backToSessions(), changeStudent(), closeMealPicker(), editAnother(), filterStudents(), loadSessionStudentsAll(), renderStudentList(), selectSession() (+1 more)
 
-### Community 78 - "Community 78"
-Cohesion: 0.25
-Nodes (7): Business Context, The bottleneck this project fixes, The caterers, The on-site managers, The roster of schools, What "fixed" looks like, What Padea does
-
-### Community 79 - "Community 79"
-Cohesion: 0.25
-Nodes (7): code:block1 (dietary_restrictions       # (no deps) — full restriction hi), LLM-extracted fields, Migration order (load-bearing), Migration Pipeline, Re-running migrations, Source files, Verification
-
-### Community 80 - "Community 80"
+### Community 37 - "Dietary UI Compatibility"
 Cohesion: 0.31
-Nodes (5): EvaluationIndex, get_term_start(), Pre-computed lookups derived from :class:`EvaluationData`., Return the start date of the current QLD school term., TestGetTermStart
+Nodes (9): Caterer Legend Tags — Definite Incompatibility Signal, Vegetarian Variant — VO Flag Creates Companion Variant Record, bestVariantSeverity(), checkCompatibility(), renderMealList(), bestVariantSeverity(), checkCompatibility(), openMealPicker() (+1 more)
 
-### Community 81 - "Community 81"
+### Community 38 - "Manager Override Flow"
+Cohesion: 0.22
+Nodes (9): eqSets(), isDirty(), loadManagerSessions(), overrideOrder(), save(), saveDietaryRequirements(), showError(), toggleDiet() (+1 more)
+
+### Community 39 - "Meal Link Emails"
+Cohesion: 0.43
+Nodes (7): format_parent_email(), format_student_email(), manage_url(), meals_url(), send_meals_links.py — Email parents or students a personalised meal-preference l, send_links(), SessionLink
+
+### Community 40 - "Caterer Data Models"
+Cohesion: 0.25
+Nodes (8): Caterers Table, Caterer Switch Proposals Table, Airtable Data Model (14 Tables), Manager Substitutions Table, Menu Items Table, Natural Key Naming Conventions (schema.py), Sessions Table, Caterer Switch Proposal Approve/Reject Page (switch-proposal.html)
+
+### Community 41 - "Database Test Infrastructure"
+Cohesion: 0.36
+Nodes (4): _chain_mock(), Unit tests for scripts/support/database.py.  Covers:   - Record.from_row constru, Return a mock that behaves like a Supabase query builder chain.      execute_seq, TestWriteJunctionRows
+
+### Community 42 - "Keyword Fallback System"
 Cohesion: 0.29
-Nodes (6): At a glance, code:block1 (Tuesday session     →   QR code → mobile webapp), code:block2 (.), Padea Catering Automation — Project Overview, Repository layout, Tech stack
+Nodes (8): Negative Keyword Fallback — Name-Based Dietary Guess, dietary_keywords.json — Negative Keyword Fallback Data, init(), loadEditForm(), loadRestrictions(), loadTodayOrder(), renderDietList(), selectStudent()
 
-### Community 82 - "Community 82"
-Cohesion: 0.36
-Nodes (6): _detect_legend_codes(), _extract_json_block(), _parse_menus_heuristic(), # TODO: import PDF extraction, Return restriction names found in the Dietary Legend preamble., run()
+### Community 43 - "Webapp Variant Cache"
+Cohesion: 0.29
+Nodes (8): buildVariantMap(), cacheGet(), cacheSet(), ensureDietMaps(), loadMenu(), loadNegativeKeywords(), setPrefTrigger(), updatePrefTrigger()
 
-### Community 83 - "Community 83"
+### Community 44 - "Term Boundary Logic"
+Cohesion: 0.43
+Nodes (3): get_term_start(), Return the start date of the current QLD school term., TestGetTermStart
+
+### Community 45 - "Project Overview & Goals"
+Cohesion: 0.29
+Nodes (7): Closed-Loop Order Automation (QR→webapp→register→send), Padea Catering Automation Project Overview, Tech Stack (Airtable, Python, Static SPA, bash run script), Thursday Manual Order Bottleneck, Padea Business Context & Bottleneck, Six Partner Schools (Three Regions, Brisbane), Ordering Pipeline (register_orders + send_orders)
+
+### Community 46 - "Error Handling Module"
 Cohesion: 0.33
-Nodes (4): graphify, Python scripting, Self-Healing & Agent-Ready Architecture Standards, What this project does
+Nodes (5): Exception, Centralized error handling and self-healing state-capture.  Intercepts exception, Raised when an unhandled business logic constraint or assumptions validation fai, UnhandledEdgeCaseError, Package initialization for the support module.
 
-### Community 84 - "Community 84"
+### Community 47 - "Allergy & Constraint Rules"
+Cohesion: 0.29
+Nodes (7): dietary_keywords.json Negative Keywords, Problem 23: Order Constraints Duplication, Problem 25: Explicit Override Allergy Danger, is_item_compatible Function, item_incompatibility_ids Function, NEGATIVE_KEYWORDS Constant, MenuItemFields TypedDict
+
+### Community 49 - "Meal Selection Modal"
 Cohesion: 0.33
-Nodes (5): code:javascript (localStorage.setItem('padea_submitted_' + sessionId, 'true')), Context, Problem Description, Problem: Shared Dropdown Without Auth allows Student Pranks, Proposed Solution (AI Actionable)
+Nodes (7): closeVariantModal(), commitMealSelection(), confirmVariantModal(), openConfirm(), selectMeal(), setOrderTrigger(), updateOrderTrigger()
 
-### Community 85 - "Community 85"
-Cohesion: 0.33
-Nodes (5): 30 — `EmailStatus` literal advertises `Send Immediately` but the schema doesn't, code:python (EmailStatus = Literal["Queued", "Send Immediately", "Sent", ), code:python (fields["Status"] = "Send Immediately" if immediate else "Que), code:python ("options": {), Fix
-
-### Community 86 - "Community 86"
+### Community 50 - "Edge Cases Docs"
 Cohesion: 0.40
-Nodes (6): atCreate(), atFetch(), atUpdate(), cacheBust(), makeId(), persistChanges()
+Nodes (6): One-Way Roster Lockout (Device Lock + Roster Filter), Min-Qty Enforcement (Proportional Dissolve), Edge Cases Documentation, Self-Healing & Pydantic Validation Architecture, One-Way Roster Lockout (Disappearing Dropdown), Shared Dropdown Without Auth Prank Problem
 
-### Community 87 - "Community 87"
+### Community 51 - "Compatibility Records"
+Cohesion: 0.33
+Nodes (4): item_incompatibility_ids(), Shared dietary-compatibility logic.  Used by:   - scripts/actions/register_order, Return the restriction IDs the item *definitely* violates for this     student (, Typed record models for the Padea Supabase database.  For every table we expose:
+
+### Community 52 - "QR Code Generation"
 Cohesion: 0.60
 Nodes (4): generate_qr(), main(), make_session_url(), generate_qr.py — Generate QR code PNGs for each session's web app URL.  Each QR
 
-### Community 88 - "Community 88"
+### Community 53 - "Student Data Migration"
 Cohesion: 0.40
-Nodes (3): 29 — Outbound email queueing is not idempotent, code:python (existing = db.ScheduledEmails.all(formula=f"{{Email ID}}='{e), Fix
+Nodes (5): Students Source Data (students.xlsx converted), Students Table, LLM Extraction in Migration (caterer_contacts, menus, exclusions), Migration Dependency Order, Migration Pipeline (One-Shot Airtable Import)
 
-### Community 89 - "Community 89"
+### Community 55 - "Sandbox Safety Guards"
+Cohesion: 0.50
+Nodes (5): Claude Code Automation Harness, Git Guard - Unauthorized Edit Revert, Latest Error Prompt Loader, Restricted PATH Sandbox, Self-Healing Orchestration
+
+### Community 56 - "Order Data Structures"
 Cohesion: 0.40
-Nodes (4): 31 — `send_orders.py` processes every Weekly Order with `Week Start >= TODAY()`, code:python (def load_pending_orders(db: Database) -> list[Record[WeeklyO), code:python (next_monday = get_next_week_dates()["Monday"].isoformat()), Fix
+Nodes (5): OrderingData, OrderingIndex, Pre-computed lookups derived from :class:`OrderingData`., Raw records loaded once from Airtable for the order build., ConstraintsData
 
-### Community 90 - "Community 90"
-Cohesion: 0.40
-Nodes (4): Context, Problem Description, Problem: Explicit Override of Medical Allergies is a Liability, Proposed Solution (AI Actionable)
+### Community 58 - "Digital Ticket & Override"
+Cohesion: 0.67
+Nodes (3): Problem 27: Digital Ticketing Swapped Meals, override_order RPC Function, OrderFields TypedDict
 
-### Community 91 - "Community 91"
-Cohesion: 0.40
-Nodes (4): Context, Problem Description, Problem: Swapped Meals Cause Classroom Confusion and Waste, Proposed Solution (AI Actionable)
-
-### Community 92 - "Community 92"
-Cohesion: 0.50
-Nodes (3): 21 — Caterer feedback loaded by `register_orders.py` but never used, code:python (@dataclass(frozen=True)), Fix
-
-### Community 93 - "Community 93"
-Cohesion: 0.50
-Nodes (3): 11 — Airtable API key exposed in the webapp bundle ✓ RESOLVED, code:js (const CONFIG = {), Fix applied
-
-### Community 95 - "Community 95"
-Cohesion: 0.50
-Nodes (3): 24 — `host_webapp.py` uses `os.chdir`, code:python (def main(port=DEFAULT_PORT):), Fix
-
-### Community 96 - "Community 96"
-Cohesion: 0.50
-Nodes (3): 28 — `MIN_SESSIONS = 0` disables the caterer-switch sanity floor, code:python (SWITCH_THRESHOLD = 2.5), Fix
-
-### Community 97 - "Community 97"
-Cohesion: 0.50
-Nodes (3): 32 — `host_webapp.py` startup hints point at the old `./run qr` command, code:python ("""), Fix
-
-### Community 118 - "Community 118"
-Cohesion: 0.32
-Nodes (7): format_email(), load_draft_orders(), process_orders(), send_orders.py — Format and log caterer order emails.  Reads Weekly Orders with, Process all draft orders., Load all Weekly Orders with Status=Draft., Format a structured order email.
-
-### Community 119 - "Community 119"
-Cohesion: 0.38
-Nodes (5): LLM-with-Heuristic-Fallback Pattern, _extract_json_block(), _parse_exclusions_heuristic(), run(), map_dietary_heuristically()
-
-### Community 120 - "Community 120"
-Cohesion: 0.29
-Nodes (5): Two-Pass Schema Creation (Resolves Circular Links), run — CLI Entrypoint Script, TABLES_SCHEMA — Airtable Schema Definition (10 Tables), update_schema(), verify_migration()
-
-### Community 121 - "Community 121"
-Cohesion: 0.47
-Nodes (5): QR Code → Session-Scoped Webapp URL Pattern, generate_qr(), main(), make_session_url(), generate_qr.py — Generate QR code PNGs for each session's web app URL.  Each QR
+### Community 59 - "LLM & Logging Utils"
+Cohesion: 0.67
+Nodes (3): prompt_user Tkinter Dialog, ask_llm Function, log Logger Instance
 
 ## Knowledge Gaps
-- **362 isolated node(s):** `TAG_SHORT`, `CONSTRAINT_PHRASE`, `_memCache`, `views`, `el` (+357 more)
+- **109 isolated node(s):** `TAG_SHORT`, `CONSTRAINT_PHRASE`, `_memCache`, `ls`, `state` (+104 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **24 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **21 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `_parse_menus_heuristic()` connect `Community 82` to `Data Migration Pipeline`, `Community 119`, `Community 39`?**
-  _High betweenness centrality (0.107) - this node is a cross-community bridge._
-- **Why does `Record` connect `Community 41` to `Community 37`, `Community 39`, `Community 40`, `Community 44`, `Community 45`, `Community 50`, `Community 51`, `Community 52`, `Community 57`, `Community 58`, `Community 59`, `Community 61`, `Community 63`, `Community 67`, `Community 70`, `Community 71`, `Community 72`, `Community 74`, `Community 76`, `Community 77`?**
-  _High betweenness centrality (0.106) - this node is a cross-community bridge._
-- **Why does `caterer_menus.py — Caterer Menus Migration` connect `Data Migration Pipeline` to `Community 82`?**
-  _High betweenness centrality (0.095) - this node is a cross-community bridge._
-- **Are the 67 inferred relationships involving `Record` (e.g. with `DietaryHierarchy` and `.create()`) actually correct?**
-  _`Record` has 67 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 67 inferred relationships involving `MockDatabase` (e.g. with `TestExecuteCatererSwitch` and `TestApiGetManagerSessions`) actually correct?**
-  _`MockDatabase` has 67 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 9 inferred relationships involving `register_orders()` (e.g. with `has_opted_out()` and `is_item_compatible()`) actually correct?**
-  _`register_orders()` has 9 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 12 inferred relationships involving `Assignment` (e.g. with `DietaryHierarchy` and `TestIsStudentExcluded`) actually correct?**
-  _`Assignment` has 12 INFERRED edges - model-reasoned connections that need verification._
+- **Why does `Record` connect `Order Registration Pipeline` to `Dietary Hierarchy Build`, `Order Email Generation`, `Self-Healing Error Infrastructure`, `Caterer Switch Execution`, `Caterer Proposal Lifecycle`, `Caterer Scoring & Filtering`, `Database Access Layer`, `Error Handling Module`, `Meal Assignment Logic`, `Database Utilities`, `Idempotent Order Registration`, `Compatibility Records`, `Student Exclusion Check`, `User Interaction Utilities`, `Candidate Discovery`, `Minimum Quantity Enforcement`?**
+  _High betweenness centrality (0.266) - this node is a cross-community bridge._
+- **Why does `ask_llm()` connect `Migration & Notification` to `Error Handling Module`, `User Interaction Utilities`?**
+  _High betweenness centrality (0.264) - this node is a cross-community bridge._
+- **Why does `run()` connect `Migration & Notification` to `Dietary UI Compatibility`?**
+  _High betweenness centrality (0.237) - this node is a cross-community bridge._
+- **Are the 57 inferred relationships involving `Record` (e.g. with `DietaryHierarchy` and `.create()`) actually correct?**
+  _`Record` has 57 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 43 inferred relationships involving `MockDatabase` (e.g. with `TestRecordFromRow` and `TestExtractJunctionFields`) actually correct?**
+  _`MockDatabase` has 43 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 13 inferred relationships involving `Table` (e.g. with `TestRecordFromRow` and `TestExtractJunctionFields`) actually correct?**
+  _`Table` has 13 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 10 inferred relationships involving `register_orders()` (e.g. with `has_opted_out()` and `is_item_compatible()`) actually correct?**
+  _`register_orders()` has 10 INFERRED edges - model-reasoned connections that need verification._

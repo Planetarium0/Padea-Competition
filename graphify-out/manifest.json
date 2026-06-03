@@ -1,23 +1,23 @@
 {
   "/home/daniel/Projects/Padea/run": {
-    "mtime": 1779965709.678915,
-    "ast_hash": "7d49f9522916a73503efc22ba6c8a9dc",
-    "semantic_hash": ""
+    "mtime": 1780451019.1735067,
+    "ast_hash": "aebfe9a21d44a15be35b9758dfcdd90d",
+    "semantic_hash": "aebfe9a21d44a15be35b9758dfcdd90d"
   },
   "/home/daniel/Projects/Padea/webapp/app.js": {
-    "mtime": 1780020679.7463074,
-    "ast_hash": "b0b32af9bec0cb2e07e5b64e2c35a758",
-    "semantic_hash": ""
+    "mtime": 1780444154.453518,
+    "ast_hash": "e81aa87f0e2ad19b9dc13142c3777b2a",
+    "semantic_hash": "e81aa87f0e2ad19b9dc13142c3777b2a"
   },
   "/home/daniel/Projects/Padea/webapp/switch-proposal.js": {
-    "mtime": 1779799606.5203104,
-    "ast_hash": "fe79340f7e93a55061a0d83421c29b4d",
-    "semantic_hash": ""
+    "mtime": 1780444154.455395,
+    "ast_hash": "3846f0db666acce8eb1b5eda5d6001a4",
+    "semantic_hash": "3846f0db666acce8eb1b5eda5d6001a4"
   },
   "/home/daniel/Projects/Padea/webapp/manage.js": {
-    "mtime": 1780025517.1229377,
-    "ast_hash": "a53ba80e0c61a01ed726c2ad23c7746e",
-    "semantic_hash": ""
+    "mtime": 1780444154.4545033,
+    "ast_hash": "213fb67d57ffaaba43918c99ea5382ef",
+    "semantic_hash": "213fb67d57ffaaba43918c99ea5382ef"
   },
   "/home/daniel/Projects/Padea/.claude/settings.json": {
     "mtime": 1779532381.1989665,
@@ -30,234 +30,209 @@
     "semantic_hash": ""
   },
   "/home/daniel/Projects/Padea/scripts/migrations/dietary_restrictions.py": {
-    "mtime": 1780009328.5649414,
-    "ast_hash": "4cd0ba5ffa281f98834c6f2d894052cd",
-    "semantic_hash": ""
+    "mtime": 1780450849.8963158,
+    "ast_hash": "779dd67847779a622b4b7aa6c24674df",
+    "semantic_hash": "779dd67847779a622b4b7aa6c24674df"
   },
   "/home/daniel/Projects/Padea/scripts/migrations/students.py": {
-    "mtime": 1779714137.055114,
-    "ast_hash": "d859d2a447404273e890121907ddb7c3",
-    "semantic_hash": ""
+    "mtime": 1780450967.5237892,
+    "ast_hash": "b16ce98ebace6f43fe73bbc30cbc7f67",
+    "semantic_hash": "b16ce98ebace6f43fe73bbc30cbc7f67"
   },
   "/home/daniel/Projects/Padea/scripts/migrations/exclusions.py": {
-    "mtime": 1779791331.326251,
-    "ast_hash": "9c9c1dbc8c26c5fad816f18d52d3d3fa",
-    "semantic_hash": ""
+    "mtime": 1780450998.5359092,
+    "ast_hash": "4c4baaf756ac39a354b008c37897d7ed",
+    "semantic_hash": "4c4baaf756ac39a354b008c37897d7ed"
   },
   "/home/daniel/Projects/Padea/scripts/migrations/caterer_contacts.py": {
-    "mtime": 1779791331.326251,
-    "ast_hash": "4b5f276c160251b8cd8b12e73c8a0276",
-    "semantic_hash": ""
+    "mtime": 1780450884.1264105,
+    "ast_hash": "a8dfa38023f41c3a052357ed713ced06",
+    "semantic_hash": "a8dfa38023f41c3a052357ed713ced06"
   },
   "/home/daniel/Projects/Padea/scripts/migrations/migrate.py": {
     "mtime": 1779713300.39115,
     "ast_hash": "85426d167535d9d02b461a462425f3b8",
-    "semantic_hash": ""
+    "semantic_hash": "85426d167535d9d02b461a462425f3b8"
   },
   "/home/daniel/Projects/Padea/scripts/migrations/sessions.py": {
-    "mtime": 1779791331.326251,
-    "ast_hash": "e87dbb9be1e6e0bc01722b61a3e622df",
-    "semantic_hash": ""
+    "mtime": 1780450933.3651903,
+    "ast_hash": "71d040225c107af3e32b3c75f7c9587f",
+    "semantic_hash": "71d040225c107af3e32b3c75f7c9587f"
   },
   "/home/daniel/Projects/Padea/scripts/migrations/absences.py": {
-    "mtime": 1779713274.5735662,
-    "ast_hash": "e2f9c6078c54218389cdce77bcce80d3",
-    "semantic_hash": ""
+    "mtime": 1780450986.1766872,
+    "ast_hash": "d42a7c05fcb6442943b488810e9a8a0a",
+    "semantic_hash": "d42a7c05fcb6442943b488810e9a8a0a"
   },
   "/home/daniel/Projects/Padea/scripts/migrations/caterers.py": {
-    "mtime": 1779713147.3676374,
-    "ast_hash": "ba916c7806a54c066c65c6056ba052c4",
-    "semantic_hash": ""
+    "mtime": 1780450866.5311234,
+    "ast_hash": "302cdd05c0581e7b0192d52ac8b59c02",
+    "semantic_hash": "302cdd05c0581e7b0192d52ac8b59c02"
   },
   "/home/daniel/Projects/Padea/scripts/migrations/schools.py": {
-    "mtime": 1779713138.4510553,
-    "ast_hash": "651853a5975b9e3190900e3b61c1e47d",
-    "semantic_hash": ""
+    "mtime": 1780450857.6663911,
+    "ast_hash": "1495d538e00e09fb95b191db0ea44fb2",
+    "semantic_hash": "1495d538e00e09fb95b191db0ea44fb2"
   },
   "/home/daniel/Projects/Padea/scripts/migrations/caterer_menus.py": {
-    "mtime": 1779940931.4957595,
-    "ast_hash": "89c49bdeba38450cab97407106a48c93",
-    "semantic_hash": ""
+    "mtime": 1780450908.4342313,
+    "ast_hash": "c1f991eda34a266a7f249f56e62bc0c4",
+    "semantic_hash": "c1f991eda34a266a7f249f56e62bc0c4"
   },
   "/home/daniel/Projects/Padea/scripts/actions/send_meals_links.py": {
     "mtime": 1780025325.8933167,
     "ast_hash": "58fa8f2abd93012ea1adfe67dee2c994",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/scripts/actions/api.py": {
-    "mtime": 1780403568.0494516,
-    "ast_hash": "9e140f0548f0696dfcc1dcec7c6ee210",
-    "semantic_hash": ""
+    "semantic_hash": "58fa8f2abd93012ea1adfe67dee2c994"
   },
   "/home/daniel/Projects/Padea/scripts/actions/register_orders.py": {
-    "mtime": 1780403529.8337386,
-    "ast_hash": "8eef311f32aa42504101ff2af469dbc3",
-    "semantic_hash": ""
+    "mtime": 1780442475.898244,
+    "ast_hash": "5242029100dcde48b85332687fd589a0",
+    "semantic_hash": "5242029100dcde48b85332687fd589a0"
   },
   "/home/daniel/Projects/Padea/scripts/actions/evaluate_caterers.py": {
-    "mtime": 1780403549.6455882,
-    "ast_hash": "1ac144762612b476a1cefdbbf0440b91",
-    "semantic_hash": ""
+    "mtime": 1780442456.1043146,
+    "ast_hash": "14c95d54f52d397d674e5d41c4e5e4fb",
+    "semantic_hash": "14c95d54f52d397d674e5d41c4e5e4fb"
   },
   "/home/daniel/Projects/Padea/scripts/actions/send_orders.py": {
-    "mtime": 1780403540.7846549,
-    "ast_hash": "63f28c88756b095516948df7f8a2bee9",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/scripts/actions/update_schema.py": {
-    "mtime": 1779713396.5745296,
-    "ast_hash": "d58e2a79ad9548252eb2c52d665a0dcd",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/scripts/actions/host_webapp.py": {
-    "mtime": 1780049643.4053695,
-    "ast_hash": "55dacdb8681deeb24ae57bfe3a049e1b",
-    "semantic_hash": ""
+    "mtime": 1780442285.1936126,
+    "ast_hash": "5f1e5421c3f3d1b7d77b6f6b844f4ed5",
+    "semantic_hash": "5f1e5421c3f3d1b7d77b6f6b844f4ed5"
   },
   "/home/daniel/Projects/Padea/scripts/actions/send_qr_emails.py": {
     "mtime": 1780025373.4812343,
     "ast_hash": "c2c352d50ce684e005b2e65a1ff20246",
-    "semantic_hash": ""
+    "semantic_hash": "c2c352d50ce684e005b2e65a1ff20246"
   },
   "/home/daniel/Projects/Padea/scripts/actions/cache_pdf.py": {
     "mtime": 1779713356.6163893,
     "ast_hash": "3cd76f1fcc8cd22c81ed08695ce79e24",
-    "semantic_hash": ""
+    "semantic_hash": "3cd76f1fcc8cd22c81ed08695ce79e24"
   },
   "/home/daniel/Projects/Padea/scripts/actions/generate_qr.py": {
     "mtime": 1779930472.2352998,
     "ast_hash": "ddcbaf6f0425150bb7c1e00e2b641e28",
-    "semantic_hash": ""
+    "semantic_hash": "ddcbaf6f0425150bb7c1e00e2b641e28"
   },
   "/home/daniel/Projects/Padea/scripts/actions/execute_caterer_switch.py": {
-    "mtime": 1780403557.7855272,
-    "ast_hash": "7ea361dc3f173f4fd3db92ea5281c43a",
-    "semantic_hash": ""
+    "mtime": 1780442747.0332892,
+    "ast_hash": "2b841f0ba86091b744b0b73b3703ef0c",
+    "semantic_hash": "2b841f0ba86091b744b0b73b3703ef0c"
   },
   "/home/daniel/Projects/Padea/scripts/actions/clear_database.py": {
     "mtime": 1780038661.7175708,
     "ast_hash": "8b4ad9ccf4caa574b3a84ddf2a242320",
-    "semantic_hash": ""
+    "semantic_hash": "8b4ad9ccf4caa574b3a84ddf2a242320"
   },
   "/home/daniel/Projects/Padea/scripts/tests/mock_db.py": {
-    "mtime": 1780025382.2992182,
-    "ast_hash": "4fc8a744e22b05a360d7afd224c1be38",
-    "semantic_hash": ""
+    "mtime": 1780442658.5642462,
+    "ast_hash": "a6102cbf2eb354de0d4b193aad7e6bd2",
+    "semantic_hash": "a6102cbf2eb354de0d4b193aad7e6bd2"
   },
   "/home/daniel/Projects/Padea/scripts/tests/run_all.py": {
-    "mtime": 1780403586.9263146,
-    "ast_hash": "d35fa4a825091ea399e672f5f67ebb18",
-    "semantic_hash": ""
+    "mtime": 1780457821.3298728,
+    "ast_hash": "83053ad571c4b054feaa24e01b641f97",
+    "semantic_hash": "83053ad571c4b054feaa24e01b641f97"
   },
   "/home/daniel/Projects/Padea/scripts/tests/order_constraints.py": {
-    "mtime": 1780011853.0495064,
-    "ast_hash": "7cedb1532bc70c9ccba75d555a93dbed",
-    "semantic_hash": ""
+    "mtime": 1780443385.6844943,
+    "ast_hash": "424bc2ebe37f332214814e0d7c6c13ea",
+    "semantic_hash": "424bc2ebe37f332214814e0d7c6c13ea"
   },
   "/home/daniel/Projects/Padea/scripts/tests/fixtures.py": {
-    "mtime": 1780025375.2542312,
-    "ast_hash": "08f8b6e652a2a07b881c2b571632f578",
-    "semantic_hash": ""
+    "mtime": 1780442705.1704354,
+    "ast_hash": "90615ec2629d6aff71bc693db3f9f674",
+    "semantic_hash": "90615ec2629d6aff71bc693db3f9f674"
   },
   "/home/daniel/Projects/Padea/scripts/tests/test_execute_caterer_switch.py": {
-    "mtime": 1779799580.8166063,
-    "ast_hash": "0dc301625775224a6e2ff401ae453b47",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/scripts/tests/test_manage_api.py": {
-    "mtime": 1780025856.4720352,
-    "ast_hash": "643cd0544b660e285f66e7ef78f96d81",
-    "semantic_hash": ""
+    "mtime": 1780443281.7525945,
+    "ast_hash": "534f0641aaf7e752d2553923f3702de3",
+    "semantic_hash": "534f0641aaf7e752d2553923f3702de3"
   },
   "/home/daniel/Projects/Padea/scripts/tests/test_edge_cases.py": {
-    "mtime": 1780403581.7353518,
-    "ast_hash": "648785be811877912a046a479b2a203e",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/scripts/tests/test_api.py": {
-    "mtime": 1779975448.8864157,
-    "ast_hash": "c41d48e520acfe6fdef81fbff43f6861",
-    "semantic_hash": ""
+    "mtime": 1780443355.811264,
+    "ast_hash": "17e48be90cd14bc5fd910dee81856653",
+    "semantic_hash": "17e48be90cd14bc5fd910dee81856653"
   },
   "/home/daniel/Projects/Padea/scripts/tests/test_substitutions.py": {
-    "mtime": 1780025474.2540329,
-    "ast_hash": "d520b4bfe527d0b215c50e4b91573535",
-    "semantic_hash": ""
+    "mtime": 1780442833.0635054,
+    "ast_hash": "e405e1ba03b3afdf1f647701b141ce88",
+    "semantic_hash": "e405e1ba03b3afdf1f647701b141ce88"
   },
   "/home/daniel/Projects/Padea/scripts/tests/test_register_orders.py": {
-    "mtime": 1780011853.0495064,
-    "ast_hash": "a41aae0052a06e0362de7a9bbb08113b",
-    "semantic_hash": ""
+    "mtime": 1780443172.8068988,
+    "ast_hash": "fb087fa14ad371fb486f5c31fffd9058",
+    "semantic_hash": "fb087fa14ad371fb486f5c31fffd9058"
   },
   "/home/daniel/Projects/Padea/scripts/tests/test_send_orders.py": {
-    "mtime": 1779845707.0938401,
-    "ast_hash": "a432548bccd6d0220c2fc53de5d9cd24",
-    "semantic_hash": ""
+    "mtime": 1780442778.9021783,
+    "ast_hash": "c8e245c7e5ce0e970c2104bd550ed507",
+    "semantic_hash": "c8e245c7e5ce0e970c2104bd550ed507"
   },
   "/home/daniel/Projects/Padea/scripts/tests/test_evaluate_caterers.py": {
-    "mtime": 1779976032.6048875,
-    "ast_hash": "c6bcc4fa590895c001365b6e7c818d4f",
-    "semantic_hash": ""
+    "mtime": 1780443248.1693804,
+    "ast_hash": "6428d369cbd1a4294b889cfa0023236d",
+    "semantic_hash": "6428d369cbd1a4294b889cfa0023236d"
   },
   "/home/daniel/Projects/Padea/scripts/support/schemas.py": {
-    "mtime": 1780403440.5254667,
-    "ast_hash": "b6ea36f52a9c39807ce374902445d73b",
-    "semantic_hash": ""
+    "mtime": 1780455502.264288,
+    "ast_hash": "809a0ecdc8704de49e8e8b0082b38c73",
+    "semantic_hash": "809a0ecdc8704de49e8e8b0082b38c73"
   },
   "/home/daniel/Projects/Padea/scripts/support/error_handler.py": {
     "mtime": 1780403449.6383884,
     "ast_hash": "275df85615d70734bb0942c673d622e1",
-    "semantic_hash": ""
+    "semantic_hash": "275df85615d70734bb0942c673d622e1"
   },
   "/home/daniel/Projects/Padea/scripts/support/__init__.py": {
     "mtime": 1780403454.9633431,
     "ast_hash": "aa73195b04fadd4f049b029e39aff725",
-    "semantic_hash": ""
+    "semantic_hash": "aa73195b04fadd4f049b029e39aff725"
   },
   "/home/daniel/Projects/Padea/scripts/support/database.py": {
-    "mtime": 1780403468.5892286,
-    "ast_hash": "ee6205799ddd8a8531cc72f24038b172",
-    "semantic_hash": ""
+    "mtime": 1780457686.089283,
+    "ast_hash": "b0c9dc5c49cf5444e78e8a1ab835282f",
+    "semantic_hash": "b0c9dc5c49cf5444e78e8a1ab835282f"
   },
   "/home/daniel/Projects/Padea/scripts/support/prompt_user.py": {
     "mtime": 1779712997.4616919,
     "ast_hash": "23f2ef03aeb3680c23fa5adce08cf4dc",
-    "semantic_hash": ""
+    "semantic_hash": "23f2ef03aeb3680c23fa5adce08cf4dc"
   },
   "/home/daniel/Projects/Padea/scripts/support/records.py": {
-    "mtime": 1780023405.8416488,
-    "ast_hash": "63264ebf7331cfeefd57fe76bf934b21",
-    "semantic_hash": ""
+    "mtime": 1780441516.9839888,
+    "ast_hash": "1a6ea16d0b731b0c54e4726f3653ff47",
+    "semantic_hash": "1a6ea16d0b731b0c54e4726f3653ff47"
   },
   "/home/daniel/Projects/Padea/scripts/support/compatibility.py": {
-    "mtime": 1780009365.5960784,
-    "ast_hash": "98a64e7de25d8b7f2fe973087018e27c",
-    "semantic_hash": ""
+    "mtime": 1780441716.1759646,
+    "ast_hash": "1b334dca9d9ab55a9018b9b6571bcc19",
+    "semantic_hash": "1b334dca9d9ab55a9018b9b6571bcc19"
   },
   "/home/daniel/Projects/Padea/scripts/support/support.py": {
     "mtime": 1779712958.0226727,
     "ast_hash": "c3214706ad56ac4e025a21cf58f03d08",
-    "semantic_hash": ""
+    "semantic_hash": "c3214706ad56ac4e025a21cf58f03d08"
   },
   "/home/daniel/Projects/Padea/data/dietary_keywords.json": {
     "mtime": 1779681088.880944,
     "ast_hash": "2c625c12823f3b39c495506160d7f05b",
-    "semantic_hash": ""
+    "semantic_hash": "2c625c12823f3b39c495506160d7f05b"
   },
   "/home/daniel/Projects/Padea/data/schema.py": {
     "mtime": 1780049533.646444,
     "ast_hash": "aaa02b7aa55ea62c844a2b7845580846",
-    "semantic_hash": ""
+    "semantic_hash": "aaa02b7aa55ea62c844a2b7845580846"
   },
   "/home/daniel/Projects/Padea/data/dietary_data.py": {
     "mtime": 1780009318.800354,
     "ast_hash": "fae857a0824f5f392774611572bb6703",
-    "semantic_hash": ""
+    "semantic_hash": "fae857a0824f5f392774611572bb6703"
   },
   "/home/daniel/Projects/Padea/data/__init__.py": {
     "mtime": 1779685620.3780763,
     "ast_hash": "4e63fc482b8ac1698bae11e7a1be0a13",
-    "semantic_hash": ""
+    "semantic_hash": "4e63fc482b8ac1698bae11e7a1be0a13"
   },
   "/home/daniel/Projects/Padea/cache/caterer-menus.txt": {
     "mtime": 1779498953.2544563,
@@ -280,218 +255,313 @@
     "semantic_hash": ""
   },
   "/home/daniel/Projects/Padea/webapp/meals.html": {
-    "mtime": 1780020657.01611,
-    "ast_hash": "fba82e4caf08ada70d3051ee1eea2908",
-    "semantic_hash": ""
+    "mtime": 1780444154.4568818,
+    "ast_hash": "f07e063b613634354a336a2969380a2d",
+    "semantic_hash": "f07e063b613634354a336a2969380a2d"
   },
   "/home/daniel/Projects/Padea/webapp/switch-proposal.html": {
-    "mtime": 1779791331.3263624,
-    "ast_hash": "056bb52be77198300aa28114f4bcf898",
-    "semantic_hash": ""
+    "mtime": 1780444154.4579413,
+    "ast_hash": "f884d05a3bab3764d673e0681a750ca2",
+    "semantic_hash": "f884d05a3bab3764d673e0681a750ca2"
   },
   "/home/daniel/Projects/Padea/webapp/manage.html": {
-    "mtime": 1780025250.8204288,
-    "ast_hash": "493717d9d4432458bc6099bbbfdc031c",
-    "semantic_hash": ""
+    "mtime": 1780444154.4574363,
+    "ast_hash": "1f83254bb40e84f20db6d8c3a0413ae9",
+    "semantic_hash": "1f83254bb40e84f20db6d8c3a0413ae9"
   },
   "/home/daniel/Projects/Padea/.claude/CLAUDE.md": {
     "mtime": 1780403664.9207802,
     "ast_hash": "b6fec2e37a211b64488ee1f157f2b74a",
     "semantic_hash": ""
   },
-  "/home/daniel/Projects/Padea/plans/thoughts.md": {
-    "mtime": 1780403086.560975,
-    "ast_hash": "b8dd1e97d2910a5d3bb9d774c6098e43",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/plans/resolved/23-order-constraints-duplication.md": {
-    "mtime": 1779681865.6330774,
-    "ast_hash": "482137bc88abbfe12bc09aac6a3dc5bd",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/plans/resolved/30-send-immediately-status.md": {
-    "mtime": 1780049235.2144547,
-    "ast_hash": "8ddca0bcfc80d1e001e80ef1c2c86f13",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/plans/resolved/27-digital-ticketing-swapped-meals.md": {
-    "mtime": 1779974834.3908114,
-    "ast_hash": "9bceb76f9ffa3c02851fa126de95e7e4",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/plans/resolved/28-min-sessions-zero.md": {
-    "mtime": 1780049213.306543,
-    "ast_hash": "a799255cebe51339c565e0cbc40a8595",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/plans/resolved/11-api-key-exposed-in-webapp.md": {
-    "mtime": 1779847333.162453,
-    "ast_hash": "0da241ad52587c106fdcd8b60e147f22",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/plans/resolved/25-explicit-override-allergy-danger.md": {
-    "mtime": 1779974834.3908114,
-    "ast_hash": "413877481ec5f503a1e240eb95fe56fc",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/plans/resolved/refactor.md": {
-    "mtime": 1779712645.5166762,
-    "ast_hash": "90bfdb04cf11f829c3777b128e060475",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/plans/resolved/18-diet-resource-undocumented.md": {
-    "mtime": 1779678595.8301024,
-    "ast_hash": "543fcf8db8e8936b3a5ef41a685d5577",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/plans/resolved/24-host-webapp-chdir.md": {
-    "mtime": 1779678671.4106276,
-    "ast_hash": "859d625b4cdd585b410c1637581a9c7f",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/plans/resolved/duplicate-webapp-reviews.md": {
-    "mtime": 1779753151.5119286,
-    "ast_hash": "d31420fd4f456ebfe10a3518877ddaa5",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/plans/resolved/handle-vegetarian-meal.md": {
-    "mtime": 1779752600.5933697,
-    "ast_hash": "962c23dc1313378d677ce9c2f90d7395",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/plans/resolved/26-no-auth-student-picker-pranks.md": {
-    "mtime": 1779974834.3908114,
-    "ast_hash": "d24bafffe49b38f245430058dce5a598",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/plans/resolved/32-host-webapp-startup-hint.md": {
-    "mtime": 1780049253.451381,
-    "ast_hash": "c7ed9afdf72642d5a91732456096895d",
-    "semantic_hash": ""
-  },
   "/home/daniel/Projects/Padea/plans/current/05-ordering-pipeline.md": {
     "mtime": 1780048991.9324348,
     "ast_hash": "8da0674f16bc6b04bd30736b4e086870",
-    "semantic_hash": ""
+    "semantic_hash": "8da0674f16bc6b04bd30736b4e086870"
   },
   "/home/daniel/Projects/Padea/plans/current/00-overview.md": {
     "mtime": 1780049147.3808093,
     "ast_hash": "da42b794cfd4155cb104dd4841f33ebd",
-    "semantic_hash": ""
+    "semantic_hash": "da42b794cfd4155cb104dd4841f33ebd"
   },
   "/home/daniel/Projects/Padea/plans/current/08-operational-commands.md": {
     "mtime": 1780049090.1520398,
     "ast_hash": "f834916297957f80f8a758eac143a628",
-    "semantic_hash": ""
+    "semantic_hash": "f834916297957f80f8a758eac143a628"
   },
   "/home/daniel/Projects/Padea/plans/current/09-unfinished-work.md": {
     "mtime": 1780049112.960948,
     "ast_hash": "5b6b81b05084e200aaaa478cd4b7f385",
-    "semantic_hash": ""
+    "semantic_hash": "5b6b81b05084e200aaaa478cd4b7f385"
   },
   "/home/daniel/Projects/Padea/plans/current/03-migration-pipeline.md": {
     "mtime": 1780049142.8798273,
     "ast_hash": "36dc5031ad0354b609525ead0b2640c6",
-    "semantic_hash": ""
+    "semantic_hash": "36dc5031ad0354b609525ead0b2640c6"
   },
   "/home/daniel/Projects/Padea/plans/current/06-dietary-system.md": {
     "mtime": 1780049014.7553432,
     "ast_hash": "d55515c98d75ce685a363d58d4aade62",
-    "semantic_hash": ""
+    "semantic_hash": "d55515c98d75ce685a363d58d4aade62"
   },
   "/home/daniel/Projects/Padea/plans/current/02-data-model.md": {
     "mtime": 1780048874.8688834,
     "ast_hash": "c106f746a468018d91470040daf416ed",
-    "semantic_hash": ""
+    "semantic_hash": "c106f746a468018d91470040daf416ed"
   },
   "/home/daniel/Projects/Padea/plans/current/01-business-context.md": {
     "mtime": 1779677644.839835,
     "ast_hash": "9bc28c482ce9705f7c8076d8b519e6e9",
-    "semantic_hash": ""
+    "semantic_hash": "9bc28c482ce9705f7c8076d8b519e6e9"
   },
   "/home/daniel/Projects/Padea/plans/current/testing.md": {
     "mtime": 1780049136.0718548,
     "ast_hash": "c81fde8048af2869d3ba8951c486f4d8",
-    "semantic_hash": ""
+    "semantic_hash": "c81fde8048af2869d3ba8951c486f4d8"
   },
   "/home/daniel/Projects/Padea/plans/current/07-edge-cases.md": {
     "mtime": 1780403701.748544,
     "ast_hash": "9ae8c82e5d79344b80de5a446a78d29c",
-    "semantic_hash": ""
+    "semantic_hash": "9ae8c82e5d79344b80de5a446a78d29c"
   },
   "/home/daniel/Projects/Padea/plans/current/04-webapp.md": {
     "mtime": 1780048946.042619,
     "ast_hash": "1158e177c206c255214c6bf924bea50e",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/plans/problems/19-missing-init-py.md": {
-    "mtime": 1780049183.7266626,
-    "ast_hash": "9d80b866e5988971660c323f0d8d5546",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/plans/problems/29-email-queue-not-idempotent.md": {
-    "mtime": 1780049225.948492,
-    "ast_hash": "5d0e769bf7ccc16bd98452e399b32775",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/plans/problems/21-feedback-rating-unused.md": {
-    "mtime": 1780049202.2935877,
-    "ast_hash": "989a9f357b4afd4c85688e4124532817",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/plans/problems/00-index.md": {
-    "mtime": 1780049173.8137026,
-    "ast_hash": "cd2ebfb544c89298615f94f5eab97fb1",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/plans/problems/31-send-orders-week-window.md": {
-    "mtime": 1780049245.1864145,
-    "ast_hash": "72808bc9214955cf26efe12c174eebe3",
-    "semantic_hash": ""
-  },
-  "/home/daniel/Projects/Padea/plans/problems/15-no-incremental-migration.md": {
-    "mtime": 1779678568.9072764,
-    "ast_hash": "e7c153dd5ab0bd84cb0a38dfcdb8e704",
-    "semantic_hash": ""
+    "semantic_hash": "1158e177c206c255214c6bf924bea50e"
   },
   "/home/daniel/Projects/Padea/graphify-out/converted/students_c05057b0.md": {
-    "mtime": 1780403861.3672388,
+    "mtime": 1780463061.10615,
     "ast_hash": "6d4eebca461161af444d8a8718f775a0",
-    "semantic_hash": ""
+    "semantic_hash": "6d4eebca461161af444d8a8718f775a0"
   },
   "/home/daniel/Projects/Padea/graphify-out/converted/sessions_f177eb39.md": {
-    "mtime": 1780403861.4560602,
+    "mtime": 1780463061.205538,
     "ast_hash": "911bfeb60b7c461ae0abf434e516f98e",
-    "semantic_hash": ""
+    "semantic_hash": "911bfeb60b7c461ae0abf434e516f98e"
   },
   "/home/daniel/Projects/Padea/graphify-out/converted/caterers_6dfa654d.md": {
-    "mtime": 1780403861.4597318,
+    "mtime": 1780463061.2092185,
     "ast_hash": "0329d218d428377ee11844dcca4b918a",
-    "semantic_hash": ""
+    "semantic_hash": "0329d218d428377ee11844dcca4b918a"
   },
   "/home/daniel/Projects/Padea/graphify-out/memory/query_20260523_104100_why_does_airtable_get___connect_data_migration_pip.md": {
     "mtime": 1779532860.400597,
     "ast_hash": "3ad3fc123e4a643517bb5e58a16ca9f1",
-    "semantic_hash": ""
+    "semantic_hash": "3ad3fc123e4a643517bb5e58a16ca9f1"
   },
   "/home/daniel/Projects/Padea/resources/caterer-contacts.pdf": {
     "mtime": 1779360785.0,
     "ast_hash": "8b1bcee31cd93e832664b521b61711df",
-    "semantic_hash": ""
+    "semantic_hash": "8b1bcee31cd93e832664b521b61711df"
   },
   "/home/daniel/Projects/Padea/resources/caterer-menus.pdf": {
     "mtime": 1779361162.0,
     "ast_hash": "c3bd1a19d22f3a39446421baf944d229",
-    "semantic_hash": ""
+    "semantic_hash": "c3bd1a19d22f3a39446421baf944d229"
   },
   "/home/daniel/Projects/Padea/resources/exclusions.pdf": {
     "mtime": 1779360821.0,
     "ast_hash": "6e2161589f281452784315dc152311af",
-    "semantic_hash": ""
+    "semantic_hash": "6e2161589f281452784315dc152311af"
   },
   "/home/daniel/Projects/Padea/resources/absences.pdf": {
     "mtime": 1779361853.0,
     "ast_hash": "40f70d573c1f9255d3fc5c53094c72b9",
-    "semantic_hash": ""
+    "semantic_hash": "40f70d573c1f9255d3fc5c53094c72b9"
+  },
+  "/home/daniel/Projects/Padea/.old/old/verify_migration.py": {
+    "mtime": 1779610132.0156536,
+    "ast_hash": "a21bde6a292059e229a1d289a1cb72bf",
+    "semantic_hash": "a21bde6a292059e229a1d289a1cb72bf"
+  },
+  "/home/daniel/Projects/Padea/webapp/supabase_client.js": {
+    "mtime": 1780450455.4379818,
+    "ast_hash": "e0178995757587eb49e618c00eb54111",
+    "semantic_hash": "e0178995757587eb49e618c00eb54111"
+  },
+  "/home/daniel/Projects/Padea/webapp/data/dietary_keywords.json": {
+    "mtime": 1780444154.4589612,
+    "ast_hash": "2c625c12823f3b39c495506160d7f05b",
+    "semantic_hash": "2c625c12823f3b39c495506160d7f05b"
+  },
+  "/home/daniel/Projects/Padea/scripts/tests/test_database.py": {
+    "mtime": 1780457934.5737388,
+    "ast_hash": "548fb99221a8312eedf6a1675fa805d9",
+    "semantic_hash": "548fb99221a8312eedf6a1675fa805d9"
+  },
+  "/home/daniel/Projects/Padea/scripts/support/run_claude_agent.py": {
+    "mtime": 1780462570.7808373,
+    "ast_hash": "870d13a283ac66f8f384e02b9c1295eb",
+    "semantic_hash": "870d13a283ac66f8f384e02b9c1295eb"
+  },
+  "/home/daniel/Projects/Padea/supabase/migrations/20260602230008_initial_schema.sql": {
+    "mtime": 1780441400.1685357,
+    "ast_hash": "6f473c108f7c0aca60445ad737048fc4",
+    "semantic_hash": "6f473c108f7c0aca60445ad737048fc4"
+  },
+  "/home/daniel/Projects/Padea/.old/purpose.md": {
+    "mtime": 1779974834.3908114,
+    "ast_hash": "6e765d2338f4c473980528c5e6c66c7c",
+    "semantic_hash": "6e765d2338f4c473980528c5e6c66c7c"
+  },
+  "/home/daniel/Projects/Padea/.old/resolved/23-order-constraints-duplication.md": {
+    "mtime": 1779681865.6330774,
+    "ast_hash": "482137bc88abbfe12bc09aac6a3dc5bd",
+    "semantic_hash": "482137bc88abbfe12bc09aac6a3dc5bd"
+  },
+  "/home/daniel/Projects/Padea/.old/resolved/30-send-immediately-status.md": {
+    "mtime": 1780049235.2144547,
+    "ast_hash": "8ddca0bcfc80d1e001e80ef1c2c86f13",
+    "semantic_hash": "8ddca0bcfc80d1e001e80ef1c2c86f13"
+  },
+  "/home/daniel/Projects/Padea/.old/resolved/27-digital-ticketing-swapped-meals.md": {
+    "mtime": 1779974834.3908114,
+    "ast_hash": "9bceb76f9ffa3c02851fa126de95e7e4",
+    "semantic_hash": "9bceb76f9ffa3c02851fa126de95e7e4"
+  },
+  "/home/daniel/Projects/Padea/.old/resolved/28-min-sessions-zero.md": {
+    "mtime": 1780049213.306543,
+    "ast_hash": "a799255cebe51339c565e0cbc40a8595",
+    "semantic_hash": "a799255cebe51339c565e0cbc40a8595"
+  },
+  "/home/daniel/Projects/Padea/.old/resolved/11-api-key-exposed-in-webapp.md": {
+    "mtime": 1779847333.162453,
+    "ast_hash": "0da241ad52587c106fdcd8b60e147f22",
+    "semantic_hash": "0da241ad52587c106fdcd8b60e147f22"
+  },
+  "/home/daniel/Projects/Padea/.old/resolved/25-explicit-override-allergy-danger.md": {
+    "mtime": 1779974834.3908114,
+    "ast_hash": "413877481ec5f503a1e240eb95fe56fc",
+    "semantic_hash": "413877481ec5f503a1e240eb95fe56fc"
+  },
+  "/home/daniel/Projects/Padea/.old/resolved/refactor.md": {
+    "mtime": 1779712645.5166762,
+    "ast_hash": "90bfdb04cf11f829c3777b128e060475",
+    "semantic_hash": "90bfdb04cf11f829c3777b128e060475"
+  },
+  "/home/daniel/Projects/Padea/.old/resolved/18-diet-resource-undocumented.md": {
+    "mtime": 1779678595.8301024,
+    "ast_hash": "543fcf8db8e8936b3a5ef41a685d5577",
+    "semantic_hash": "543fcf8db8e8936b3a5ef41a685d5577"
+  },
+  "/home/daniel/Projects/Padea/.old/resolved/24-host-webapp-chdir.md": {
+    "mtime": 1779678671.4106276,
+    "ast_hash": "859d625b4cdd585b410c1637581a9c7f",
+    "semantic_hash": "859d625b4cdd585b410c1637581a9c7f"
+  },
+  "/home/daniel/Projects/Padea/.old/resolved/duplicate-webapp-reviews.md": {
+    "mtime": 1779753151.5119286,
+    "ast_hash": "d31420fd4f456ebfe10a3518877ddaa5",
+    "semantic_hash": "d31420fd4f456ebfe10a3518877ddaa5"
+  },
+  "/home/daniel/Projects/Padea/.old/resolved/handle-vegetarian-meal.md": {
+    "mtime": 1779752600.5933697,
+    "ast_hash": "962c23dc1313378d677ce9c2f90d7395",
+    "semantic_hash": "962c23dc1313378d677ce9c2f90d7395"
+  },
+  "/home/daniel/Projects/Padea/.old/resolved/26-no-auth-student-picker-pranks.md": {
+    "mtime": 1779974834.3908114,
+    "ast_hash": "d24bafffe49b38f245430058dce5a598",
+    "semantic_hash": "d24bafffe49b38f245430058dce5a598"
+  },
+  "/home/daniel/Projects/Padea/.old/resolved/32-host-webapp-startup-hint.md": {
+    "mtime": 1780049253.451381,
+    "ast_hash": "c7ed9afdf72642d5a91732456096895d",
+    "semantic_hash": "c7ed9afdf72642d5a91732456096895d"
+  },
+  "/home/daniel/Projects/Padea/.old/problems/19-missing-init-py.md": {
+    "mtime": 1780049183.7266626,
+    "ast_hash": "9d80b866e5988971660c323f0d8d5546",
+    "semantic_hash": "9d80b866e5988971660c323f0d8d5546"
+  },
+  "/home/daniel/Projects/Padea/.old/problems/29-email-queue-not-idempotent.md": {
+    "mtime": 1780049225.948492,
+    "ast_hash": "5d0e769bf7ccc16bd98452e399b32775",
+    "semantic_hash": "5d0e769bf7ccc16bd98452e399b32775"
+  },
+  "/home/daniel/Projects/Padea/.old/problems/21-feedback-rating-unused.md": {
+    "mtime": 1780049202.2935877,
+    "ast_hash": "989a9f357b4afd4c85688e4124532817",
+    "semantic_hash": "989a9f357b4afd4c85688e4124532817"
+  },
+  "/home/daniel/Projects/Padea/.old/problems/00-index.md": {
+    "mtime": 1780049173.8137026,
+    "ast_hash": "cd2ebfb544c89298615f94f5eab97fb1",
+    "semantic_hash": "cd2ebfb544c89298615f94f5eab97fb1"
+  },
+  "/home/daniel/Projects/Padea/.old/problems/31-send-orders-week-window.md": {
+    "mtime": 1780049245.1864145,
+    "ast_hash": "72808bc9214955cf26efe12c174eebe3",
+    "semantic_hash": "72808bc9214955cf26efe12c174eebe3"
+  },
+  "/home/daniel/Projects/Padea/.old/problems/15-no-incremental-migration.md": {
+    "mtime": 1779678568.9072764,
+    "ast_hash": "e7c153dd5ab0bd84cb0a38dfcdb8e704",
+    "semantic_hash": "e7c153dd5ab0bd84cb0a38dfcdb8e704"
+  },
+  "/home/daniel/Projects/Padea/webapp/index.html": {
+    "mtime": 1780450153.694032,
+    "ast_hash": "568148d62d822d476d9196b33e6796f8",
+    "semantic_hash": "568148d62d822d476d9196b33e6796f8"
+  },
+  "/home/daniel/Projects/Padea/.github/workflows/deploy.yml": {
+    "mtime": 1780450533.6011817,
+    "ast_hash": "a5a8a2528ec67cc66f98eb77d94ff1d8",
+    "semantic_hash": "a5a8a2528ec67cc66f98eb77d94ff1d8"
+  },
+  "/home/daniel/Projects/Padea/output/qrcodes/Indooroopilly_State_High_School_-_Thursday.png": {
+    "mtime": 1779942705.0924125,
+    "ast_hash": "2b98aac90d7e9078dc94c49dd025193b",
+    "semantic_hash": "2b98aac90d7e9078dc94c49dd025193b"
+  },
+  "/home/daniel/Projects/Padea/output/qrcodes/Indooroopilly_State_High_School_-_Tuesday.png": {
+    "mtime": 1779942705.2324119,
+    "ast_hash": "9fd55e5ec9dc7ee798ca4e1e3b874e66",
+    "semantic_hash": "9fd55e5ec9dc7ee798ca4e1e3b874e66"
+  },
+  "/home/daniel/Projects/Padea/output/qrcodes/Cannon_Hill_Anglican_College_-_Monday.png": {
+    "mtime": 1779942705.2504117,
+    "ast_hash": "5dd2903621bdef5f815cb823d4b87873",
+    "semantic_hash": "5dd2903621bdef5f815cb823d4b87873"
+  },
+  "/home/daniel/Projects/Padea/output/qrcodes/Loreto_College_-_Tuesday.png": {
+    "mtime": 1779942705.214412,
+    "ast_hash": "555fbc6ba4e3f1ea01ac112720a85ac0",
+    "semantic_hash": "555fbc6ba4e3f1ea01ac112720a85ac0"
+  },
+  "/home/daniel/Projects/Padea/output/qrcodes/Moreton_Bay_Boys'_College_-_Tuesday.png": {
+    "mtime": 1779942705.1414123,
+    "ast_hash": "5d4e289d46c221767047ccd024ffabe6",
+    "semantic_hash": "5d4e289d46c221767047ccd024ffabe6"
+  },
+  "/home/daniel/Projects/Padea/output/qrcodes/Loreto_College_-_Monday.png": {
+    "mtime": 1779942705.2674117,
+    "ast_hash": "3ef2afafa1c12d29f237161c64331834",
+    "semantic_hash": "3ef2afafa1c12d29f237161c64331834"
+  },
+  "/home/daniel/Projects/Padea/output/qrcodes/MacGregor_State_High_School_-_Thursday.png": {
+    "mtime": 1779942705.1254122,
+    "ast_hash": "4b6c2abed87eca200d6c7677d27e9d41",
+    "semantic_hash": "4b6c2abed87eca200d6c7677d27e9d41"
+  },
+  "/home/daniel/Projects/Padea/output/qrcodes/John_Paul_College_-_Wednesday.png": {
+    "mtime": 1779942705.1084123,
+    "ast_hash": "876cff992916e0042f876b8b02f57667",
+    "semantic_hash": "876cff992916e0042f876b8b02f57667"
+  },
+  "/home/daniel/Projects/Padea/output/qrcodes/Cannon_Hill_Anglican_College_-_Wednesday.png": {
+    "mtime": 1779942705.1784122,
+    "ast_hash": "e8c671b98d0c5d46436799b67685de87",
+    "semantic_hash": "e8c671b98d0c5d46436799b67685de87"
+  },
+  "/home/daniel/Projects/Padea/output/qrcodes/Indooroopilly_State_High_School_-_Monday.png": {
+    "mtime": 1779942705.1574123,
+    "ast_hash": "38099ae63ece894f1b67991f4fa92cf3",
+    "semantic_hash": "38099ae63ece894f1b67991f4fa92cf3"
+  },
+  "/home/daniel/Projects/Padea/output/qrcodes/John_Paul_College_-_Tuesday.png": {
+    "mtime": 1779942705.195412,
+    "ast_hash": "8adc1345f5fee4086c68ad518c458008",
+    "semantic_hash": "8adc1345f5fee4086c68ad518c458008"
   }
 }
