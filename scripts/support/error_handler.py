@@ -79,10 +79,12 @@ class self_healing_error_handler(contextlib.AbstractContextManager):
                 _active_handler.set(None)
             self._token = None
 
-        # Path 1: an exception escaped. Capture and let it bubble.
-        if exc_type is not None:
-            if exc_type in (SystemExit, KeyboardInterrupt):
-                return False
+        has_exception = exc_type is not None
+        is_pass_through = has_exception and exc_type in (SystemExit, KeyboardInterrupt)
+
+        # Path 1: a real exception escaped (not sys.exit / Ctrl+C).
+        # Capture it — logged failures are bundled into the same payload.
+        if has_exception and not is_pass_through:
             try:
                 self._handle_exception_failure(exc_type, exc_val, exc_tb)
             except Exception as e:
@@ -90,7 +92,9 @@ class self_healing_error_handler(contextlib.AbstractContextManager):
                 traceback.print_exc()
             return False
 
-        # Path 2: clean exit, but log.failure() calls accumulated.
+        # Path 2: clean exit OR pass-through exit. In both cases, any
+        # log.failure() calls accumulated during the block still deserve a
+        # capture — sys.exit doesn't unregister them.
         if self._logged_failures:
             try:
                 self._handle_logged_failure_batch()

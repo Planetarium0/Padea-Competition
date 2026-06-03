@@ -916,7 +916,7 @@ def force_proposal(
     session_name = index.session_labels.get(session_id, session_id)
     outgoing_caterer_id = index.session_to_caterer.get(session_id)
     if not outgoing_caterer_id:
-        log.error(f"Session {session_name!r} has no current caterer — cannot create proposal.")
+        log.failure(f"Session {session_name!r} has no current caterer — cannot create proposal.")
         sys.exit(1)
 
     outgoing_name = index.caterer_names.get(outgoing_caterer_id, outgoing_caterer_id)
@@ -927,7 +927,7 @@ def force_proposal(
         session_students = index.session_to_students.get(session_id, [])
         candidates       = find_candidates(session_id, outgoing_caterer_id, session_students, index)
         if not candidates:
-            log.error(
+            log.failure(
                 f"No eligible replacement caterer found for session {session_name!r}. "
                 "Pass --incoming <caterer_id> to specify one explicitly."
             )

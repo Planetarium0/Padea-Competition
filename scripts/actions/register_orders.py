@@ -759,7 +759,7 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
             "total_cost":  total_cost,
         }])
         if not created_wo:
-            log.error(f"Failed to create Weekly Order for '{caterer_name}' — skipping.")
+            log.failure(f"Failed to create Weekly Order for '{caterer_name}' — skipping.")
             continue
 
         wo_airtable_id = created_wo[0].id

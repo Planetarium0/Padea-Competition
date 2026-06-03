@@ -1,6 +1,7 @@
 """Tests for scripts/support/email.py — schedule_email dev redirect and escalate_to_dev."""
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import tempfile
@@ -9,7 +10,9 @@ from pathlib import Path
 from unittest import mock
 
 import support.email as email_module
+import support.error_handler as eh_module
 from support.email import escalate_to_dev, schedule_email
+from support.error_handler import LoggedFailureBatch, self_healing_error_handler
 from mock_db import MockDatabase
 
 
@@ -172,6 +175,72 @@ class TestEscalateToDev(unittest.TestCase):
         self.mock_send.assert_called_once()
         sent = self.mock_send.call_args[0][0]
         self.assertEqual(sent["to"], ["oncall@example.com"])
+
+
+class TestScheduleEmailCapturesResendFailures(unittest.TestCase):
+    """Resend failures inside a wrapped workflow must register with the
+    active self_healing_error_handler so the agent gets a capture artifact.
+
+    Regression for: ``./run forms send parents --limit 1`` logging
+    ``[FAILED]`` without producing a failure_*.json / patch_prompt_*.md pair.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = Path(tempfile.mkdtemp(prefix="padea_email_handler_test_"))
+        self._patch_dir = mock.patch.object(eh_module, "_FAILURES_DIR", self._tmp)
+        self._patch_dir.start()
+        self._send_patch = mock.patch("support.email.resend.Emails.send")
+        self.mock_send = self._send_patch.start()
+        self._env_patch = mock.patch.dict(
+            os.environ, {"RESEND_API_KEY": "test-key"}, clear=False
+        )
+        self._env_patch.start()
+        # Ensure APP_ENV isn't 'development' for this test.
+        os.environ.pop("APP_ENV", None)
+
+    def tearDown(self) -> None:
+        self._env_patch.stop()
+        self._send_patch.stop()
+        self._patch_dir.stop()
+        shutil.rmtree(self._tmp, ignore_errors=True)
+
+    def test_resend_failure_inside_handler_is_captured(self) -> None:
+        self.mock_send.side_effect = RuntimeError("Resend 401 Unauthorized")
+        db = MockDatabase()
+        with self_healing_error_handler("send_meals_links"):
+            schedule_email(
+                db,
+                to_email="recipient@example.com",
+                cc_email=None,
+                subject="Test",
+                body="Body",
+                email_id="EMAIL-TEST-001",
+            )
+        jsons = sorted(self._tmp.glob("failure_*.json"))
+        self.assertEqual(len(jsons), 1, "schedule_email should register a failure on Resend exception")
+        payload = json.loads(jsons[0].read_text(encoding="utf-8"))
+        self.assertEqual(payload["error"]["type"], LoggedFailureBatch.__name__)
+        self.assertEqual(len(payload["logged_failures"]), 1)
+        self.assertIn("recipient@example.com", payload["logged_failures"][0])
+        self.assertIn("Resend 401", payload["logged_failures"][0])
+        # The row was still marked Failed in the audit log.
+        update_call = db.ScheduledEmails.updates[-1]
+        self.assertEqual(update_call[1], {"status": "Failed"})
+
+    def test_resend_failure_outside_handler_just_logs(self) -> None:
+        # Same Resend failure, but no wrapping handler — must not write any artifact.
+        self.mock_send.side_effect = RuntimeError("Resend down")
+        db = MockDatabase()
+        schedule_email(
+            db,
+            to_email="recipient@example.com",
+            cc_email=None,
+            subject="Test",
+            body="Body",
+            email_id="EMAIL-TEST-002",
+        )
+        jsons = sorted(self._tmp.glob("failure_*.json"))
+        self.assertEqual(jsons, [])
 
 
 if __name__ == "__main__":

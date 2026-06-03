@@ -86,7 +86,7 @@ def _resolve_context(
     incoming_caterer_id = pf.get("incoming_caterer_id")
 
     if not session_id or not outgoing_caterer_id or not incoming_caterer_id:
-        log.error("Proposal is missing Session, Outgoing Caterer, or Incoming Caterer.")
+        log.failure("Proposal is missing Session, Outgoing Caterer, or Incoming Caterer.")
         sys.exit(1)
 
     try:
@@ -97,7 +97,7 @@ def _resolve_context(
         sys.exit(1)
 
     if not out_rec or not in_rec:
-        log.error("Outgoing or incoming caterer record could not be loaded.")
+        log.failure("Outgoing or incoming caterer record could not be loaded.")
         sys.exit(1)
 
     # Fetch the session to derive school_id and build a human-readable session name.

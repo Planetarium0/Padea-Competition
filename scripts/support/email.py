@@ -96,7 +96,7 @@ def schedule_email(
     except Exception as exc:
         if se_record:
             db.ScheduledEmails.update(se_record.id, {"status": "Failed"})
-        log.error(f"[FAILED] Failed to send email to {actual_to}: {exc}")
+        log.failure(f"[FAILED] Failed to send email to {actual_to}: {exc}")
 
     return se_record
 

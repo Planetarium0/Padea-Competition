@@ -29,6 +29,7 @@ Usage:
   $0 caterer switch <proposal_id> [--approve] [--dry-run]
   $0 test [name]
   $0 script [name]
+  $0 fix [--latest-error|--run-and-heal CMD|...]
 
 migrate resources:
   diet, schools, caterers, contacts, menus, sessions, students, absences, exclusions, all
@@ -199,6 +200,11 @@ case "$COMMAND" in
 
     script)
         $PYTHON "scripts/actions/${2:-}.py"
+        ;;
+
+    fix)
+        shift
+        $PYTHON scripts/support/run_claude_agent.py "$@"
         ;;
 
     *)

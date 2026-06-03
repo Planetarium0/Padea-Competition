@@ -144,7 +144,7 @@ class Table(Generic[FieldsT]):
                 query = filter(query)
             result = query.execute()
         except Exception as e:
-            _log.error("Error fetching from %s: %s", self._view, e)
+            _log.failure("Error fetching from %s: %s", self._view, e)
             return []
 
         model = MODEL_MAP.get(self._table)
@@ -165,7 +165,7 @@ class Table(Generic[FieldsT]):
                 .execute()
             )
         except Exception as e:
-            _log.error("Error fetching %s from %s: %s", record_id, self._view, e)
+            _log.failure("Error fetching %s from %s: %s", record_id, self._view, e)
             return None
         if not result.data:
             return None

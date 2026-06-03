@@ -144,14 +144,32 @@ class TestExceptionPathStillWins(_HandlerTestBase):
         self.assertIn("## Stack Trace", prompt)
         self.assertNotIn("## Registered Failures", prompt)
 
-    def test_systemexit_is_not_captured(self) -> None:
-        # SystemExit and KeyboardInterrupt must pass through untouched —
-        # they're the canonical "human misuse" exit path.
+    def test_systemexit_alone_is_not_captured(self) -> None:
+        # SystemExit and KeyboardInterrupt pass through untouched — they're
+        # the canonical "human misuse" exit path. With no logged failures,
+        # nothing is written.
         with self.assertRaises(SystemExit):
             with self_healing_error_handler("evaluate_caterers"):
                 raise SystemExit(2)
         jsons, _ = self._failure_artifacts()
         self.assertEqual(jsons, [])
+
+    def test_systemexit_after_log_failure_still_captures_batch(self) -> None:
+        # Common pattern in action scripts: log.failure(...) followed by
+        # sys.exit(1) for unrecoverable data-quality issues. The exit is
+        # a control-flow concern; the registered failure must still surface.
+        with self.assertRaises(SystemExit):
+            with self_healing_error_handler("execute_caterer_switch"):
+                log.failure("Proposal points to non-existent caterer")
+                raise SystemExit(1)
+        jsons, _ = self._failure_artifacts()
+        self.assertEqual(len(jsons), 1)
+        payload = json.loads(jsons[0].read_text(encoding="utf-8"))
+        self.assertEqual(payload["error"]["type"], LoggedFailureBatch.__name__)
+        self.assertEqual(
+            payload["logged_failures"],
+            ["Proposal points to non-existent caterer"],
+        )
 
 
 class TestStateProviderSnapshotting(_HandlerTestBase):
