@@ -87,8 +87,17 @@ def schedule_email(
     }
     if actual_cc:
         send_params["cc"] = actual_cc
+    api_key = os.environ.get("RESEND_API_KEY")
+    if not api_key:
+        if se_record:
+            db.ScheduledEmails.update(se_record.id, {"status": "Failed"})
+        log.failure(
+            f"[FAILED] RESEND_API_KEY is not configured — cannot send email to {actual_to}"
+        )
+        return se_record
+
+    resend.api_key = api_key
     try:
-        resend.api_key = os.environ["RESEND_API_KEY"]
         resend.Emails.send(send_params)
         if se_record:
             db.ScheduledEmails.update(se_record.id, {"status": "Sent"})

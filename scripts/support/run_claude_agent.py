@@ -27,8 +27,6 @@ ALLOWED_EDIT_DIRS = [
 # Strict allowlist of binaries that Claude's bash tool is permitted to run
 ALLOWED_BINARIES = [
     "git",
-    "./run",
-    ".venv/bin/python",
     "python",
     "python3",
     "uv",
@@ -334,7 +332,10 @@ def main():
         print("[!] Warning: You have uncommitted changes in your repository:")
         for f in modified_before:
             print(f"  - {f}")
-        confirm = input("Do you want to proceed anyway? (y/N): ").strip().lower()
+        try:
+            confirm = input("Do you want to proceed anyway? (y/N): ").strip().lower()
+        except EOFError:
+            confirm = ""
         if confirm != 'y':
             print("Aborted.")
             sys.exit(1)

@@ -8,8 +8,12 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import tempfile
 import unittest
+from pathlib import Path
 from typing import Any, Dict
+from unittest import mock
 
 from mock_db import MockDatabase
 from support import Record
@@ -160,3 +164,84 @@ class TestSelfHealingRegression(unittest.TestCase):
         
         # Test assertion replicating the unhandled logic state: No compatible items!
         self.assertEqual(len(compatible_items), 0)
+
+
+class TestSendMealsLinksResendApiKeyMissing(unittest.TestCase):
+    """Regression for failure_20260603_201520_send_meals_links.
+
+    Missing RESEND_API_KEY previously produced the opaque error message
+    "'RESEND_API_KEY'" (a bare KeyError repr) instead of a clear message.
+    After the fix, log.failure emits a human-readable explanation.
+    """
+
+    def test_failure_20260603_201520_send_meals_links(self) -> None:
+        import support.error_handler as eh_module
+        from actions.send_meals_links import send_links
+        from support.error_handler import self_healing_error_handler
+
+        # Minimal state derived from the captured snapshot.
+        snapshot: Dict[str, Any] = {
+            "students": [{
+                "id": "0074c290-1f3a-4a55-9596-d62dd1cc52c4",
+                "fields": {
+                    "name": "Phoebe Harris",
+                    "year_level": 9,
+                    "email": "phoebeharris@eq.edu.au",
+                    "parent_name": "Hudson Harris",
+                    "parent_email": "hudsonharris@gmail.com",
+                    "parent_mobile": "0415 285 648",
+                    "meal_preference_id": None,
+                    "last_submitted": None,
+                    "dietary_requirement_ids": [],
+                    "session_ids": ["9bdb3fa9-60ff-42b9-919b-0cc631f0af27"],
+                }
+            }],
+            "sessions": [{
+                "id": "9bdb3fa9-60ff-42b9-919b-0cc631f0af27",
+                "fields": {
+                    "day": "Tuesday",
+                    "school_id": "school-test-1",
+                    "caterer_id": None,
+                }
+            }],
+            "schools": [{
+                "id": "school-test-1",
+                "fields": {"name": "Test School"}
+            }],
+        }
+
+        db = MockDatabase()
+        populate_mock_db(db, snapshot)
+
+        tmp = Path(tempfile.mkdtemp(prefix="padea_regression_resend_"))
+        try:
+            with mock.patch.object(eh_module, "_FAILURES_DIR", tmp), \
+                 mock.patch.dict(os.environ, {"URL_ORIGIN": "http://test:8000"}, clear=False):
+                os.environ.pop("RESEND_API_KEY", None)
+                os.environ.pop("APP_ENV", None)
+                with self_healing_error_handler("send_meals_links"):
+                    send_links(target="parents", limit=1, db=db)
+
+            jsons = sorted(tmp.glob("failure_*.json"))
+            self.assertEqual(len(jsons), 1,
+                "Missing RESEND_API_KEY should write a failure artifact")
+
+            payload = json.loads(jsons[0].read_text(encoding="utf-8"))
+            self.assertEqual(len(payload["logged_failures"]), 1)
+            failure_msg = payload["logged_failures"][0]
+
+            # After fix: clear, human-readable message
+            self.assertIn("RESEND_API_KEY", failure_msg)
+            self.assertIn("not configured", failure_msg,
+                "Message should say the key is not configured, not a bare KeyError repr")
+            # Before fix: bare KeyError repr was ": 'RESEND_API_KEY'" at the end
+            self.assertNotIn(": 'RESEND_API_KEY'", failure_msg,
+                "Message must not be the opaque KeyError repr string")
+
+            # Audit record must be marked Failed
+            self.assertTrue(
+                any(v.get("status") == "Failed" for _, v in db.ScheduledEmails.updates),
+                "ScheduledEmails record should be updated to Failed",
+            )
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
