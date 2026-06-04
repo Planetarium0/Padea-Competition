@@ -168,6 +168,56 @@ class TestSelfHealingRegression(unittest.TestCase):
         self.assertEqual(len(compatible_items), 0)
 
 
+class TestSendOrdersDuplicateEmailCode(unittest.TestCase):
+    """Regression for failure_20260605_091650_send_orders.
+
+    Re-running send_orders when the caterer email was already sent produced a
+    Postgres unique constraint violation (duplicate email_code). After the fix,
+    schedule_email detects the pre-existing row and returns it without inserting
+    or re-sending.
+    """
+
+    def test_failure_20260605_091650_send_orders(self) -> None:
+        import support.email as email_module
+        from support.email import schedule_email
+
+        db = MockDatabase()
+
+        # Simulate the row that was already inserted on the previous run
+        existing_email_code = "EMAIL-2026-06-08-ae58638f"
+        existing_record = Record(
+            id="rec_existing_email",
+            fields={
+                "email_code": existing_email_code,
+                "to_address": "caterer@lakehouse.com",
+                "subject": "Padea Meal Order — Week of 8 June 2026",
+                "body": "<p>Existing body</p>",
+                "status": "Sent",
+                "weekly_order_id": "ae58638f-190e-4c05-91fe-7d7e16ada6e8",
+            },
+        )
+        db.ScheduledEmails._records = [existing_record]
+
+        with mock.patch.object(email_module, "_send_via_sendgrid") as mock_send:
+            result = schedule_email(
+                db=db,
+                to_email="caterer@lakehouse.com",
+                cc_email=None,
+                subject="Padea Meal Order — Week of 8 June 2026",
+                body="<p>Re-run body</p>",
+                email_id=existing_email_code,
+                weekly_order_id="ae58638f-190e-4c05-91fe-7d7e16ada6e8",
+            )
+
+        # Returns the existing record, not a newly inserted duplicate
+        self.assertIsNotNone(result)
+        self.assertEqual(result.fields.get("email_code"), existing_email_code)
+        # No second row was inserted
+        self.assertEqual(len(db.ScheduledEmails._records), 1)
+        # Email was not re-sent
+        mock_send.assert_not_called()
+
+
 class TestSendMealsLinksResendApiKeyMissing(unittest.TestCase):
     """Regression for failure_20260603_201520_send_meals_links.
 

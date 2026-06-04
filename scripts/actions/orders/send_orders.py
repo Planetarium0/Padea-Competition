@@ -401,6 +401,7 @@ if __name__ == "__main__":
                 "schools": db.Schools.all(),
                 "on_site_managers": db.OnSiteManagers.all(),
                 "manager_substitutions": db.ManagerSubstitutions.all(),
+                "scheduled_emails": db.ScheduledEmails.all(),
             }
         except Exception as e:
             return {"error_loading_db_state": str(e)}

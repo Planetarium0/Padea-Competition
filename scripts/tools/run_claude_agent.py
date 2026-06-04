@@ -8,7 +8,6 @@ Python automation harness for Claude Code (run_claude_agent.py).
 from __future__ import annotations
 
 import argparse
-import io
 import os
 import shutil
 import subprocess
@@ -139,12 +138,26 @@ def setup_restricted_path(temp_dir_path: Path) -> dict[str, str]:
     return new_env
 
 
-def _tee(src: io.RawIOBase, dst, buf: list[bytes]) -> None:
-    """Read src line-by-line, write to dst and accumulate in buf."""
-    for chunk in iter(lambda: src.read(4096), b""):
-        dst.buffer.write(chunk)
-        dst.buffer.flush()
-        buf.append(chunk)
+def _stream_tee(src, buf: list[bytes]) -> None:
+    """Parse stream-json lines from src, print assistant text to stdout, accumulate raw in buf."""
+    import json
+    for raw_line in src:
+        buf.append(raw_line)
+        line = raw_line.decode("utf-8", errors="replace").strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+            if event.get("type") == "assistant":
+                for block in event.get("message", {}).get("content", []):
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        text = block.get("text", "")
+                        if text:
+                            sys.stdout.write(text)
+                            sys.stdout.flush()
+        except (json.JSONDecodeError, KeyError, TypeError):
+            sys.stdout.write(line + "\n")
+            sys.stdout.flush()
     src.close()
 
 
@@ -165,6 +178,7 @@ def run_claude(prompt: str, env: dict[str, str]) -> tuple[bool, str]:
     claude_cmd = [
         claude_path,
         "-p", prompt,
+        "--output-format", "stream-json",
         "--permission-mode", "acceptEdits"
     ]
 
@@ -179,7 +193,7 @@ def run_claude(prompt: str, env: dict[str, str]) -> tuple[bool, str]:
         stderr=subprocess.STDOUT,  # merge stderr so both streams land in the log
         env=env
     )
-    tee_thread = threading.Thread(target=_tee, args=(process.stdout, sys.stdout, buf))
+    tee_thread = threading.Thread(target=_stream_tee, args=(process.stdout, buf))
     tee_thread.start()
     process.wait()
     tee_thread.join()

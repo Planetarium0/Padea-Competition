@@ -273,6 +273,14 @@ def schedule_email(
     Exactly one of ``weekly_order_id`` or ``caterer_switch_proposal_id`` should
     be provided so the email is traceable back to its source record.
     """
+    existing = next(
+        (r for r in db.ScheduledEmails.all() if r.fields.get("email_code") == email_id),
+        None,
+    )
+    if existing:
+        log.info(f"[SKIP] Email already scheduled: {email_id} (status={existing.fields.get('status')})")
+        return existing
+
     fields: dict[str, object] = {
         "email_code":  email_id,
         "to_address":  to_email,
