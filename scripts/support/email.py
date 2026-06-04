@@ -16,8 +16,10 @@ from __future__ import annotations
 
 import datetime
 import os
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Literal, Optional
 
 import resend
 
@@ -28,8 +30,161 @@ if TYPE_CHECKING:
     from .database import Database, Record
 
 
+# ---------------------------------------------------------------------------
+# Email component system
+# ---------------------------------------------------------------------------
+
+class Component(ABC):
+    @abstractmethod
+    def render(self) -> str: ...
+
+
+@dataclass
+class Text(Component):
+    """A paragraph of text. Use ``\\n`` for line breaks. ``bold=True`` wraps in <strong>."""
+    content: str
+    bold: bool = False
+
+    def render(self) -> str:
+        body = self.content.replace("\n", "<br>")
+        if self.bold:
+            body = f"<strong>{body}</strong>"
+        return f'<p style="margin:0 0 16px;">{body}</p>'
+
+
+@dataclass
+class Heading(Component):
+    """A bold section heading. ``accent=True`` renders in primary red (#A51C30)."""
+    text: str
+    accent: bool = False
+
+    def render(self) -> str:
+        color = "#A51C30" if self.accent else "#1A1614"
+        return f'<p style="margin:0 0 10px;font-weight:700;color:{color};">{self.text}</p>'
+
+
+@dataclass
+class Meta(Component):
+    """A labelled key-value row, e.g. ``Meta("Deliver by", "6:20 PM")``."""
+    label: str
+    value: str
+
+    def render(self) -> str:
+        return (
+            f'<p style="margin:0 0 4px;font-size:15px;">'
+            f'<strong>{self.label}:</strong> {self.value}</p>'
+        )
+
+
+@dataclass
+class Button(Component):
+    """A CTA button in primary red."""
+    label: str
+    href: str
+
+    def render(self) -> str:
+        return (
+            f'<p style="margin:12px 0 0;">'
+            f'<a href="{self.href}" style="display:inline-block;background-color:#A51C30;'
+            f'color:#FFFFFF;padding:10px 20px;border-radius:8px;text-decoration:none;'
+            f'font-weight:600;font-size:15px;">{self.label}</a>'
+            f'</p>'
+        )
+
+
+@dataclass
+class List(Component):
+    """A bulleted list. Items are rendered as raw HTML."""
+    items: list[str]
+
+    def render(self) -> str:
+        items = "".join(
+            f'<li style="margin:4px 0;font-size:15px;">{item}</li>'
+            for item in self.items
+        )
+        return f'<ul style="margin:12px 0 4px;padding-left:20px;">{items}</ul>'
+
+
+@dataclass
+class Image(Component):
+    """A centred image wrapped in a hyperlink."""
+    src: str
+    href: str
+    alt: str
+    size: int = 200
+
+    def render(self) -> str:
+        return (
+            f'<p style="text-align:center;margin:0 0 12px;">'
+            f'<a href="{self.href}">'
+            f'<img src="{self.src}" alt="{self.alt}" width="{self.size}" height="{self.size}" '
+            f'style="width:{self.size}px;height:{self.size}px;display:block;margin:0 auto;">'
+            f'</a></p>'
+        )
+
+
+@dataclass
+class Link(Component):
+    """An inline text hyperlink. ``centered=True`` centres the paragraph."""
+    text: str
+    href: str
+    centered: bool = False
+
+    def render(self) -> str:
+        align = "text-align:center;" if self.centered else ""
+        return (
+            f'<p style="margin:0 0 12px;font-size:14px;{align}">'
+            f'<a href="{self.href}" style="color:#A51C30;">{self.text}</a>'
+            f'</p>'
+        )
+
+
+@dataclass
+class Card(Component):
+    """A bordered card containing child components. ``shaded=True`` adds a light grey fill."""
+    children: list[Component]
+    shaded: bool = False
+
+    def render(self) -> str:
+        bg = "background-color:#FAF7F5;" if self.shaded else ""
+        inner = "".join(child.render() for child in self.children)
+        return (
+            f'<div style="{bg}border:1px solid #ECE6E2;border-radius:8px;'
+            f'padding:16px 20px;margin:0 0 16px;">'
+            f'{inner}'
+            f'</div>'
+        )
+
+
+@dataclass
+class Alert(Component):
+    """A coloured callout. ``variant='red'`` (default) or ``'amber'``."""
+    children: list[Component]
+    variant: Literal["red", "amber"] = "red"
+
+    def render(self) -> str:
+        if self.variant == "amber":
+            style = "background-color:#FFF7E8;border:1px solid #F2DDB1;color:#8A4F08;"
+        else:
+            style = "background-color:#FDECEF;border:1px solid #F6D2D9;"
+        inner = "".join(child.render() for child in self.children)
+        return (
+            f'<div style="{style}border-radius:8px;padding:14px 18px;margin:0 0 20px;">'
+            f'{inner}'
+            f'</div>'
+        )
+
+
+@dataclass
+class Divider(Component):
+    """A horizontal rule separating major sections."""
+
+    def render(self) -> str:
+        return '<div style="border-top:2px solid #ECE6E2;margin:8px 0 16px;"></div>'
+
+
 def html_email(content: str) -> str:
-    """Wrap HTML content in a minimal email shell with Padea base styles."""
+    """Wrap raw HTML content in the Padea email shell. Prefer :func:`compose_email`."""
     f = "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif"
     return (
         '<!DOCTYPE html>'
@@ -38,11 +193,16 @@ def html_email(content: str) -> str:
         '<meta charset="UTF-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1.0">'
         '</head>'
-        f'<body lang="en" style="margin:0;padding:20px;font-family:{f};font-size:16px;line-height:1.5;color:#1A1614;">'
+        f'<body lang="en" style="margin:0;padding:20px;font-family:{f};font-size:16px;line-height:1.5;color:#1A1614;max-width:600px;">'
         f'{content}'
         '</body>'
         '</html>'
     )
+
+
+def compose_email(components: list[Component]) -> str:
+    """Render a list of email components into a complete HTML email string."""
+    return html_email("".join(c.render() for c in components))
 
 
 def schedule_email(

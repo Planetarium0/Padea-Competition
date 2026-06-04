@@ -1299,4 +1299,5 @@ window.confirmVariantModal = function () {
 // Bootstrap
 // ============================================================
 
+window.app = app;
 document.addEventListener("DOMContentLoaded", () => app.init());

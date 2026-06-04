@@ -28,17 +28,24 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 
 from support import (
+    Alert,
+    Button,
+    Card,
     CatererFeedbackFields,
     CatererFields,
     CatererSwitchProposalFields,
     Database,
+    Heading,
+    List,
     MenuItemFields,
+    Meta,
     OnSiteManagerFields,
     Record,
     SchoolFields,
     SessionFields,
     StudentFields,
-    html_email,
+    Text,
+    compose_email,
     log,
     schedule_email,
 )
@@ -518,47 +525,42 @@ def format_proposal_email(
     proposal_url:   str | None,
     forced:         bool = False,
 ) -> str:
-    if proposal_url:
-        action_block = (
-            f'<a href="{proposal_url}" style="display:inline-block;background-color:#A51C30;color:#FFFFFF;'
-            f'padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">'
-            f'Review, approve, or reject this proposal</a>'
-        )
-    else:
-        action_block = '<p style="margin:0;color:#6F655F;">Open the Padea admin portal to approve or reject.</p>'
+    action_component = (
+        Button("Review, approve, or reject this proposal", href=proposal_url)
+        if proposal_url
+        else Text("Open the Padea admin portal to approve or reject.")
+    )
 
     if forced:
-        trigger_block = (
-            '<div style="background-color:#FFF7E8;border:1px solid #F2DDB1;border-radius:8px;padding:14px 18px;margin:0 0 20px;">'
-            '<p style="margin:0;color:#8A4F08;">This proposal was manually created by a coordinator, '
-            'bypassing the automated rating check.</p>'
-            '</div>'
-        )
+        trigger = Alert([
+            Text("This proposal was manually created by a coordinator, bypassing the automated rating check.")
+        ], variant="amber")
     else:
-        trigger_block = (
-            '<div style="background-color:#FDECEF;border:1px solid #F6D2D9;border-radius:8px;padding:14px 18px;margin:0 0 20px;">'
-            f'<p style="margin:0 0 8px;">The automated rating check has flagged <strong>{outgoing_name}</strong> '
-            f'for session <strong>{session_name}</strong>.</p>'
-            f'<p style="margin:0 0 4px;"><strong>Rolling average:</strong> {avg_rating:.1f}/5 over the last {num_sessions} sessions</p>'
-            f'<p style="margin:0;"><strong>Sampled from:</strong> {num_raters} students</p>'
-            '</div>'
-        )
+        trigger = Alert([
+            Text(
+                f"The automated rating check has flagged <strong>{outgoing_name}</strong> "
+                f"for session <strong>{session_name}</strong>."
+            ),
+            Meta("Rolling average", f"{avg_rating:.1f}/5 over the last {num_sessions} sessions"),
+            Meta("Sampled from", f"{num_raters} students"),
+        ])
 
-    content = (
-        '<p style="margin:0 0 16px;">Hi,</p>'
-        + trigger_block
-        + '<div style="background-color:#FAF7F5;border:1px solid #ECE6E2;border-radius:8px;padding:14px 18px;margin:0 0 20px;">'
-        + f'<p style="margin:0 0 6px;"><strong>Session:</strong> {session_name}</p>'
-        + f'<p style="margin:0 0 6px;"><strong>Outgoing caterer:</strong> {outgoing_name}</p>'
-        + f'<p style="margin:0 0 6px;"><strong>Proposed replacement:</strong> {incoming_name}</p>'
-        + f'<p style="margin:0;"><strong>Effective week:</strong> {effective_week.strftime("%-d %B %Y")}</p>'
-        + '</div>'
-        + f'<div style="margin:0 0 20px;">{action_block}</div>'
-        + '<p style="margin:0 0 24px;color:#6F655F;">Approving will schedule the switch for the effective week above. '
-        + "Rejecting means you won't be reminded about this caterer again this term.</p>"
-        + '<p style="margin:0;color:#6F655F;">— Padea automation</p>'
-    )
-    return html_email(content)
+    return compose_email([
+        Text("Hi,"),
+        trigger,
+        Card([
+            Meta("Session", session_name),
+            Meta("Outgoing caterer", outgoing_name),
+            Meta("Proposed replacement", incoming_name),
+            Meta("Effective week", effective_week.strftime("%-d %B %Y")),
+        ], shaded=True),
+        action_component,
+        Text(
+            "Approving will schedule the switch for the effective week above. "
+            "Rejecting means you won't be reminded about this caterer again this term."
+        ),
+        Text("— Padea automation"),
+    ])
 
 
 def format_no_candidate_email(
@@ -568,22 +570,23 @@ def format_no_candidate_email(
     num_sessions:  int,
     num_raters:    int,
 ) -> str:
-    content = (
-        '<p style="margin:0 0 16px;">Hi,</p>'
-        '<div style="background-color:#FDECEF;border:1px solid #F6D2D9;border-radius:8px;padding:14px 18px;margin:0 0 20px;">'
-        f'<p style="margin:0;">The automated rating check has flagged <strong>{outgoing_name}</strong> for '
-        f'session <strong>{session_name}</strong> (average {avg_rating:.1f}/5 over '
-        f'{num_sessions} sessions, {num_raters} raters), but '
-        f'<strong>no eligible replacement caterer was found</strong>.</p>'
-        '</div>'
-        '<p style="margin:0 0 8px;font-weight:700;">Please review the situation manually:</p>'
-        '<ul style="margin:0 0 24px;padding-left:20px;">'
-        "<li style=\"margin:0 0 6px;\">Check whether any caterer's <em>Able to Serve Schools</em> list needs updating.</li>"
-        '<li>Check whether any menu items need to be added for existing caterers.</li>'
-        '</ul>'
-        '<p style="margin:0;color:#6F655F;">— Padea automation</p>'
-    )
-    return html_email(content)
+    return compose_email([
+        Text("Hi,"),
+        Alert([
+            Text(
+                f"The automated rating check has flagged <strong>{outgoing_name}</strong> for "
+                f"session <strong>{session_name}</strong> (average {avg_rating:.1f}/5 over "
+                f"{num_sessions} sessions, {num_raters} raters), but "
+                f"<strong>no eligible replacement caterer was found</strong>."
+            )
+        ]),
+        Text("Please review the situation manually:", bold=True),
+        List([
+            "Check whether any caterer's <em>Able to Serve Schools</em> list needs updating.",
+            "Check whether any menu items need to be added for existing caterers.",
+        ]),
+        Text("— Padea automation"),
+    ])
 
 
 def format_watch_email(
@@ -593,18 +596,21 @@ def format_watch_email(
     num_sessions: int,
     num_raters:   int,
 ) -> str:
-    content = (
-        '<p style="margin:0 0 16px;">Hi,</p>'
-        '<div style="background-color:#FFF7E8;border:1px solid #F2DDB1;border-radius:8px;padding:14px 18px;margin:0 0 20px;">'
-        f'<p style="margin:0;"><strong>{caterer_name}</strong> for session <strong>{session_name}</strong> has a rolling '
-        f'average of <strong>{avg_rating:.1f}/5</strong> over the last {num_sessions} sessions '
-        f'({num_raters} raters). This is below the watch threshold of {WATCH_THRESHOLD}/5.</p>'
-        '</div>'
-        f'<p style="margin:0 0 24px;color:#6F655F;">No action has been taken yet. If ratings continue to fall '
-        f'below {SWITCH_THRESHOLD}/5, a switch proposal will be generated automatically.</p>'
-        '<p style="margin:0;color:#6F655F;">— Padea automation</p>'
-    )
-    return html_email(content)
+    return compose_email([
+        Text("Hi,"),
+        Alert([
+            Text(
+                f"<strong>{caterer_name}</strong> for session <strong>{session_name}</strong> has a rolling "
+                f"average of <strong>{avg_rating:.1f}/5</strong> over the last {num_sessions} sessions "
+                f"({num_raters} raters). This is below the watch threshold of {WATCH_THRESHOLD}/5."
+            )
+        ], variant="amber"),
+        Text(
+            f"No action has been taken yet. If ratings continue to fall "
+            f"below {SWITCH_THRESHOLD}/5, a switch proposal will be generated automatically."
+        ),
+        Text("— Padea automation"),
+    ])
 
 
 # ---------------------------------------------------------------------------

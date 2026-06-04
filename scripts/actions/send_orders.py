@@ -18,15 +18,23 @@ from dataclasses import dataclass
 from datetime import datetime, date, timedelta
 
 from support import (
+    Button,
+    Card,
     CatererFields,
+    Component,
     Database,
+    Divider,
+    Heading,
+    List,
     MenuItemFields,
+    Meta,
     OnSiteManagerFields,
     Record,
     SchoolFields,
     SessionFields,
+    Text,
     WeeklyOrderFields,
-    html_email,
+    compose_email,
     load_substitutions,
     log,
     resolve_manager_id,
@@ -197,7 +205,7 @@ def load_order_details(
 
 
 # ---------------------------------------------------------------------------
-# Email formatting — Markdown (Airtable-supported subset, no tables)
+# Email formatting
 # ---------------------------------------------------------------------------
 
 def format_email_body(
@@ -225,7 +233,7 @@ def format_email_body(
         by_session[li.session.fields.get("session_code", "unknown")].append(li)
 
     num_deliveries = 0
-    session_blocks: list[str] = []
+    session_cards: list[Component] = []
 
     for sess_key in sorted(by_session):
         items = by_session[sess_key]
@@ -237,34 +245,29 @@ def format_email_body(
         building       = sess.fields.get("building", "")
         manager_name   = sess.manager_name or ""
         manager_mobile = sess.manager_mobile or ""
-
         deliver_by     = subtract_minutes(dinner_time)
         manager_is_sub = sess.manager_is_sub
 
-        meta = [f'<p style="margin:0 0 4px;font-size:15px;"><strong>Deliver by:</strong> {deliver_by}</p>']
+        meta_rows: list[Component] = [Meta("Deliver by", deliver_by)]
         if building:
-            meta.append(f'<p style="margin:0 0 4px;font-size:15px;"><strong>Building:</strong> {building}</p>')
+            meta_rows.append(Meta("Building", building))
         if manager_name:
-            mgr = manager_name
-            if manager_mobile:
-                mgr += f" ({manager_mobile})"
-            label = "On-site manager (substitute)" if manager_is_sub else "On-site manager"
-            meta.append(f'<p style="margin:0 0 4px;font-size:15px;"><strong>{label}:</strong> {mgr}</p>')
+            mgr_value = f"{manager_name} ({manager_mobile})" if manager_mobile else manager_name
+            mgr_label = "On-site manager (substitute)" if manager_is_sub else "On-site manager"
+            meta_rows.append(Meta(mgr_label, mgr_value))
 
         session_total = sum(li.quantity for li in items)
-        meal_rows = "".join(
-            f'<li style="margin:4px 0;font-size:15px;">{li.menu_item.get("name", "?")} ×{li.quantity}</li>'
+        meal_items = [
+            f'{li.menu_item.get("name", "?")} ×{li.quantity}'
             for li in sorted(items, key=lambda x: -x.quantity)
-        )
+        ]
 
-        session_blocks.append(
-            f'<div style="background-color:#FAF7F5;border:1px solid #ECE6E2;border-radius:8px;padding:16px 20px;margin:0 0 16px;">'
-            f'<h2 style="margin:0 0 12px;font-size:17px;font-weight:700;color:#A51C30;">{day} — {school_name}</h2>'
-            + "".join(meta)
-            + f'<ul style="margin:12px 0 0;padding-left:20px;">{meal_rows}</ul>'
-            + f'<p style="margin:12px 0 0;font-size:15px;font-weight:700;">Subtotal: {session_total} meals</p>'
-            + '</div>'
-        )
+        session_cards.append(Card([
+            Heading(f"{day} — {school_name}", accent=True),
+            *meta_rows,
+            List(meal_items),
+            Text(f"Subtotal: {session_total} meals", bold=True),
+        ], shaded=True))
         num_deliveries += 1
 
     if fee_structure == "Per school per trip":
@@ -274,18 +277,18 @@ def format_email_body(
         total_delivery = delivery_fee
         fee_note = f"${delivery_fee:.2f} per trip"
 
-    content = (
-        f'<p style="margin:0 0 16px;">Hi {first_name},</p>'
-        f'<p style="margin:0 0 24px;">Here is the meal order for <strong>{caterer_name}</strong> '
-        f'for the week of <strong>{week_display}</strong>:</p>'
-        + "".join(session_blocks)
-        + '<div style="border-top:2px solid #ECE6E2;padding-top:16px;margin-top:8px;">'
-        + f'<p style="margin:0 0 4px;font-size:16px;font-weight:700;">Grand total: {total_meals} meals</p>'
-        + f'<p style="margin:0;font-size:15px;"><strong>Delivery fee:</strong> ${total_delivery:.2f} ({fee_note})</p>'
-        + '</div>'
-        + '<p style="margin:24px 0 0;color:#6F655F;">Thanks,<br>Padea</p>'
-    )
-    return html_email(content)
+    return compose_email([
+        Text(f"Hi {first_name},"),
+        Text(
+            f"Here is the meal order for <strong>{caterer_name}</strong> "
+            f"for the week of <strong>{week_display}</strong>:"
+        ),
+        *session_cards,
+        Divider(),
+        Text(f"Grand total: {total_meals} meals", bold=True),
+        Meta("Delivery fee", f"${total_delivery:.2f} ({fee_note})"),
+        Text("Thanks,\nPadea"),
+    ])
 
 
 # ---------------------------------------------------------------------------

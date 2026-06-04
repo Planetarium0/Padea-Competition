@@ -26,7 +26,23 @@ from .records import (
 )
 from .support import VERBOSE, ask_llm, log
 from .error_handler import UnhandledEdgeCaseError, self_healing_error_handler
-from .email import escalate_to_dev, html_email, schedule_email
+from .email import (
+    Alert,
+    Button,
+    Card,
+    Component,
+    Divider,
+    Heading,
+    Image,
+    Link,
+    List,
+    Meta,
+    Text,
+    compose_email,
+    escalate_to_dev,
+    html_email,
+    schedule_email,
+)
 
 __all__ = [
     "AbsenceFields",
@@ -54,7 +70,19 @@ __all__ = [
     "VERBOSE",
     "WeeklyOrderFields",
     "YearLevel",
+    "Alert",
+    "Button",
+    "Card",
+    "Component",
+    "Divider",
+    "Heading",
+    "Image",
+    "Link",
+    "List",
+    "Meta",
+    "Text",
     "ask_llm",
+    "compose_email",
     "escalate_to_dev",
     "html_email",
     "load_substitutions",

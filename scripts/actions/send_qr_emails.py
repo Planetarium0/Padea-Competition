@@ -23,12 +23,18 @@ from dataclasses import dataclass
 from urllib.parse import quote as url_quote
 
 from support import (
+    Button,
+    Card,
     Database,
+    Heading,
+    Image,
+    Link,
     OnSiteManagerFields,
     Record,
     SchoolFields,
     SessionFields,
-    html_email,
+    Text,
+    compose_email,
     log,
     schedule_email,
 )
@@ -73,34 +79,33 @@ def format_manager_email(
 ) -> tuple[str, str]:
     first   = (manager_name.split()[0] if manager_name else None) or "there"
     subject = "Padea Meals — QR codes for this term's sessions"
-
-    qr_blocks = "".join(
-        f'<div style="border:1px solid #ECE6E2;border-radius:8px;padding:16px 20px;margin:0 0 16px;text-align:center;">'
-        f'<h2 style="margin:0 0 12px;font-size:17px;font-weight:700;color:#1A1614;text-align:left;">{entry.label}</h2>'
-        f'<a href="{entry.url}"><img src="{qr_image_url(entry.url)}" alt="QR Code" width="200" height="200"'
-        f' style="width:200px;height:200px;display:block;margin:0 auto 12px;"></a>'
-        f'<p style="margin:0;font-size:14px;"><a href="{entry.url}" style="color:#A51C30;">{entry.url}</a></p>'
-        f'</div>'
-        for entry in entries
-    )
-
     mgr_url = manage_url(origin, manager_id)
 
-    content = (
-        f'<p style="margin:0 0 16px;">Hi {first},</p>'
-        f'<p style="margin:0 0 24px;">Please find the QR codes for your sessions this term below. '
-        f'Display them at the venue so students can set their meal preferences.</p>'
-        f'{qr_blocks}'
-        f'<div style="padding-top:20px;margin-top:8px;">'
-        f'<p style="margin:0 0 8px;font-weight:700;">Student management</p>'
-        f'<p style="margin:0 0 16px;color:#6F655F;">Use this link to update dietary requirements or override meal '
-        f'assignments for any student across all your sessions:</p>'
-        f'<a href="{mgr_url}" style="display:inline-block;background-color:#A51C30;color:#FFFFFF;'
-        f'padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">Manage your students</a>'
-        f'</div>'
-        f'<p style="margin:24px 0 0;color:#6F655F;">Thanks,<br>Padea</p>'
-    )
-    return subject, html_email(content)
+    body = compose_email([
+        Text(f"Hi {first},"),
+        Text(
+            "Please find the QR codes for your sessions this term below. "
+            "Display them at the venue so students can set their meal preferences."
+        ),
+        *[
+            Card([
+                Heading(entry.label),
+                Image(src=qr_image_url(entry.url), href=entry.url, alt="QR Code"),
+                Link(entry.url, href=entry.url, centered=True),
+            ])
+            for entry in entries
+        ],
+        Card([
+            Heading("Student management"),
+            Text(
+                "Use this link to update dietary requirements or override meal "
+                "assignments for any student across all your sessions:"
+            ),
+            Button("Manage your students", href=mgr_url),
+        ]),
+        Text("Thanks,\nPadea"),
+    ])
+    return subject, body
 
 
 # ---------------------------------------------------------------------------
