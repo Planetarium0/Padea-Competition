@@ -11,7 +11,7 @@ import unittest
 from unittest import mock
 
 import fixtures
-from actions.send_meals_links import (
+from actions.forms.send_meals_links import (
     SessionLink,
     format_parent_email,
     format_student_email,

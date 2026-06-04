@@ -22,7 +22,7 @@ os.environ.setdefault("PADEA_TEST_MODE", "1")
 
 from support import Record
 from support.inbound import InboundMessage
-from actions.parse_dietary_reply import parse_reply, _extract_json
+from actions.dietary.parse_dietary_reply import parse_reply, _extract_json
 
 from mock_db import MockDatabase
 from fixtures import (
@@ -121,7 +121,7 @@ def _llm_response(
 class TestParseReply(unittest.TestCase):
 
     def _parse(self, db, request, message, llm_text: str, dry_run: bool = False):
-        with patch("actions.parse_dietary_reply.ask_llm", return_value=llm_text):
+        with patch("actions.dietary.parse_dietary_reply.ask_llm", return_value=llm_text):
             parse_reply(db, request, message, dry_run=dry_run)
 
     # 1. Sweeping confirmation → Resolved, all tags written
@@ -219,8 +219,8 @@ class TestParseReply(unittest.TestCase):
             still_unknown=[{"menu_item_id": ITEM_CHICKEN_RICE_ID, "restriction_id": DIET_VEG_ID}],
         )
 
-        with patch("actions.parse_dietary_reply.ask_llm", return_value=llm), \
-             patch("actions.parse_dietary_reply.schedule_email") as mock_email:
+        with patch("actions.dietary.parse_dietary_reply.ask_llm", return_value=llm), \
+             patch("actions.dietary.parse_dietary_reply.schedule_email") as mock_email:
             parse_reply(db, request, msg)
 
         # clarification_rounds incremented to 1, status Clarifying
@@ -266,8 +266,8 @@ class TestParseReply(unittest.TestCase):
             still_unknown=[{"menu_item_id": ITEM_CHICKEN_RICE_ID, "restriction_id": DIET_VEG_ID}],
         )
 
-        with patch("actions.parse_dietary_reply.ask_llm", return_value=llm), \
-             patch("actions.parse_dietary_reply.notify_coordinator") as mock_notify:
+        with patch("actions.dietary.parse_dietary_reply.ask_llm", return_value=llm), \
+             patch("actions.dietary.parse_dietary_reply.notify_coordinator") as mock_notify:
             parse_reply(db, request, msg)
 
         mock_notify.assert_called_once()
@@ -302,7 +302,7 @@ class TestParseReply(unittest.TestCase):
         request = _make_request()
         msg = _make_message()
 
-        with patch("actions.parse_dietary_reply.ask_llm", return_value="Sorry I can't answer"):
+        with patch("actions.dietary.parse_dietary_reply.ask_llm", return_value="Sorry I can't answer"):
             parse_reply(db, request, msg)
 
         self.assertEqual(len(db.DietaryClarificationRequests.updates), 0)
@@ -313,7 +313,7 @@ class TestParseReply(unittest.TestCase):
         request = _make_request()
         msg = _make_message()
 
-        with patch("actions.parse_dietary_reply.ask_llm", return_value=None):
+        with patch("actions.dietary.parse_dietary_reply.ask_llm", return_value=None):
             parse_reply(db, request, msg)
 
         self.assertEqual(len(db.DietaryClarificationRequests.updates), 0)
@@ -327,8 +327,8 @@ class TestParseReply(unittest.TestCase):
             clarification_questions=["Could not understand the reply — please confirm?"],
         )
 
-        with patch("actions.parse_dietary_reply.ask_llm", return_value=llm), \
-             patch("actions.parse_dietary_reply.schedule_email"):
+        with patch("actions.dietary.parse_dietary_reply.ask_llm", return_value=llm), \
+             patch("actions.dietary.parse_dietary_reply.schedule_email"):
             parse_reply(db, request, msg)
 
         # Should not crash and should send clarification
@@ -369,8 +369,8 @@ class TestParseReply(unittest.TestCase):
             ]
         )
 
-        with patch("actions.parse_dietary_reply.ask_llm", return_value=llm), \
-             patch("actions.parse_dietary_reply.schedule_email") as mock_email:
+        with patch("actions.dietary.parse_dietary_reply.ask_llm", return_value=llm), \
+             patch("actions.dietary.parse_dietary_reply.schedule_email") as mock_email:
             parse_reply(db, request, msg)
 
         mock_email.assert_called_once()

@@ -13,7 +13,7 @@ import unittest
 from datetime import date
 
 import fixtures
-from actions.evaluate_caterers import (
+from actions.caterers.evaluate_caterers import (
     EvaluationData,
     EvaluationIndex,
     FeedbackEntry,

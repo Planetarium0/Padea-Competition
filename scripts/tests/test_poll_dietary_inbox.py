@@ -25,7 +25,7 @@ from support.inbound import (
     SupabaseInboundInbox,
     extract_request_code,
 )
-from actions.poll_dietary_inbox import run_poll
+from actions.dietary.poll_dietary_inbox import run_poll
 
 from mock_db import MockDatabase
 
@@ -199,20 +199,20 @@ class TestRunPoll(unittest.TestCase):
         msg = _make_inbound_msg("msg-001", request_code="CDR-TEST")
         inbox = self._make_mock_inbox([msg])
 
-        with patch("actions.poll_dietary_inbox.run_poll.__module__"), \
-             patch("actions.parse_dietary_reply.parse_reply") as mock_parse, \
-             patch("actions.escalate_dietary.run_escalation"):
-            from actions.poll_dietary_inbox import run_poll as _run_poll
+        with patch("actions.dietary.poll_dietary_inbox.run_poll.__module__"), \
+             patch("actions.dietary.parse_dietary_reply.parse_reply") as mock_parse, \
+             patch("actions.dietary.escalate_dietary.run_escalation"):
+            from actions.dietary.poll_dietary_inbox import run_poll as _run_poll
 
-            with patch("actions.poll_dietary_inbox.run_poll") as rp:
+            with patch("actions.dietary.poll_dietary_inbox.run_poll") as rp:
                 rp.side_effect = None
                 # Call directly
                 pass
 
         # Instead, test via direct import with mocks
-        with patch("actions.parse_dietary_reply.parse_reply") as mock_parse, \
-             patch("actions.escalate_dietary.run_escalation") as mock_esc:
-            from actions.poll_dietary_inbox import run_poll as direct_poll
+        with patch("actions.dietary.parse_dietary_reply.parse_reply") as mock_parse, \
+             patch("actions.dietary.escalate_dietary.run_escalation") as mock_esc:
+            from actions.dietary.poll_dietary_inbox import run_poll as direct_poll
             direct_poll(db, inbox, dry_run=False)
 
         mock_parse.assert_called_once()
@@ -223,9 +223,9 @@ class TestRunPoll(unittest.TestCase):
         msg = _make_inbound_msg("msg-orphan", request_code=None)
         inbox = self._make_mock_inbox([msg])
 
-        with patch("actions.poll_dietary_inbox.notify_coordinator") as mock_notify, \
-             patch("actions.escalate_dietary.run_escalation"):
-            from actions.poll_dietary_inbox import run_poll as direct_poll
+        with patch("actions.dietary.poll_dietary_inbox.notify_coordinator") as mock_notify, \
+             patch("actions.dietary.escalate_dietary.run_escalation"):
+            from actions.dietary.poll_dietary_inbox import run_poll as direct_poll
             direct_poll(db, inbox, dry_run=False)
 
         mock_notify.assert_called_once()
@@ -236,9 +236,9 @@ class TestRunPoll(unittest.TestCase):
         msg = _make_inbound_msg("msg-unmatched", request_code="DOESNT-EXIST")
         inbox = self._make_mock_inbox([msg])
 
-        with patch("actions.poll_dietary_inbox.notify_coordinator") as mock_notify, \
-             patch("actions.escalate_dietary.run_escalation"):
-            from actions.poll_dietary_inbox import run_poll as direct_poll
+        with patch("actions.dietary.poll_dietary_inbox.notify_coordinator") as mock_notify, \
+             patch("actions.dietary.escalate_dietary.run_escalation"):
+            from actions.dietary.poll_dietary_inbox import run_poll as direct_poll
             direct_poll(db, inbox, dry_run=False)
 
         mock_notify.assert_called_once()
@@ -250,10 +250,10 @@ class TestRunPoll(unittest.TestCase):
         msg = _make_inbound_msg("msg-001", request_code="CDR-DONE")
         inbox = self._make_mock_inbox([msg])
 
-        with patch("actions.parse_dietary_reply.parse_reply") as mock_parse, \
-             patch("actions.poll_dietary_inbox.notify_coordinator") as mock_notify, \
-             patch("actions.escalate_dietary.run_escalation"):
-            from actions.poll_dietary_inbox import run_poll as direct_poll
+        with patch("actions.dietary.parse_dietary_reply.parse_reply") as mock_parse, \
+             patch("actions.dietary.poll_dietary_inbox.notify_coordinator") as mock_notify, \
+             patch("actions.dietary.escalate_dietary.run_escalation"):
+            from actions.dietary.poll_dietary_inbox import run_poll as direct_poll
             direct_poll(db, inbox, dry_run=False)
 
         # parse_reply must NOT be called; notify_coordinator should be
@@ -265,10 +265,10 @@ class TestRunPoll(unittest.TestCase):
         msg = _make_inbound_msg("msg-001", request_code="CDR-TEST")
         inbox = self._make_mock_inbox([msg])
 
-        with patch("actions.parse_dietary_reply.parse_reply") as mock_parse, \
-             patch("actions.poll_dietary_inbox.notify_coordinator") as mock_notify, \
-             patch("actions.escalate_dietary.run_escalation") as mock_esc:
-            from actions.poll_dietary_inbox import run_poll as direct_poll
+        with patch("actions.dietary.parse_dietary_reply.parse_reply") as mock_parse, \
+             patch("actions.dietary.poll_dietary_inbox.notify_coordinator") as mock_notify, \
+             patch("actions.dietary.escalate_dietary.run_escalation") as mock_esc:
+            from actions.dietary.poll_dietary_inbox import run_poll as direct_poll
             direct_poll(db, inbox, dry_run=True)
 
         mock_parse.assert_not_called()
@@ -280,8 +280,8 @@ class TestRunPoll(unittest.TestCase):
         db = MockDatabase()
         inbox = self._make_mock_inbox([])
 
-        with patch("actions.escalate_dietary.run_escalation") as mock_esc:
-            from actions.poll_dietary_inbox import run_poll as direct_poll
+        with patch("actions.dietary.escalate_dietary.run_escalation") as mock_esc:
+            from actions.dietary.poll_dietary_inbox import run_poll as direct_poll
             direct_poll(db, inbox, dry_run=False)
 
         mock_esc.assert_called_once()
@@ -292,9 +292,9 @@ class TestRunPoll(unittest.TestCase):
         msg = _make_inbound_msg("msg-001", request_code="CDR-CLAR")
         inbox = self._make_mock_inbox([msg])
 
-        with patch("actions.parse_dietary_reply.parse_reply") as mock_parse, \
-             patch("actions.escalate_dietary.run_escalation"):
-            from actions.poll_dietary_inbox import run_poll as direct_poll
+        with patch("actions.dietary.parse_dietary_reply.parse_reply") as mock_parse, \
+             patch("actions.dietary.escalate_dietary.run_escalation"):
+            from actions.dietary.poll_dietary_inbox import run_poll as direct_poll
             direct_poll(db, inbox, dry_run=False)
 
         mock_parse.assert_called_once()
@@ -304,10 +304,10 @@ class TestRunPoll(unittest.TestCase):
         msg = _make_inbound_msg("msg-001", request_code="CDR-CNCL")
         inbox = self._make_mock_inbox([msg])
 
-        with patch("actions.parse_dietary_reply.parse_reply") as mock_parse, \
-             patch("actions.poll_dietary_inbox.notify_coordinator") as mock_notify, \
-             patch("actions.escalate_dietary.run_escalation"):
-            from actions.poll_dietary_inbox import run_poll as direct_poll
+        with patch("actions.dietary.parse_dietary_reply.parse_reply") as mock_parse, \
+             patch("actions.dietary.poll_dietary_inbox.notify_coordinator") as mock_notify, \
+             patch("actions.dietary.escalate_dietary.run_escalation"):
+            from actions.dietary.poll_dietary_inbox import run_poll as direct_poll
             direct_poll(db, inbox, dry_run=False)
 
         mock_parse.assert_not_called()
@@ -321,10 +321,10 @@ class TestRunPoll(unittest.TestCase):
         ]
         inbox = self._make_mock_inbox(msgs)
 
-        with patch("actions.parse_dietary_reply.parse_reply"), \
-             patch("actions.poll_dietary_inbox.notify_coordinator"), \
-             patch("actions.escalate_dietary.run_escalation"):
-            from actions.poll_dietary_inbox import run_poll as direct_poll
+        with patch("actions.dietary.parse_dietary_reply.parse_reply"), \
+             patch("actions.dietary.poll_dietary_inbox.notify_coordinator"), \
+             patch("actions.dietary.escalate_dietary.run_escalation"):
+            from actions.dietary.poll_dietary_inbox import run_poll as direct_poll
             count = direct_poll(db, inbox, dry_run=False)
 
         self.assertEqual(count, 2)
@@ -334,9 +334,9 @@ class TestRunPoll(unittest.TestCase):
         msg = _make_inbound_msg("msg-orphan", request_code=None)
         inbox = self._make_mock_inbox([msg])
 
-        with patch("actions.poll_dietary_inbox.notify_coordinator") as mock_notify, \
-             patch("actions.escalate_dietary.run_escalation"):
-            from actions.poll_dietary_inbox import run_poll as direct_poll
+        with patch("actions.dietary.poll_dietary_inbox.notify_coordinator") as mock_notify, \
+             patch("actions.dietary.escalate_dietary.run_escalation"):
+            from actions.dietary.poll_dietary_inbox import run_poll as direct_poll
             direct_poll(db, inbox, dry_run=True)
 
         mock_notify.assert_not_called()

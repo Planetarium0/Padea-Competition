@@ -49,13 +49,16 @@ code, not before.
 │   │   ├── email.py               schedule_email — audit-log + SendGrid dispatch.
 │   │   ├── inbound.py             InboundMailbox protocol + SupabaseInboundInbox adapter.
 │   │   ├── error_handler.py       self_healing_error_handler context manager.
-│   │   ├── run_claude_agent.py    Sandboxed agent harness.
 │   │   └── support.py             log, ask_llm, env bootstrap.
-│   ├── actions/              One file per operational goal.
-│   │   ├── clarify_dietary.py       Term-start sweep: asks caterers about MAYBE items.
-│   │   ├── escalate_dietary.py      Marks overdue Open/Clarifying requests Escalated; notifies coordinator.
-│   │   ├── parse_dietary_reply.py   LLM-driven parser: reads caterer reply, writes tags, handles clarification rounds.
-│   │   ├── poll_dietary_inbox.py    Drains dietary_inbound_messages, dispatches to parser, runs escalation.
+│   ├── tools/                Dev/ops tools (not imported as library modules).
+│   │   └── run_claude_agent.py    Sandboxed agent harness.
+│   ├── actions/              One file per operational goal, grouped by domain.
+│   │   ├── dietary/               clarify_dietary, escalate_dietary, parse_dietary_reply, poll_dietary_inbox
+│   │   ├── orders/                register_orders, send_orders
+│   │   ├── caterers/              evaluate_caterers, execute_caterer_switch, cache_pdf
+│   │   ├── forms/                 generate_qr, send_qr_emails, send_meals_links
+│   │   ├── inbox/                 poll_support_inbox, handle_support_email
+│   │   └── clear_database.py
 │   ├── migrations/           Destructive seed scripts (PDFs/Excel → DB).
 │   └── tests/                Pure-in-memory tests (MockDatabase).
 ├── cache/
@@ -76,13 +79,13 @@ Decide first what kind of code it is.
 
 | Kind of change | Where it goes |
 |---|---|
-| New operational goal (runs from `./run`) | `scripts/actions/<verb>.py` + a new case in `./run` |
+| New operational goal (runs from `./run`) | `scripts/actions/<domain>/<verb>.py` + a new case in `./run` |
 | Helper used by one script | Stay in that script |
 | Helper used by two+ scripts | Move to `scripts/support/<topic>.py` |
 | New table / column / constraint | `supabase/migrations/<timestamp>_<desc>.sql` + Pydantic in `schemas.py` + TypedDict in `records.py` + view if many-to-many |
 | New dietary-restriction logic | `scripts/support/compatibility.py` *and* `webapp/app.js` (mirror) |
 | New webapp page | `webapp/<name>.html` + `<name>.js`; talks to Supabase via `supabase_client.js`. No Python proxy. |
-| New test | Mirror the action: `scripts/tests/test_<script>.py`. Regression for a captured failure: `test_edge_cases.py`. |
+| New test | Mirror the action: `scripts/tests/test_<verb>.py` (flat, no subdirs). Regression for a captured failure: `test_edge_cases.py`. |
 | Anything one-off / exploratory | Don't add it under `scripts/`. Run it from a notebook or a REPL. |
 
 If you're tempted to put a helper "temporarily" in an `actions/` file
@@ -127,7 +130,7 @@ publishable anon key (today: everything; eventually: gated by RLS).
 ./run dietary poll [--dry-run]    # drain dietary_inbound_messages, parse replies, run escalation
 ./run support poll [--dry-run]    # drain support_inbound_messages, run AI handler for parent emails
 ./run test [name]                 # full suite or a single test_*.py module
-./run script <name>               # ad-hoc: scripts/actions/<name>.py
+./run script <domain>/<name>      # ad-hoc: scripts/actions/<domain>/<name>.py
 ```
 
 **Required env in `.env`:**
@@ -168,15 +171,15 @@ LOG_LEVEL=info               # verbose|info|warning|error
    `workflow.md`, update those files in the same commit.
 6. **Or, if the failure is environmental and you've ruled out a
    logical fix (see `principles.md §2`), escalate**:
-   `python scripts/support/run_claude_agent.py --escalate "<reason>"
+   `python scripts/tools/run_claude_agent.py --escalate "<reason>"
    [--suggested-action "<text>"]`. This writes
    `cache/failures/escalation_<id>.md` and best-effort notifies
    `DEV_NOTIFICATION_EMAIL`. Dedupes by failure_id.
 
-The harness `scripts/support/run_claude_agent.py` automates steps 1–4
+The harness `scripts/tools/run_claude_agent.py` automates steps 1–4
 under a sandbox (PATH allowlist + edit-path guard + post-edit
 revert-on-unauthorized). Invoke it via
-`python scripts/support/run_claude_agent.py --latest-error` or
+`python scripts/tools/run_claude_agent.py --latest-error` or
 `--run-and-heal "<command>"`.
 
 ## Keeping graphify and docs in sync

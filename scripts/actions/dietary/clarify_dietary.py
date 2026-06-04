@@ -11,7 +11,7 @@ After the sweep, runs the escalation check so any prior-term requests that
 have crossed the 7-day mark are also picked up in the same command.
 
 Usage:
-  python scripts/actions/clarify_dietary.py <school_name_or_id>
+  python scripts/actions/dietary/clarify_dietary.py <school_name_or_id>
             [--caterer <id>] [--restriction <name>] [--dry-run]
 """
 
@@ -459,5 +459,5 @@ if __name__ == "__main__":
         # Run escalation sweep so prior-term open requests that have crossed
         # the 7-day mark are also picked up in the same command.
         if not args.dry_run:
-            from actions.escalate_dietary import run_escalation
+            from actions.dietary.escalate_dietary import run_escalation
             run_escalation(db)

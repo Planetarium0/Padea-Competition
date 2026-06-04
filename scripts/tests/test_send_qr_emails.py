@@ -11,7 +11,7 @@ import unittest
 from unittest import mock
 
 import fixtures
-from actions.send_qr_emails import (
+from actions.forms.send_qr_emails import (
     SessionEntry,
     format_manager_email,
     manage_url,

@@ -7,7 +7,7 @@ is enrolled in, pre-filled with session + student IDs so the recipient lands
 straight on the form without picking a name.
 
 Usage:
-  python scripts/actions/send_meals_links.py --target {parents|students}
+  python scripts/actions/forms/send_meals_links.py --target {parents|students}
                                               [--immediate]
                                               [--dry-run]
                                               [--limit N]

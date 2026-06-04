@@ -7,7 +7,7 @@ session they run.  QR code images are rendered inline via api.qrserver.com so
 no attachment handling is needed.
 
 Usage:
-  python scripts/actions/send_qr_emails.py [--immediate] [--dry-run] [--first] [--limit N]
+  python scripts/actions/forms/send_qr_emails.py [--immediate] [--dry-run] [--first] [--limit N]
 
 Requires URL_ORIGIN in .env (or as an environment variable):
   URL_ORIGIN=http://<server-ip>:8000

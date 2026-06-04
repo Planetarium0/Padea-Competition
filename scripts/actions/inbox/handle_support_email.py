@@ -10,7 +10,7 @@ For a given support_inbound_messages row:
   5. Update the support case with the conversation and new status.
 
 Usage:
-  python scripts/actions/handle_support_email.py --message-id <id> [--dry-run]
+  python scripts/actions/inbox/handle_support_email.py --message-id <id> [--dry-run]
 """
 
 from __future__ import annotations

@@ -12,7 +12,7 @@ import unittest
 from collections import defaultdict
 
 import fixtures
-from actions.clarify_dietary import (
+from actions.dietary.clarify_dietary import (
     compute_question_set,
     has_open_request,
     run_sweep,

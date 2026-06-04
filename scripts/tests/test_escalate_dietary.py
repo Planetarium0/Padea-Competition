@@ -14,7 +14,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import fixtures
-from actions.escalate_dietary import ESCALATION_DAYS, _is_overdue, run_escalation
+from actions.dietary.escalate_dietary import ESCALATION_DAYS, _is_overdue, run_escalation
 from mock_db import MockDatabase
 from support import Record
 
@@ -90,7 +90,7 @@ class TestRunEscalation(unittest.TestCase):
     def setUp(self):
         # Patch notify_coordinator so we don't touch the filesystem or send email
         self._patcher = patch(
-            "actions.escalate_dietary.notify_coordinator",
+            "actions.dietary.escalate_dietary.notify_coordinator",
             return_value=Path("/tmp/fake_artifact.md"),
         )
         self.mock_notify = self._patcher.start()

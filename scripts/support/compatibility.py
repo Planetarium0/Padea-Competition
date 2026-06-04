@@ -2,7 +2,7 @@
 Shared dietary-compatibility logic.
 
 Used by:
-  - scripts/actions/register_orders.py  (meal assignment + min-qty swaps)
+  - scripts/actions/orders/register_orders.py  (meal assignment + min-qty swaps)
   - scripts/tests/order_constraints.py  (opted-out / eligibility check)
 
 The webapp implements the same algorithm in JS at

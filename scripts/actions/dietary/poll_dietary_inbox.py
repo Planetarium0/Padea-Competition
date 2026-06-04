@@ -11,7 +11,7 @@ After draining the inbox, runs the escalation check so overdue requests
 are also caught in the same command.
 
 Usage:
-  python scripts/actions/poll_dietary_inbox.py [--dry-run]
+  python scripts/actions/dietary/poll_dietary_inbox.py [--dry-run]
 """
 
 from __future__ import annotations
@@ -83,14 +83,14 @@ def run_poll(
             f"from {msg.from_address}"
         )
         if not dry_run:
-            from actions.parse_dietary_reply import parse_reply
+            from actions.dietary.parse_dietary_reply import parse_reply
             parse_reply(db, request, msg)
             inbox.mark_seen(msg.message_id)
         processed += 1
 
     # Run escalation so overdue requests are caught in the same command.
     if not dry_run:
-        from actions.escalate_dietary import run_escalation
+        from actions.dietary.escalate_dietary import run_escalation
         run_escalation(db)
 
     log.info(f"Poll complete: {processed} message(s) processed.")

@@ -13,7 +13,7 @@ from collections import Counter
 from datetime import date
 
 import fixtures
-from actions.register_orders import (
+from actions.orders.register_orders import (
     Assignment,
     OrderingData,
     OrderingIndex,
@@ -68,14 +68,14 @@ class TestIsStudentExcluded(unittest.TestCase):
         return _make_index(exclusions=exclusions)
 
     def test_no_exclusions(self):
-        from actions.register_orders import is_student_excluded
+        from actions.orders.register_orders import is_student_excluded
         idx = _make_index()
         stu = fixtures.student_normal().fields
         sess = fixtures.session_monday().fields
         self.assertFalse(is_student_excluded(stu, sess, date(2026, 2, 2), idx))
 
     def test_excluded_by_school_date_all_levels(self):
-        from actions.register_orders import is_student_excluded
+        from actions.orders.register_orders import is_student_excluded
         exclusion = Record(id="exc001", fields={
             "school_id":  fixtures.SCHOOL_A_ID,
             "date":       "2026-02-02",
@@ -87,7 +87,7 @@ class TestIsStudentExcluded(unittest.TestCase):
         self.assertTrue(is_student_excluded(stu, sess, date(2026, 2, 2), idx))
 
     def test_excluded_matching_year_level(self):
-        from actions.register_orders import is_student_excluded
+        from actions.orders.register_orders import is_student_excluded
         exclusion = Record(id="exc002", fields={
             "school_id":  fixtures.SCHOOL_A_ID,
             "date":       "2026-02-02",
@@ -99,7 +99,7 @@ class TestIsStudentExcluded(unittest.TestCase):
         self.assertTrue(is_student_excluded(stu, sess, date(2026, 2, 2), idx))
 
     def test_not_excluded_wrong_year_level(self):
-        from actions.register_orders import is_student_excluded
+        from actions.orders.register_orders import is_student_excluded
         exclusion = Record(id="exc003", fields={
             "school_id":  fixtures.SCHOOL_A_ID,
             "date":       "2026-02-02",
@@ -111,7 +111,7 @@ class TestIsStudentExcluded(unittest.TestCase):
         self.assertFalse(is_student_excluded(stu, sess, date(2026, 2, 2), idx))
 
     def test_not_excluded_wrong_date(self):
-        from actions.register_orders import is_student_excluded
+        from actions.orders.register_orders import is_student_excluded
         exclusion = Record(id="exc004", fields={
             "school_id":  fixtures.SCHOOL_A_ID,
             "date":       "2026-02-09",  # different week

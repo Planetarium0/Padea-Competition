@@ -17,7 +17,7 @@ tracks capability (can a caterer serve a school?), not current assignment. The
 current assignment is always derived from Sessions.Caterer.
 
 Usage:
-  python scripts/actions/execute_caterer_switch.py <proposal_id> [--approve] [--dry-run]
+  python scripts/actions/caterers/execute_caterer_switch.py <proposal_id> [--approve] [--dry-run]
 """
 
 from __future__ import annotations

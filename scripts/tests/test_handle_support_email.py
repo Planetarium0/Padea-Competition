@@ -34,7 +34,7 @@ from mock_db import MockDatabase
 from support import Record
 from support.inbound import InboundMessage
 
-import actions.handle_support_email as hse
+import actions.inbox.handle_support_email as hse
 
 
 # ---------------------------------------------------------------------------
@@ -198,7 +198,7 @@ class TestCoordinatorSender(unittest.TestCase):
 
 class TestNewCase(unittest.TestCase):
 
-    @patch("actions.handle_support_email.run_tool_loop")
+    @patch("actions.inbox.handle_support_email.run_tool_loop")
     def test_creates_case_with_correct_parent_email(self, mock_loop):
         db = _db_with_parent()
         msg = _make_inbound()
@@ -210,7 +210,7 @@ class TestNewCase(unittest.TestCase):
         self.assertEqual(case_fields["parent_email"], PARENT_EMAIL)
         self.assertEqual(case_fields["status"], "Open")
 
-    @patch("actions.handle_support_email.run_tool_loop")
+    @patch("actions.inbox.handle_support_email.run_tool_loop")
     def test_tool_loop_called_with_new_case(self, mock_loop):
         db = _db_with_parent()
         msg = _make_inbound()
@@ -228,7 +228,7 @@ class TestNewCase(unittest.TestCase):
 
 class TestThreadingReuseOpenCase(unittest.TestCase):
 
-    @patch("actions.handle_support_email.run_tool_loop")
+    @patch("actions.inbox.handle_support_email.run_tool_loop")
     def test_in_reply_to_reuses_open_case(self, mock_loop):
         db = _db_with_parent()
         prior_msg_id = "<prior-msg@example.com>"
@@ -253,7 +253,7 @@ class TestThreadingReuseOpenCase(unittest.TestCase):
 
 class TestThreadingResolvedCase(unittest.TestCase):
 
-    @patch("actions.handle_support_email.run_tool_loop")
+    @patch("actions.inbox.handle_support_email.run_tool_loop")
     def test_in_reply_to_resolved_case_creates_new(self, mock_loop):
         db = _db_with_parent()
         prior_msg_id = "<prior-msg@example.com>"
@@ -353,7 +353,7 @@ class TestToolExecutor(unittest.TestCase):
         self.assertEqual(len(db.Students.updates), 0)
 
     # 10. send_reply — schedule_email called with correct args
-    @patch("actions.handle_support_email.schedule_email")
+    @patch("actions.inbox.handle_support_email.schedule_email")
     def test_send_reply_calls_schedule_email(self, mock_schedule):
         db = _db_with_parent()
         executor = _make_executor(db)
@@ -373,7 +373,7 @@ class TestToolExecutor(unittest.TestCase):
 class TestFullToolLoopResolved(unittest.TestCase):
 
     @patch("support.email._send_via_sendgrid")
-    @patch("actions.handle_support_email.Anthropic")
+    @patch("actions.inbox.handle_support_email.Anthropic")
     def test_restriction_added_reply_sent_case_resolved(self, MockAnthropic, mock_send):
         db = _db_with_parent()
         case = _make_case()
@@ -440,7 +440,7 @@ class TestFullToolLoopResolved(unittest.TestCase):
 class TestFullToolLoopReplyOnly(unittest.TestCase):
 
     @patch("support.email._send_via_sendgrid")
-    @patch("actions.handle_support_email.Anthropic")
+    @patch("actions.inbox.handle_support_email.Anthropic")
     def test_reply_only_case_resolved(self, MockAnthropic, mock_send):
         db = _db_with_parent()
         case = _make_case()
@@ -494,7 +494,7 @@ class TestNoApiKey(unittest.TestCase):
 
         with patch.dict(os.environ, env, clear=True):
             # notify_coordinator writes artifact files; suppress by mocking
-            with patch("actions.handle_support_email.notify_coordinator") as mock_notify:
+            with patch("actions.inbox.handle_support_email.notify_coordinator") as mock_notify:
                 hse.run_tool_loop(db, case, msg, PARENT_EMAIL, students)
                 mock_notify.assert_called_once()
 
@@ -506,7 +506,7 @@ class TestNoApiKey(unittest.TestCase):
 class TestDryRun(unittest.TestCase):
 
     @patch("support.email._send_via_sendgrid")
-    @patch("actions.handle_support_email.Anthropic")
+    @patch("actions.inbox.handle_support_email.Anthropic")
     def test_dry_run_no_db_writes(self, MockAnthropic, mock_send):
         db = _db_with_parent()
         msg = _make_inbound()
@@ -520,7 +520,7 @@ class TestDryRun(unittest.TestCase):
         self.assertEqual(len(db.ScheduledEmails.created_fields), 0)
 
     @patch("support.email._send_via_sendgrid")
-    @patch("actions.handle_support_email.Anthropic")
+    @patch("actions.inbox.handle_support_email.Anthropic")
     def test_dry_run_no_case_created_in_db(self, MockAnthropic, mock_send):
         """In dry_run mode, no case row is written to the database."""
         db = _db_with_parent()

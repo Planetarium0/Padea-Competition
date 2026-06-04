@@ -178,7 +178,7 @@ class TestSendMealsLinksResendApiKeyMissing(unittest.TestCase):
 
     def test_failure_20260603_201520_send_meals_links(self) -> None:
         import support.error_handler as eh_module
-        from actions.send_meals_links import send_links
+        from actions.forms.send_meals_links import send_links
         from support.error_handler import self_healing_error_handler
 
         # Minimal state derived from the captured snapshot.

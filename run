@@ -113,21 +113,21 @@ case "$COMMAND" in
         case "$SUBCOMMAND" in
             "")
                 echo "Generating orders..."
-                $PYTHON scripts/actions/register_orders.py
+                $PYTHON scripts/actions/orders/register_orders.py
                 echo "Logging order emails..."
-                $PYTHON scripts/actions/send_orders.py "$@"
+                $PYTHON scripts/actions/orders/send_orders.py "$@"
                 ;;
             generate)
                 echo "Generating orders..."
-                $PYTHON scripts/actions/register_orders.py "$@"
+                $PYTHON scripts/actions/orders/register_orders.py "$@"
                 ;;
             preview)
                 echo "Previewing order emails..."
-                $PYTHON scripts/actions/send_orders.py --preview "$@"
+                $PYTHON scripts/actions/orders/send_orders.py --preview "$@"
                 ;;
             send)
                 echo "Logging order emails..."
-                $PYTHON scripts/actions/send_orders.py "$@"
+                $PYTHON scripts/actions/orders/send_orders.py "$@"
                 ;;
             *)
                 echo "[ERROR] Unknown orders subcommand: $SUBCOMMAND"
@@ -143,10 +143,10 @@ case "$COMMAND" in
             qr)
                 if [[ "${3:-}" == "send" ]]; then
                     echo "Sending QR codes to site managers..."
-                    $PYTHON scripts/actions/send_qr_emails.py "${@:4}"
+                    $PYTHON scripts/actions/forms/send_qr_emails.py "${@:4}"
                 else
                     echo "Generating QR codes..."
-                    $PYTHON scripts/actions/generate_qr.py "${@:3}"
+                    $PYTHON scripts/actions/forms/generate_qr.py "${@:3}"
                 fi
                 ;;
             send)
@@ -154,7 +154,7 @@ case "$COMMAND" in
                 case "$TARGET" in
                     parents|students)
                         echo "Sending meal preference links to ${TARGET}..."
-                        $PYTHON scripts/actions/send_meals_links.py --target "$TARGET" "${@:4}"
+                        $PYTHON scripts/actions/forms/send_meals_links.py --target "$TARGET" "${@:4}"
                         ;;
                     *)
                         echo "[ERROR] Usage: $0 forms send {parents|students} [--immediate] [--dry-run]"
@@ -175,7 +175,7 @@ case "$COMMAND" in
         case "$SUBCOMMAND" in
             evaluate)
                 echo "Evaluating caterer ratings..."
-                $PYTHON scripts/actions/evaluate_caterers.py "${@:3}"
+                $PYTHON scripts/actions/caterers/evaluate_caterers.py "${@:3}"
                 ;;
             switch)
                 PROPOSAL_ID="${3:-}"
@@ -184,7 +184,7 @@ case "$COMMAND" in
                     exit 1
                 fi
                 echo "Executing caterer switch for proposal $PROPOSAL_ID..."
-                $PYTHON scripts/actions/execute_caterer_switch.py "$PROPOSAL_ID" "${@:4}"
+                $PYTHON scripts/actions/caterers/execute_caterer_switch.py "$PROPOSAL_ID" "${@:4}"
                 ;;
             *)
                 echo "[ERROR] Unknown caterer subcommand: ${SUBCOMMAND:-<none>}"
@@ -204,15 +204,15 @@ case "$COMMAND" in
                     exit 1
                 fi
                 echo "Running dietary clarification sweep for '$SCHOOL'..."
-                $PYTHON scripts/actions/clarify_dietary.py "$SCHOOL" "${@:4}"
+                $PYTHON scripts/actions/dietary/clarify_dietary.py "$SCHOOL" "${@:4}"
                 ;;
             escalate)
                 echo "Running dietary escalation check..."
-                $PYTHON scripts/actions/escalate_dietary.py "${@:3}"
+                $PYTHON scripts/actions/dietary/escalate_dietary.py "${@:3}"
                 ;;
             poll)
                 echo "Polling dietary inbound inbox..."
-                $PYTHON scripts/actions/poll_dietary_inbox.py "${@:3}"
+                $PYTHON scripts/actions/dietary/poll_dietary_inbox.py "${@:3}"
                 ;;
             *)
                 echo "[ERROR] Unknown dietary subcommand: ${SUBCOMMAND:-<none>}"
@@ -227,7 +227,7 @@ case "$COMMAND" in
         case "$SUBCOMMAND" in
             poll)
                 echo "Running support inbox poll..."
-                $PYTHON scripts/actions/poll_support_inbox.py "${@:3}"
+                $PYTHON scripts/actions/inbox/poll_support_inbox.py "${@:3}"
                 ;;
             *)
                 echo "[ERROR] Unknown support subcommand: ${SUBCOMMAND:-<none>}"
@@ -253,7 +253,7 @@ case "$COMMAND" in
 
     fix)
         shift
-        $PYTHON scripts/support/run_claude_agent.py "$@"
+        $PYTHON scripts/tools/run_claude_agent.py "$@"
         ;;
 
     *)

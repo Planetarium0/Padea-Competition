@@ -7,7 +7,7 @@ For each unseen support_inbound_messages row:
   3. Mark the row as seen.
 
 Usage:
-  python scripts/actions/poll_support_inbox.py [--dry-run]
+  python scripts/actions/inbox/poll_support_inbox.py [--dry-run]
 """
 
 from __future__ import annotations
@@ -79,7 +79,7 @@ def run_poll(
         )
 
         if not dry_run:
-            from actions.handle_support_email import handle_message  # noqa: PLC0415
+            from actions.inbox.handle_support_email import handle_message  # noqa: PLC0415
             handle_message(db, inbound_msg)
             db.SupportInboundMessages.update(row.id, {"seen": True})
 

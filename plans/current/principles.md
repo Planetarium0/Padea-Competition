@@ -76,7 +76,7 @@ minimal human intervention.
   test in `scripts/tests/test_edge_cases.py` that loads the snapshot
   via `populate_mock_db` and reproduces the bug. `./run test` must pass
   before the patch is shipped.
-- **The sandbox is the contract for agent edits.** `scripts/support/run_claude_agent.py`
+- **The sandbox is the contract for agent edits.** `scripts/tools/run_claude_agent.py`
   restricts agent file writes to `scripts/`, `supabase/`, `webapp/`,
   `plans/` and bash commands to a fixed allowlist. If you want an agent
   to touch something outside those paths, that is a deliberate change to

@@ -14,7 +14,7 @@ This action runs on demand and is also called at the end of
 prior-term sweeps that crossed the 7-day line.
 
 Usage:
-  python scripts/actions/escalate_dietary.py [--dry-run]
+  python scripts/actions/dietary/escalate_dietary.py [--dry-run]
 """
 
 from __future__ import annotations

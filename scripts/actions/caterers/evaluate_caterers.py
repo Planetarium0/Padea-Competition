@@ -15,7 +15,7 @@ Dietary hard filter: a candidate caterer is only eligible if it has at least
 one compatible menu item for EVERY non-opted-out student at the session.
 
 Usage:
-  python scripts/actions/evaluate_caterers.py [--dry-run] [--limit N]
+  python scripts/actions/caterers/evaluate_caterers.py [--dry-run] [--limit N]
 """
 
 from __future__ import annotations

@@ -11,7 +11,7 @@ import unittest
 from unittest import mock
 
 import fixtures
-from actions.send_orders import (
+from actions.orders.send_orders import (
     LineItem,
     SessionContext,
     format_email_body,

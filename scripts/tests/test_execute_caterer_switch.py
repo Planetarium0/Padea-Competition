@@ -9,7 +9,7 @@ from __future__ import annotations
 import unittest
 
 import fixtures
-from actions.execute_caterer_switch import execute
+from actions.caterers.execute_caterer_switch import execute
 from mock_db import MockDatabase
 from support import Record
 

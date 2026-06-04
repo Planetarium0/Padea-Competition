@@ -85,7 +85,7 @@ source .venv/bin/activate        # activate in shell
 
 Do not use the system `pip` or `python` — the system environment is
 externally managed and packages installed there won't be visible to `.venv/`.
-The agent harness (`scripts/support/run_claude_agent.py`) already prefers
+The agent harness (`scripts/tools/run_claude_agent.py`) already prefers
 `.venv/` when present.
 
 ## Self-healing & agent-ready architecture
@@ -115,7 +115,7 @@ rules:
 - Anything that can fail has a unit test. Tests are pure-in-memory
   (`MockDatabase` in `scripts/tests/mock_db.py`); no real Supabase
   calls in the suite.
-- One script = one operational goal (`scripts/actions/<verb>.py`).
+- One script = one operational goal (`scripts/actions/<domain>/<verb>.py`).
   Helpers used by more than one script move to `scripts/support/`.
 - All operations are invoked via `./run` — no ad-hoc paths in docs,
   runbooks, or cron.
@@ -130,14 +130,14 @@ rules:
 ./run caterer evaluate         # rolling-rating check + propose switches
 ./run forms qr [send]          # generate or email per-session QR codes
 ./run test                     # full suite (pure in-memory)
-./run script <name>            # ad-hoc: scripts/actions/<name>.py
+./run script <domain>/<name>   # ad-hoc: scripts/actions/<domain>/<name>.py
 ```
 
 Self-healing harness:
 
 ```bash
-.venv/bin/python scripts/support/run_claude_agent.py --latest-error
-.venv/bin/python scripts/support/run_claude_agent.py --run-and-heal "./run orders"
+.venv/bin/python scripts/tools/run_claude_agent.py --latest-error
+.venv/bin/python scripts/tools/run_claude_agent.py --run-and-heal "./run orders"
 ```
 
 See [`plans/current/dev-guide.md`](../plans/current/dev-guide.md) for the

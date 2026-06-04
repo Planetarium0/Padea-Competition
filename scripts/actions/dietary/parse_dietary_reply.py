@@ -11,7 +11,7 @@ calls ask_llm to extract structured answers, and then:
   - If the LLM returns unusable JSON, logs without mutating state.
 
 Usage (CLI):
-  python scripts/actions/parse_dietary_reply.py \\
+  python scripts/actions/dietary/parse_dietary_reply.py \\
       --request-id <uuid> --message-id <message_id>
 """
 
