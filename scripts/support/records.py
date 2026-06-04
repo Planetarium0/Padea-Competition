@@ -27,7 +27,7 @@ Region = Literal[
 ]
 DayName = Literal["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 DeliveryFeeStructure = Literal["Per trip", "Per school per trip"]
-ClarificationStatus = Literal["Open", "Resolved", "Escalated", "Cancelled"]
+ClarificationStatus = Literal["Open", "Clarifying", "Resolved", "Escalated", "Cancelled"]
 EmailStatus = Literal["Queued", "Send Immediately", "Sent", "Failed"]
 ProposalStatus = Literal["Pending", "Approved", "Rejected", "Executed"]
 YearLevel = Literal["All", "12", "11", "10", "9", "8", "7", "6"]
@@ -281,9 +281,29 @@ DietaryClarificationRequestFields = TypedDict(
         "school_id": str,
         "sent_at": str,
         "responded_at": str,
+        "clarification_rounds": int,
         "status": ClarificationStatus,
-        "question_set": list[dict[str, str]],   # [{menu_item_id, restriction_id}]
+        "question_set": list[dict],   # [{menu_item_id, restriction_id, answer?, ...}]
+        "messages": list[dict],       # [{direction, sent_at, message_id, body, ...}]
+        "reply_to_address": str,
         "notes": str,
+    },
+    total=False,
+)
+
+DietaryInboundMessageFields = TypedDict(
+    "DietaryInboundMessageFields",
+    {
+        "id": str,
+        "received_at": str,
+        "seen": bool,
+        "from_address": str,
+        "subject": str,
+        "body_text": str,
+        "message_id": str,
+        "in_reply_to": str,
+        "to_address": str,
+        "raw_payload": dict,
     },
     total=False,
 )
@@ -313,4 +333,5 @@ __all__ = [
     "ManagerSubstitutionFields",
     "CatererSwitchProposalFields",
     "DietaryClarificationRequestFields",
+    "DietaryInboundMessageFields",
 ]

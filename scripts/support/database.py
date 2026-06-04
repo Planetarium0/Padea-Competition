@@ -36,6 +36,7 @@ from .records import (
     CatererFields,
     CatererSwitchProposalFields,
     DietaryClarificationRequestFields,
+    DietaryInboundMessageFields,
     DietaryRestrictionFields,
     ExclusionFields,
     ManagerSubstitutionFields,
@@ -400,6 +401,10 @@ class Database:
     @property
     def DietaryClarificationRequests(self) -> Table[DietaryClarificationRequestFields]:
         return self._table("dietary_clarification_requests")
+
+    @property
+    def DietaryInboundMessages(self) -> Table[DietaryInboundMessageFields]:
+        return self._table("dietary_inbound_messages")
 
 
 # ---------------------------------------------------------------------------

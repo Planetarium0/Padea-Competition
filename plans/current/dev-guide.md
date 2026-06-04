@@ -46,13 +46,16 @@ code, not before.
 │   │   ├── schemas.py             Pydantic models. Validate on every I/O.
 │   │   ├── records.py             TypedDicts mirroring view shapes.
 │   │   ├── compatibility.py       Dietary verdict (mirrored in webapp/app.js).
-│   │   ├── email.py               schedule_email — audit-log + MailSlurp dispatch.
+│   │   ├── email.py               schedule_email — audit-log + SendGrid dispatch.
+│   │   ├── inbound.py             InboundMailbox protocol + SupabaseInboundInbox adapter.
 │   │   ├── error_handler.py       self_healing_error_handler context manager.
 │   │   ├── run_claude_agent.py    Sandboxed agent harness.
 │   │   └── support.py             log, ask_llm, env bootstrap.
 │   ├── actions/              One file per operational goal.
 │   │   ├── clarify_dietary.py       Term-start sweep: asks caterers about MAYBE items.
-│   │   ├── escalate_dietary.py      Marks overdue Open requests Escalated; notifies coordinator.
+│   │   ├── escalate_dietary.py      Marks overdue Open/Clarifying requests Escalated; notifies coordinator.
+│   │   ├── parse_dietary_reply.py   LLM-driven parser: reads caterer reply, writes tags, handles clarification rounds.
+│   │   ├── poll_dietary_inbox.py    Drains dietary_inbound_messages, dispatches to parser, runs escalation.
 │   ├── migrations/           Destructive seed scripts (PDFs/Excel → DB).
 │   └── tests/                Pure-in-memory tests (MockDatabase).
 ├── cache/
@@ -120,7 +123,8 @@ publishable anon key (today: everything; eventually: gated by RLS).
 ./run dietary clarify <school>    # ask caterers for MAYBE item confirmation; also runs escalation
 ./run dietary clarify <school> --restriction <name>  # single restriction only
 ./run dietary clarify <school> --caterer <id>        # single caterer only
-./run dietary escalate            # mark overdue Open requests Escalated + notify coordinator
+./run dietary escalate            # mark overdue Open/Clarifying requests Escalated + notify coordinator
+./run dietary poll [--dry-run]    # drain dietary_inbound_messages, parse replies, run escalation
 ./run test [name]                 # full suite or a single test_*.py module
 ./run script <name>               # ad-hoc: scripts/actions/<name>.py
 ```
@@ -137,6 +141,8 @@ COORDINATOR_EMAIL=…          # where notify_coordinator sends dietary escalati
                              # (falls back to DEV_NOTIFICATION_EMAIL if unset)
 URL_ORIGIN=https://…         # used in QR codes + preference links
 ANTHROPIC_API_KEY=…          # optional, only for LLM-assisted migrations
+SENDGRID_INBOUND_VERIFICATION_KEY=… # ECDSA P-256 public key for the receive-dietary-reply Edge Function
+APP_DOMAIN=…                 # e.g. padea.com.au; used to construct reply-to addresses
 LOG_LEVEL=info               # verbose|info|warning|error
 ```
 

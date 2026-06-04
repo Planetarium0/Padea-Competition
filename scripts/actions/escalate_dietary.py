@@ -70,10 +70,10 @@ def run_escalation(
 
     open_requests = [
         req for req in requests
-        if req.fields.get("status") == "Open"
+        if req.fields.get("status") in ("Open", "Clarifying")
     ]
     log.info(
-        f"Escalation check: {len(open_requests)} open request(s), "
+        f"Escalation check: {len(open_requests)} open/clarifying request(s), "
         f"reference={reference.date()}"
     )
 

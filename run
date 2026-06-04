@@ -29,6 +29,7 @@ Usage:
   $0 caterer switch <proposal_id> [--approve] [--dry-run]
   $0 dietary clarify <school> [--caterer ID] [--restriction NAME] [--dry-run]
   $0 dietary escalate [--dry-run]
+  $0 dietary poll [--dry-run]
   $0 test [name]
   $0 script [name]
   $0 fix [--latest-error|--run-and-heal CMD|...]
@@ -208,9 +209,13 @@ case "$COMMAND" in
                 echo "Running dietary escalation check..."
                 $PYTHON scripts/actions/escalate_dietary.py "${@:3}"
                 ;;
+            poll)
+                echo "Polling dietary inbound inbox..."
+                $PYTHON scripts/actions/poll_dietary_inbox.py "${@:3}"
+                ;;
             *)
                 echo "[ERROR] Unknown dietary subcommand: ${SUBCOMMAND:-<none>}"
-                echo "Use: dietary clarify <school> | dietary escalate"
+                echo "Use: dietary clarify <school> | dietary escalate | dietary poll [--dry-run]"
                 exit 1
                 ;;
         esac

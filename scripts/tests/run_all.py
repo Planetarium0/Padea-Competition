@@ -30,6 +30,8 @@ import test_error_handler
 import test_escalate_dietary
 import test_evaluate_caterers
 import test_execute_caterer_switch
+import test_parse_dietary_reply
+import test_poll_dietary_inbox
 import test_register_orders
 import test_send_meals_links
 import test_send_orders
@@ -47,6 +49,8 @@ def suite() -> unittest.TestSuite:
         test_email,
         test_error_handler,
         test_escalate_dietary,
+        test_parse_dietary_reply,
+        test_poll_dietary_inbox,
         test_register_orders,
         test_send_meals_links,
         test_send_orders,

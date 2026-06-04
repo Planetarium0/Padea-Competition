@@ -24,6 +24,7 @@ import re
 import sys
 from collections import defaultdict
 
+
 from support import (
     Alert,
     Card,
@@ -311,6 +312,13 @@ def run_sweep(
         }])
         log.info(f"  Created request {request_code}")
 
+        # Compute the Reply-To address for this request and persist it.
+        reply_domain = f"reply.{os.environ.get('APP_DOMAIN', 'padea.com.au')}"
+        reply_to_address = f"dietary-{request_code}@{reply_domain}"
+        db.DietaryClarificationRequests.update(
+            created[0].id, {"reply_to_address": reply_to_address}
+        )
+
         contact_email = caterer.fields.get("contact_email")
         if not contact_email:
             log.warning(f"  {caterer_name}: no contact_email — skipping email")
@@ -334,8 +342,7 @@ def run_sweep(
 
             school_label = school_name or school_id
             subject = (
-                f"[Padea] Dietary information needed — "
-                f"{school_label} × {caterer_name}"
+                f"[{request_code}] Padea dietary check — {caterer_name}"
             )
             schedule_email(
                 db,
@@ -344,6 +351,7 @@ def run_sweep(
                 subject=subject,
                 body=body,
                 email_id=request_code,
+                reply_to=reply_to_address,
             )
 
         requests_created += 1

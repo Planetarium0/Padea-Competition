@@ -220,6 +220,7 @@ def _send_via_sendgrid(
     body: str,
     cc: list[str] | None = None,
     is_html: bool = True,
+    in_reply_to_header: str | None = None,
 ) -> None:
     """Dispatch an email via SendGrid. Raises RuntimeError if the API key is missing."""
     api_key = os.environ.get("SENDGRID_API_KEY")
@@ -236,6 +237,9 @@ def _send_via_sendgrid(
         "subject": subject,
         "content": [{"type": "text/html" if is_html else "text/plain", "value": body}],
     }
+
+    if in_reply_to_header:
+        payload["headers"] = [{"key": "In-Reply-To", "value": in_reply_to_header}]
 
     if os.environ.get("PADEA_TEST_MODE") == "1":
         raise RuntimeError(
@@ -261,6 +265,8 @@ def schedule_email(
     email_id:                    str,
     weekly_order_id:             str | None = None,
     caterer_switch_proposal_id:  str | None = None,
+    reply_to:                    str | None = None,
+    in_reply_to_header:          str | None = None,
 ) -> Record[ScheduledEmailFields] | None:
     """Create an audit record in scheduled_emails and immediately send via Resend.
 
@@ -303,7 +309,13 @@ def schedule_email(
         actual_cc = cc_email
 
     try:
-        _send_via_sendgrid(to=[actual_to], cc=actual_cc, subject=subject, body=body)
+        _send_via_sendgrid(
+            to=[actual_to],
+            cc=actual_cc,
+            subject=subject,
+            body=body,
+            in_reply_to_header=in_reply_to_header,
+        )
         if se_record:
             db.ScheduledEmails.update(se_record.id, {"status": "Sent"})
         log.info(f"[SENT] Email sent to {actual_to}")

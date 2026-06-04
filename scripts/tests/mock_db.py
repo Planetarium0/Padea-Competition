@@ -122,3 +122,4 @@ class MockDatabase:
         self.ManagerSubstitutions:          MockTable = MockTable()
         self.CatererSwitchProposals:        MockTable = MockTable()
         self.DietaryClarificationRequests:  MockTable = MockTable()
+        self.DietaryInboundMessages:        MockTable = MockTable()

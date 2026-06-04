@@ -10,6 +10,7 @@ from .records import (
     DayName,
     DeliveryFeeStructure,
     DietaryClarificationRequestFields,
+    DietaryInboundMessageFields,
     DietaryRestrictionFields,
     EmailStatus,
     ExclusionFields,
@@ -25,6 +26,12 @@ from .records import (
     StudentFields,
     WeeklyOrderFields,
     YearLevel,
+)
+from .inbound import (
+    InboundMessage,
+    InboundMailbox,
+    SupabaseInboundInbox,
+    extract_request_code,
 )
 from .support import VERBOSE, ask_llm, log
 from .error_handler import UnhandledEdgeCaseError, self_healing_error_handler
@@ -57,9 +64,12 @@ __all__ = [
     "DayName",
     "DeliveryFeeStructure",
     "DietaryClarificationRequestFields",
+    "DietaryInboundMessageFields",
     "DietaryRestrictionFields",
     "EmailStatus",
     "ExclusionFields",
+    "InboundMailbox",
+    "InboundMessage",
     "ManagerSubstitutionFields",
     "MenuItemFields",
     "OnSiteManagerFields",
@@ -71,6 +81,7 @@ __all__ = [
     "SchoolFields",
     "SessionFields",
     "StudentFields",
+    "SupabaseInboundInbox",
     "Table",
     "VERBOSE",
     "WeeklyOrderFields",
@@ -89,6 +100,7 @@ __all__ = [
     "ask_llm",
     "compose_email",
     "escalate_to_dev",
+    "extract_request_code",
     "html_email",
     "notify_coordinator",
     "load_substitutions",

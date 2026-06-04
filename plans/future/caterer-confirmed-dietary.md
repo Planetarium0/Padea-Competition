@@ -1,12 +1,13 @@
 # Caterer-confirmed dietary information
 
-**Status:** Phase A (schema + sweep) and the core of Phase D (escalation + `notify_coordinator`) implemented 2026-06-04, against an earlier draft of this plan. Phase B (MailSlurp inbound adapter), Phase C (parser + iterative clarification), the weekly tag-write digest within Phase D, and Phase E (reactive triggers) are still to do. The earlier draft's caterer-facing webapp page is intentionally dropped — see §2 non-goals. A supporting `compatibility.item_verdict()` helper landed alongside Phase A.
+**Status:** Phase A (schema + sweep) and the core of Phase D (escalation + `notify_coordinator`) implemented 2026-06-04, against an earlier draft of this plan. Phase B (SendGrid inbound adapter + Edge Function), Phase C (parser + iterative clarification), the weekly tag-write digest within Phase D, and Phase E (reactive triggers) are still to do. The earlier draft's caterer-facing webapp page is intentionally dropped — see §2 non-goals. A supporting `compatibility.item_verdict()` helper landed alongside Phase A.
 **Touches:** `scripts/actions/clarify_dietary.py`, `scripts/actions/parse_dietary_reply.py`,
 `scripts/actions/poll_dietary_inbox.py`, `scripts/actions/escalate_dietary.py`,
 `scripts/support/inbound.py`, `scripts/support/email.py::notify_coordinator`,
-`supabase/migrations/<new>.sql`. Compatibility logic in
-`scripts/support/compatibility.py` and the order pipeline are
-**unchanged**.
+`supabase/migrations/<new>.sql`,
+`supabase/functions/receive-dietary-reply/index.ts` (new Edge Function).
+Compatibility logic in `scripts/support/compatibility.py` and the order pipeline
+are **unchanged**.
 
 ---
 
@@ -117,12 +118,14 @@ Algorithm:
    `dietary_clarification_requests` row with `status='Open'`,
    `sent_at=now()`, and `question_set` as JSONB
    `[{menu_item_id, restriction_id, answer: null}, …]`.
-5. Send one email per caterer via `schedule_email`. From:
-   `orders@padea.com.au` (Resend). **Reply-To: the shared MailSlurp
-   inbox address.** Subject: `[<request_code>] Padea dietary check —
-   <caterer name>`. Body: one row per menu item with the open
-   restrictions listed, with a "please reply to this email" note. No
-   form, no buttons.
+5. Send one email per caterer via `schedule_email`. Subject:
+   `Padea dietary check — <caterer name>`. **Reply-To:
+   `dietary-<request_code>@<DIETARY_REPLY_DOMAIN>`** — a per-request
+   address at the catch-all subdomain (e.g.
+   `dietary-CDR-23-greekcaterer@reply.padea.com.au`). Store this
+   address as `reply_to_address` on the request row. Body: one row per
+   menu item with open restrictions listed, with a "please reply to
+   this email" note. No form, no buttons.
 6. Print a per-caterer summary: open question count, 7-day deadline.
 
 ## 5. Parse + iterative clarification — the new core
@@ -245,6 +248,7 @@ CREATE TABLE dietary_clarification_requests (
                           CHECK (status IN ('Open','Clarifying','Resolved','Escalated','Cancelled')),
     question_set          JSONB NOT NULL,
     messages              JSONB NOT NULL DEFAULT '[]'::jsonb,
+    reply_to_address      TEXT,              -- dietary-<request_code>@<DIETARY_REPLY_DOMAIN>
     notes                 TEXT
 );
 
@@ -259,14 +263,93 @@ ALTER TABLE dietary_clarification_requests ENABLE ROW LEVEL SECURITY;
 `menu_item_dietary_tags`, `caterer_legend_tags`, `menu_items.notes`
 are unchanged.
 
-**Important**: because all writes happen server-side using the service
-key, this plan **does not depend on the RLS gap** in
-`principles.md §6`. That's a large simplification compared to the
-prior form-based design.
+Also add to this migration:
 
-## 9. Inbound mail adapter
+```sql
+CREATE TABLE dietary_inbound_messages (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    received_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    seen          BOOLEAN NOT NULL DEFAULT false,
+    from_address  TEXT NOT NULL,
+    subject       TEXT,
+    body_text     TEXT,
+    message_id    TEXT,
+    in_reply_to   TEXT,
+    to_address    TEXT,    -- the per-request Reply-To address caterer replied to
+    raw_payload   JSONB    -- full SendGrid Inbound Parse POST, for debugging
+);
 
-`scripts/support/inbound.py` defines a thin interface:
+CREATE INDEX dietary_inbound_unseen_idx
+    ON dietary_inbound_messages (received_at)
+    WHERE seen = false;
+
+ALTER TABLE dietary_inbound_messages ENABLE ROW LEVEL SECURITY;
+-- written only by the Edge Function (service role); no anon policy.
+```
+
+**Reply domain:** derived in code as `reply.{APP_DOMAIN}` — no
+separate env var. `APP_DOMAIN` is already required (see
+`plans/current/dev-guide.md`). The sweep builds per-request
+`Reply-To` addresses as `dietary-<request_code>@reply.{APP_DOMAIN}`;
+the Edge Function validates that inbound `To` addresses end with
+`@reply.{APP_DOMAIN}`.
+
+**Important**: because all writes happen server-side via the service
+key (Edge Function + `./run` scripts), this plan **does not depend on
+the RLS gap** in `principles.md §6`.
+
+## 9. Inbound mail adapter — SendGrid + Supabase Edge Function
+
+### How inbound routing works
+
+Every reply a caterer sends goes to their per-request `Reply-To`
+address (e.g. `dietary-CDR-23-greekcaterer@reply.padea.com.au`). An
+MX record on `reply.padea.com.au` points to SendGrid's inbound
+servers. SendGrid Inbound Parse acts as a catch-all for the whole
+subdomain: any email to `*@reply.padea.com.au` is parsed and POSTed
+as a multipart form to the configured webhook URL — a Supabase Edge
+Function.
+
+Threading is trivially solved by the `To` address: the local part
+before `@` encodes the request code. No `In-Reply-To` header matching,
+no subject parsing, no unthreaded-replies fallback needed.
+
+### Edge Function — `supabase/functions/receive-dietary-reply/index.ts`
+
+Receives the SendGrid Inbound Parse webhook POST. Steps:
+
+1. Verify the SendGrid inbound webhook signature (ECDSA, key stored as
+   Supabase secret `SENDGRID_INBOUND_VERIFICATION_KEY`). Return 403 on
+   failure.
+2. Parse the multipart form: extract `to`, `from`, `subject`, `text`,
+   `headers` (for `Message-ID` and `In-Reply-To`).
+3. Extract the request code from the `to` local part
+   (`dietary-<request_code>@…`). If the local part doesn't match the
+   expected format, write the raw payload to `dietary_inbound_messages`
+   with a null `to_address` for manual inspection, and return 200
+   (SendGrid retries on non-2xx).
+4. Insert a row into `dietary_inbound_messages` (uses the Supabase
+   service role key stored as the `SUPABASE_SERVICE_ROLE_KEY` secret).
+5. Return 200.
+
+The Edge Function is deployed with:
+```bash
+supabase functions deploy receive-dietary-reply
+```
+Its public URL (`https://<project-ref>.supabase.co/functions/v1/receive-dietary-reply`)
+is entered as the webhook target in the SendGrid Inbound Parse
+dashboard.
+
+**Required Supabase secrets** (set via `supabase secrets set`):
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SENDGRID_INBOUND_VERIFICATION_KEY`
+- `APP_DOMAIN`
+
+### Python inbound interface
+
+`scripts/support/inbound.py` defines a thin protocol so the poller
+doesn't depend on the storage backend:
 
 ```python
 class InboundMailbox(Protocol):
@@ -275,34 +358,30 @@ class InboundMailbox(Protocol):
 ```
 
 `InboundMessage` exposes `message_id`, `in_reply_to`, `subject`,
-`from_address`, `body_text`, `received_at`.
+`from_address`, `body_text`, `received_at`, `request_code`
+(extracted from `to_address` local part).
 
-v1 implementation: `MailSlurpInbox` using the `mailslurp-client` Python
-SDK and a single shared inbox configured by env var `MAILSLURP_INBOX_ID`
-+ `MAILSLURP_API_KEY`. The MailSlurp address is also written to a
-constant used by the sweep + parse actions as the `Reply-To` value.
+v1 implementation: `SupabaseInboundInbox` — queries
+`dietary_inbound_messages WHERE seen = false AND received_at >= since`;
+`mark_seen` sets `seen = true` by `message_id`.
 
-A new action `scripts/actions/poll_dietary_inbox.py`
-(`./run dietary poll`) drains the inbox:
+### Poller — `scripts/actions/poll_dietary_inbox.py`
 
-1. For each new message, try to thread to a request:
-   - First by `In-Reply-To` (if it matches the `message_id` of any
-     prior outbound on a request),
-   - else by extracting the request code from the subject (`[CDR-…]`),
-   - else **park it**: insert into a small `dietary_unthreaded_replies`
-     table (id, received_at, raw_jsonb) and `notify_coordinator` once
-     per week with the parked list. Park-rather-than-drop because a
-     misthreaded reply is information we don't want to lose.
-2. For each threaded reply, invoke `parse_dietary_reply` against the
-   matched request.
-3. Mark the message seen.
+`./run dietary poll` drains the inbox:
 
-This is the only piece of the plan that talks to MailSlurp.
-Production-time swap (Postmark / Mailgun / Gmail MCP — the latter is
-already available in this project's MCP toolset) is a one-file change:
-implement the same `InboundMailbox` interface against the new vendor,
-swap the env-var-driven constructor. The rest of the system doesn't
-know which inbox provider is wired in.
+1. `inbox.fetch_new(since=now - 30 days)` — the 30-day lookback is a
+   safety net; normally all unseen messages are recent.
+2. For each message, look up the open request by `request_code`.
+   If no matching open request exists, `notify_coordinator` once (the
+   caterer may have replied to an already-resolved or cancelled
+   request).
+3. For each matched message, invoke `parse_dietary_reply` against the
+   request.
+4. `inbox.mark_seen(message.message_id)`.
+
+Future swap (Postmark, Mailgun, Gmail MCP) is a one-file change:
+implement the same protocol against the new backend, swap the
+constructor. The rest of the system is unaffected.
 
 ## 10. Implementation phases
 
@@ -319,16 +398,20 @@ as a peer to `item_incompatibility_ids`, returning `"OK" | "MAYBE" |
 "NO"` — used by the sweep today, will be used by the parser in Phase
 C. ./run verb: `dietary clarify <school>`.
 
-**Phase B — inbound adapter + threading** *(todo)*.
-`support/inbound.py` (Protocol + `InboundMessage` dataclass),
-`MailSlurpInbox` impl using `mailslurp-client`, env vars
-`MAILSLURP_INBOX_ID` / `MAILSLURP_API_KEY`,
-`scripts/actions/poll_dietary_inbox.py`,
-`dietary_unthreaded_replies` table for the park-on-failure path.
-Tests must cover threading by `In-Reply-To`, by subject code, and the
-park-on-failure branch. The sweep already sets the request code in
-its subject (per §4 step 5), so the subject-threading path has the
-data it needs once this lands.
+**Phase B — inbound adapter + Edge Function** *(todo)*.
+`supabase/functions/receive-dietary-reply/index.ts` (Edge Function —
+receives SendGrid Inbound Parse webhook, verifies ECDSA signature,
+extracts request code from `To` local part as
+`dietary-<request_code>@reply.{APP_DOMAIN}`, writes to
+`dietary_inbound_messages`); `support/inbound.py` (Protocol +
+`InboundMessage` + `SupabaseInboundInbox`);
+`scripts/actions/poll_dietary_inbox.py`. Requires Supabase secrets
+`SENDGRID_INBOUND_VERIFICATION_KEY` and `APP_DOMAIN` (alongside the
+standard `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`). Tests must
+cover: signature rejection on bad key; valid POST writes the correct
+row; `fetch_new` returns only unseen messages; `mark_seen` flips the
+flag; poller calls `parse_dietary_reply` for matched requests and
+`notify_coordinator` for orphan replies.
 
 **Phase C — parser + iterative loop** *(todo)*.
 `scripts/actions/parse_dietary_reply.py`,
@@ -368,10 +451,10 @@ Phases A–D are the minimum useful slice. Phase E is incremental.
   call <coordinator>" as a footer; replies via that path get manually
   recorded via a `./run dietary record <request_id>` admin verb.
   Cheap to add later.
-- **Threading robustness.** v1 uses `In-Reply-To` + subject code. If
-  parking becomes common, add a per-request unique MailSlurp address
-  in v2 — that makes mis-threading impossible at the cost of inbox
-  quota.
+- **From address.** `support/email.py` derives the From address as
+  `padea@{APP_DOMAIN}` unless `EMAIL_FROM` is explicitly set. During
+  testing the address will reflect whatever `APP_DOMAIN` is configured
+  to; update `EMAIL_FROM` (or `APP_DOMAIN`) when moving to production.
 
 ---
 

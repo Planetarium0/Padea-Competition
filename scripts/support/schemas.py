@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 Region = Literal["Redlands", "South Brisbane", "West Brisbane", "Central Brisbane"]
 DayName = Literal["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 DeliveryFeeStructure = Literal["Per trip", "Per school per trip"]
-ClarificationStatus = Literal["Open", "Resolved", "Escalated", "Cancelled"]
+ClarificationStatus = Literal["Open", "Clarifying", "Resolved", "Escalated", "Cancelled"]
 EmailStatus = Literal["Queued", "Send Immediately", "Sent", "Failed"]
 ProposalStatus = Literal["Pending", "Approved", "Rejected", "Executed"]
 YearLevel = Literal["All", "12", "11", "10", "9", "8", "7", "6"]
@@ -206,9 +206,25 @@ class DietaryClarificationRequest(_Base):
     school_id: Optional[str] = None
     sent_at: Optional[str] = None
     responded_at: Optional[str] = None
+    clarification_rounds: Optional[int] = None
     status: Optional[ClarificationStatus] = None
-    question_set: List[Dict[str, str]] = Field(default_factory=list)
+    question_set: List[Dict[str, Any]] = Field(default_factory=list)
+    messages: List[Dict[str, Any]] = Field(default_factory=list)
+    reply_to_address: Optional[str] = None
     notes: Optional[str] = None
+
+
+class DietaryInboundMessage(_Base):
+    id: Optional[str] = None
+    received_at: Optional[str] = None
+    seen: Optional[bool] = None
+    from_address: Optional[str] = None
+    subject: Optional[str] = None
+    body_text: Optional[str] = None
+    message_id: Optional[str] = None
+    in_reply_to: Optional[str] = None
+    to_address: Optional[str] = None
+    raw_payload: Optional[Dict[str, Any]] = None
 
 
 # Maps Postgres table names to their Pydantic validation models.
@@ -229,4 +245,5 @@ MODEL_MAP = {
     "manager_substitutions":    ManagerSubstitution,
     "caterer_switch_proposals": CatererSwitchProposal,
     "dietary_clarification_requests": DietaryClarificationRequest,
+    "dietary_inbound_messages": DietaryInboundMessage,
 }
