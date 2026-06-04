@@ -168,7 +168,7 @@ async function _loadManagerSessions() {
   loading.classList.add("hidden");
   if (!sessions.length) { empty.classList.remove("hidden"); return; }
   list.innerHTML = sessions.map(s =>
-    `<li onclick="mgr.selectSession(${JSON.stringify(s.id)})">${escapeHtml(s.label)}</li>`
+    `<li onclick="mgr.selectSession(${escapeHtml(JSON.stringify(s.id))})">${escapeHtml(s.label)}</li>`
   ).join("");
   list.classList.remove("hidden");
 }
@@ -218,7 +218,7 @@ function renderStudentList() {
   }
   empty.classList.add("hidden");
   list.innerHTML = filteredStudents.map(s =>
-    `<li onclick="mgr.selectStudent(${JSON.stringify(s.id)}, ${JSON.stringify(s.name)})">${escapeHtml(s.name)}</li>`
+    `<li onclick="mgr.selectStudent(${escapeHtml(JSON.stringify(s.id))}, ${escapeHtml(JSON.stringify(s.name))})">${escapeHtml(s.name)}</li>`
   ).join("");
   list.classList.remove("hidden");
 }
@@ -515,8 +515,8 @@ function renderMealList() {
 
     // Managers can pick anything, but get a confirmation modal for conflicts.
     const onclick = hasVariants
-      ? `mgr.openVariantPicker(${JSON.stringify(item.id)})`
-      : `mgr.selectMeal(${JSON.stringify(item.id)}, ${JSON.stringify(sev)})`;
+      ? `mgr.openVariantPicker(${escapeHtml(JSON.stringify(item.id))})`
+      : `mgr.selectMeal(${escapeHtml(JSON.stringify(item.id))}, ${escapeHtml(JSON.stringify(sev))})`;
 
     const klass = ["meal-item",
       selected  ? "selected"     : "",
@@ -624,7 +624,7 @@ function openVariantPicker(parentId) {
       severity === "no" ? "incompatible" : severity === "maybe" ? "maybe" : "",
     ].filter(Boolean).join(" ");
     return `<div class="${klass}" data-item-id="${item.id}"
-                 onclick="mgr.selectVariantOption(${JSON.stringify(item.id)})">
+                 onclick="mgr.selectVariantOption(${escapeHtml(JSON.stringify(item.id))})">
       <div class="meal-radio"></div>
       <div class="meal-content">
         <div class="meal-name">${escapeHtml(name)}</div>
