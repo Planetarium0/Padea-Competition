@@ -20,7 +20,7 @@ class TestScheduleEmailDevRedirect(unittest.TestCase):
     """APP_ENV=development redirects sends to DEV_NOTIFICATION_EMAIL."""
 
     def setUp(self) -> None:
-        self._send_patch = mock.patch("support.email._send_via_mailslurp")
+        self._send_patch = mock.patch("support.email._send_via_sendgrid")
         self.mock_send = self._send_patch.start()
 
     def tearDown(self) -> None:
@@ -40,7 +40,7 @@ class TestScheduleEmailDevRedirect(unittest.TestCase):
         with mock.patch.dict(os.environ, {
             "APP_ENV": "development",
             "DEV_NOTIFICATION_EMAIL": "dev@example.com",
-            "MAILSLURP_API_KEY": "key",
+            "SENDGRID_API_KEY": "test-key",
         }):
             self._call(to_email="caterer@real.com")
         kwargs = self.mock_send.call_args.kwargs
@@ -50,7 +50,7 @@ class TestScheduleEmailDevRedirect(unittest.TestCase):
         with mock.patch.dict(os.environ, {
             "APP_ENV": "development",
             "DEV_NOTIFICATION_EMAIL": "dev@example.com",
-            "MAILSLURP_API_KEY": "key",
+            "SENDGRID_API_KEY": "test-key",
         }):
             self._call(cc_email=["chef@real.com", "manager@real.com"])
         kwargs = self.mock_send.call_args.kwargs
@@ -61,14 +61,14 @@ class TestScheduleEmailDevRedirect(unittest.TestCase):
         with mock.patch.dict(os.environ, {
             "APP_ENV": "development",
             "DEV_NOTIFICATION_EMAIL": "dev@example.com",
-            "MAILSLURP_API_KEY": "key",
+            "SENDGRID_API_KEY": "test-key",
         }):
             schedule_email(db, to_email="caterer@real.com", cc_email=None,
                            subject="S", body="B", email_id="E-001")
         self.assertEqual(db.ScheduledEmails.created_fields[0]["to_address"], "caterer@real.com")
 
     def test_dev_mode_no_dev_recipient_skips_send(self) -> None:
-        env = {"APP_ENV": "development", "MAILSLURP_API_KEY": "key"}
+        env = {"APP_ENV": "development", "SENDGRID_API_KEY": "test-key"}
         env.pop("DEV_NOTIFICATION_EMAIL", None)
         with mock.patch.dict(os.environ, env, clear=False):
             os.environ.pop("DEV_NOTIFICATION_EMAIL", None)
@@ -76,7 +76,7 @@ class TestScheduleEmailDevRedirect(unittest.TestCase):
         self.mock_send.assert_not_called()
 
     def test_production_mode_sends_to_real_recipient(self) -> None:
-        with mock.patch.dict(os.environ, {"MAILSLURP_API_KEY": "key"}, clear=False):
+        with mock.patch.dict(os.environ, {"SENDGRID_API_KEY": "test-key"}, clear=False):
             os.environ.pop("APP_ENV", None)
             self._call(to_email="caterer@real.com")
         kwargs = self.mock_send.call_args.kwargs
@@ -97,12 +97,13 @@ class TestEscalateToDev(unittest.TestCase):
             os.environ,
             {
                 "DEV_NOTIFICATION_EMAIL": "dev@example.com",
-                "MAILSLURP_API_KEY":      "test-key",
+                "SMTP_USER":              "test@ethereal.email",
+                "SMTP_PASS":              "test-pass",
             },
         )
         self._env_patch.start()
 
-        self._send_patch = mock.patch("support.email._send_via_mailslurp")
+        self._send_patch = mock.patch("support.email._send_via_sendgrid")
         self.mock_send = self._send_patch.start()
 
     def tearDown(self) -> None:
@@ -189,10 +190,10 @@ class TestScheduleEmailCapturesSendFailures(unittest.TestCase):
         self._tmp = Path(tempfile.mkdtemp(prefix="padea_email_handler_test_"))
         self._patch_dir = mock.patch.object(eh_module, "_FAILURES_DIR", self._tmp)
         self._patch_dir.start()
-        self._send_patch = mock.patch("support.email._send_via_mailslurp")
+        self._send_patch = mock.patch("support.email._send_via_sendgrid")
         self.mock_send = self._send_patch.start()
         self._env_patch = mock.patch.dict(
-            os.environ, {"MAILSLURP_API_KEY": "test-key"}, clear=False
+            os.environ, {"SENDGRID_API_KEY": "test-key"}, clear=False
         )
         self._env_patch.start()
         # Ensure APP_ENV isn't 'development' for this test.

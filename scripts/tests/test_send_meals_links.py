@@ -97,9 +97,9 @@ class TestFormatStudentEmail(unittest.TestCase):
 class TestSendLinksPipeline(unittest.TestCase):
 
     def setUp(self) -> None:
-        self._send_patch = mock.patch("support.email._send_via_mailslurp")
+        self._send_patch = mock.patch("support.email._send_via_sendgrid")
         self._send_patch.start()
-        self._env_patch = mock.patch.dict(os.environ, {"MAILSLURP_API_KEY": "test-key"}, clear=False)
+        self._env_patch = mock.patch.dict(os.environ, {"SENDGRID_API_KEY": "test-key"}, clear=False)
         self._env_patch.start()
 
     def tearDown(self) -> None:

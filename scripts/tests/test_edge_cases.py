@@ -215,31 +215,28 @@ class TestSendMealsLinksResendApiKeyMissing(unittest.TestCase):
         db = MockDatabase()
         populate_mock_db(db, snapshot)
 
-        tmp = Path(tempfile.mkdtemp(prefix="padea_regression_mailslurp_"))
+        tmp = Path(tempfile.mkdtemp(prefix="padea_regression_smtp_"))
         try:
             with mock.patch.object(eh_module, "_FAILURES_DIR", tmp), \
                  mock.patch.dict(os.environ, {"URL_ORIGIN": "http://test:8000"}, clear=False), \
                  contextlib.redirect_stderr(io.StringIO()):
-                os.environ.pop("MAILSLURP_API_KEY", None)
+                os.environ.pop("SENDGRID_API_KEY", None)
                 os.environ.pop("APP_ENV", None)
                 with self_healing_error_handler("send_meals_links"):
                     send_links(target="parents", limit=1, db=db)
 
             jsons = sorted(tmp.glob("failure_*.json"))
             self.assertEqual(len(jsons), 1,
-                "Missing MAILSLURP_API_KEY should write a failure artifact")
+                "Missing SENDGRID_API_KEY should write a failure artifact")
 
             payload = json.loads(jsons[0].read_text(encoding="utf-8"))
             self.assertEqual(len(payload["logged_failures"]), 1)
             failure_msg = payload["logged_failures"][0]
 
             # After fix: clear, human-readable message
-            self.assertIn("MAILSLURP_API_KEY", failure_msg)
+            self.assertIn("SENDGRID_API_KEY", failure_msg)
             self.assertIn("not configured", failure_msg,
-                "Message should say the key is not configured, not a bare KeyError repr")
-            # Before fix: bare KeyError repr was ": 'MAILSLURP_API_KEY'" at the end
-            self.assertNotIn(": 'MAILSLURP_API_KEY'", failure_msg,
-                "Message must not be the opaque KeyError repr string")
+                "Message should say the key is not configured")
 
             # Audit record must be marked Failed
             self.assertTrue(

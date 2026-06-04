@@ -9,9 +9,13 @@ Or via the run script (if a test target is added there):
 """
 from __future__ import annotations
 
+import os
 import sys
 import unittest
 from pathlib import Path
+
+# Prevent any test from accidentally hitting live services.
+os.environ["PADEA_TEST_MODE"] = "1"
 
 # Ensure the tests directory itself is on sys.path so relative fixture
 # imports work regardless of the caller's working directory.

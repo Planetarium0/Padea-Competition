@@ -4,11 +4,11 @@ Two surfaces:
 
 - :func:`schedule_email` — operational mail (caterer orders, QR codes,
   preference links, switch alerts). Writes an audit row to
-  ``scheduled_emails`` and dispatches via MailSlurp.
+  ``scheduled_emails`` and dispatches via SendGrid.
 - :func:`escalate_to_dev` — last-resort human-in-the-loop notification
   used by the self-healing harness when an agent rules out a logical
   fix. Writes an artifact to ``cache/failures/escalation_<id>.md`` first
-  so the escalation survives even if MailSlurp is the thing failing, then
+  so the escalation survives even if SendGrid is the thing failing, then
   best-effort sends a one-line notification.
 """
 
@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Optional
 
-import mailslurp_client
+import httpx
 
 from .records import ScheduledEmailFields
 from .support import log
@@ -206,39 +206,14 @@ def compose_email(components: list[Component]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# MailSlurp dispatch helpers
+# SendGrid dispatch helpers
 # ---------------------------------------------------------------------------
 
-# Process-lifetime cache so we don't create a new virtual inbox on every call
-# when MAILSLURP_INBOX_ID is not set in the environment.
-_inbox_id_cache: str | None = None
+_SENDGRID_URL = "https://api.sendgrid.com/v3/mail/send"
+_FROM_EMAIL = "padea@kaqe-crgm-vqjj-lacj.cfd"
 
 
-def _resolve_inbox_id(api_client: mailslurp_client.ApiClient) -> str:
-    """Return the inbox ID from env, or create a virtual inbox once per process."""
-    global _inbox_id_cache
-    if _inbox_id_cache:
-        return _inbox_id_cache
-    inbox_id = os.environ.get("MAILSLURP_INBOX_ID")
-    if inbox_id:
-        _inbox_id_cache = inbox_id
-        return inbox_id
-    controller = mailslurp_client.InboxControllerApi(api_client)
-    inbox = controller.create_inbox_with_options(
-        mailslurp_client.CreateInboxDto(
-            name="Padea",
-            prefix="padea",
-        )
-    )
-    _inbox_id_cache = inbox.id
-    log.warning(
-        f"[MAILSLURP] Created virtual inbox {inbox.id} ({inbox.email_address}). "
-        f"Persist it by setting MAILSLURP_INBOX_ID={inbox.id} in .env"
-    )
-    return _inbox_id_cache
-
-
-def _send_via_mailslurp(
+def _send_via_sendgrid(
     *,
     to: list[str],
     subject: str,
@@ -246,24 +221,35 @@ def _send_via_mailslurp(
     cc: list[str] | None = None,
     is_html: bool = True,
 ) -> None:
-    """Dispatch an email via MailSlurp. Raises RuntimeError if the API key is missing."""
-    api_key = os.environ.get("MAILSLURP_API_KEY")
+    """Dispatch an email via SendGrid. Raises RuntimeError if the API key is missing."""
+    api_key = os.environ.get("SENDGRID_API_KEY")
     if not api_key:
-        raise RuntimeError("MAILSLURP_API_KEY is not configured")
-    configuration = mailslurp_client.Configuration()
-    configuration.api_key["x-api-key"] = api_key
-    with mailslurp_client.ApiClient(configuration) as api_client:
-        inbox_id = _resolve_inbox_id(api_client)
-        controller = mailslurp_client.InboxControllerApi(api_client)
-        options = mailslurp_client.SendEmailOptions(
-            to=to,
-            subject=subject,
-            body=body,
-            is_html=is_html,
+        raise RuntimeError("SENDGRID_API_KEY is not configured")
+
+    personalization: dict = {"to": [{"email": addr} for addr in to]}
+    if cc:
+        personalization["cc"] = [{"email": addr} for addr in cc]
+
+    payload = {
+        "personalizations": [personalization],
+        "from": {"email": _FROM_EMAIL},
+        "subject": subject,
+        "content": [{"type": "text/html" if is_html else "text/plain", "value": body}],
+    }
+
+    if os.environ.get("PADEA_TEST_MODE") == "1":
+        raise RuntimeError(
+            "_send_via_sendgrid was called without being mocked. "
+            "Patch support.email._send_via_sendgrid in your test setUp."
         )
-        if cc:
-            options.cc = cc
-        controller.send_email(inbox_id, options)
+
+    response = httpx.post(
+        _SENDGRID_URL,
+        headers={"Authorization": f"Bearer {api_key}"},
+        json=payload,
+    )
+    if response.status_code not in (200, 202):
+        raise RuntimeError(f"SendGrid error {response.status_code}: {response.text}")
 
 
 def schedule_email(
@@ -317,7 +303,7 @@ def schedule_email(
         actual_cc = cc_email
 
     try:
-        _send_via_mailslurp(to=[actual_to], cc=actual_cc, subject=subject, body=body)
+        _send_via_sendgrid(to=[actual_to], cc=actual_cc, subject=subject, body=body)
         if se_record:
             db.ScheduledEmails.update(se_record.id, {"status": "Sent"})
         log.info(f"[SENT] Email sent to {actual_to}")
@@ -453,7 +439,7 @@ def escalate_to_dev(
         f"Full details on disk: {artifact_path}\n"
     )
     try:
-        _send_via_mailslurp(to=[recipient], subject=subject, body=short_body, is_html=False)
+        _send_via_sendgrid(to=[recipient], subject=subject, body=short_body, is_html=False)
         log.warning(f"[ESCALATION] Notification sent to {recipient}")
     except Exception as exc:
         log.error(
@@ -549,7 +535,7 @@ def notify_coordinator(
         f"Full details: {artifact_path}\n"
     )
     try:
-        _send_via_mailslurp(to=[recipient], subject=subject, body=short_body, is_html=False)
+        _send_via_sendgrid(to=[recipient], subject=subject, body=short_body, is_html=False)
         log.warning(f"[COORDINATOR NOTIFY] Notification sent to {recipient}")
     except Exception as exc:
         log.error(
