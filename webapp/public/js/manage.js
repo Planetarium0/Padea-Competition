@@ -12,9 +12,9 @@
 
 "use strict";
 
-import { supabase } from './supabase_client.js'
-import { TAG_SHORT, CONSTRAINT_PHRASE, buildHierarchyMaps, checkCompatibility, buildVariantMap, bestVariantSeverity } from './diet.js'
-import { escapeHtml, toast, showError, openConfirm, closeConfirm, confirmModalYes, confirmModalNo } from './ui.js'
+import { supabase } from './shared/supabase_client.js'
+import { TAG_SHORT, CONSTRAINT_PHRASE, buildHierarchyMaps, checkCompatibility, buildVariantMap, bestVariantSeverity } from './shared/diet.js'
+import { escapeHtml, toast, showError, openConfirm, closeConfirm, confirmModalYes, confirmModalNo } from './shared/ui.js'
 
 // ── URL params ────────────────────────────────────────────────────────────────
 const _p = new URLSearchParams(location.search);

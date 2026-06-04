@@ -5,6 +5,7 @@
 *.env.*
 scratch
 __pycache__/
+node_modules/
 output
 .mypy_cache
 cache

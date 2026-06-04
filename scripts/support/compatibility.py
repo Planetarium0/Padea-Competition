@@ -6,7 +6,7 @@ Used by:
   - scripts/tests/order_constraints.py  (opted-out / eligibility check)
 
 The webapp implements the same algorithm in JS at
-``webapp/app.js -> buildHierarchyMaps + checkCompatibility``. The two
+``webapp/public/js/shared/diet.js -> buildHierarchyMaps + checkCompatibility``. The two
 implementations must agree, since:
   - A meal the webapp lets a student pick must also pass the order
     generator's check (otherwise the explicit-preference override is the

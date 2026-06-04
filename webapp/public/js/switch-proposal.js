@@ -5,8 +5,8 @@
  * All data access goes directly to Supabase via supabase-js.
  */
 
-import { supabase } from './supabase_client.js'
-import { openConfirm, closeConfirm, confirmModalYes, confirmModalNo } from './ui.js'
+import { supabase } from './shared/supabase_client.js'
+import { openConfirm, closeConfirm, confirmModalYes, confirmModalNo } from './shared/ui.js'
 
 // ---------------------------------------------------------------------------
 // DOM helpers

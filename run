@@ -191,7 +191,9 @@ case "$COMMAND" in
         ;;
 
     test)
-        if [[ -z "${2:-}" ]]; then
+        if [[ "${2:-}" == "webapp" ]]; then
+            (cd webapp && npm test)
+        elif [[ -z "${2:-}" ]]; then
             $PYTHON scripts/tests/run_all.py
         else
             $PYTHON "scripts/tests/$2.py"

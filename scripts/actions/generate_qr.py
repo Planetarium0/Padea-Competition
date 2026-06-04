@@ -31,7 +31,7 @@ except ImportError:
     STYLED = False
 
 OUTPUT_DIR = Path.cwd() / "output" / "qrcodes"
-WEBAPP_PATH = Path.cwd() / "webapp" / "meals.html"
+WEBAPP_PATH = Path.cwd() / "webapp" / "public" / "meals.html"
 
 
 def make_session_url(

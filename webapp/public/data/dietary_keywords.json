@@ -1,5 +1,5 @@
 {
-  "_comment": "Single source of truth for the negative-keyword fallback used by the dietary compatibility check. Read by scripts/support/compatibility.py (server-side, via file IO) and webapp/meals.js (client-side, via fetch). Edit one place only.",
+  "_comment": "Single source of truth for the negative-keyword fallback used by the dietary compatibility check. Read by scripts/support/compatibility.py (server-side, via file IO) and webapp/public/js/meals.js (client-side, via fetch). Edit one place only.",
   "negative_keywords": {
     "No Beef":      ["beef", "bulgogi"],
     "No Pork":      ["pork", "bacon", "ham"],
