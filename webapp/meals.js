@@ -20,46 +20,9 @@
  */
 
 import { supabase } from './supabase_client.js'
+import { TAG_SHORT, CONSTRAINT_PHRASE, buildHierarchyMaps, checkCompatibility, buildVariantMap, bestVariantSeverity } from './diet.js'
+import { escapeHtml, toast, showError, openConfirm, closeConfirm, confirmModalYes, confirmModalNo } from './ui.js'
 
-// ============================================================
-// Constants
-// ============================================================
-
-
-// Short labels for badges. Anything not listed falls back to the full name.
-const TAG_SHORT = {
-  "Gluten Free": "GF",
-  "Dairy Free": "DF",
-  "Nut Free": "NF",
-  "Vegetarian": "Veg",
-  "Vegan": "Vegan",
-  "Halal": "Halal",
-  "Kosher": "Kosher",
-  "Pescatarian": "Pesc",
-};
-
-// Name-keyword heuristic is loaded from ./data/dietary_keywords.json at boot
-// (see loadNegativeKeywords) so the order generator and the webapp share one
-// source of truth. The resolved object is attached to dietMaps.negativeKeywords.
-
-// Plain-language phrase for each constraint, used in reason labels.
-const CONSTRAINT_PHRASE = {
-  "Gluten Free": "gluten",
-  "Dairy Free": "dairy",
-  "Nut Free": "nuts",
-  "Vegetarian": "meat",
-  "Vegan": "animal products",
-  "Pescatarian": "non-fish meat",
-  "Halal": "non-halal ingredients",
-  "Kosher": "non-kosher ingredients",
-  "No Beef": "beef",
-  "No Pork": "pork",
-  "No Lamb": "lamb",
-  "No Fish": "fish",
-  "No Shellfish": "shellfish",
-  "No Seafood": "seafood",
-  "No Red Meat": "red meat",
-};
 
 // ============================================================
 // Cache helpers
@@ -254,144 +217,6 @@ async function loadStudentTicket(studentId, sessionId) {
 }
 
 
-// ============================================================
-// Variant helpers
-// ============================================================
-
-function buildVariantMap(items) {
-  const map = {};
-  for (const item of items) {
-    if (item.is_variant) {
-      const parentId = item.variant_of_id;
-      if (parentId) (map[parentId] ||= []).push(item);
-    }
-  }
-  return map;
-}
-
-// Returns the best dietary severity across a parent item and its variants,
-// so an item with an incompatible parent but a compatible variant isn't
-// bucketed into the "doesn't match" section of the meal list.
-function bestVariantSeverity(parentSeverity, variants, reqs, maps) {
-  if (!maps || !reqs.length || !variants.length) return parentSeverity;
-  let best = parentSeverity;
-  for (const v of variants) {
-    const { severity } = checkCompatibility(v, reqs, maps);
-    if (severity === "ok") return "ok";
-    if (severity === "maybe" && best === "no") best = "maybe";
-  }
-  return best;
-}
-
-// ============================================================
-// Dietary hierarchy
-// ============================================================
-
-function buildHierarchyMaps(restrictions, negativeKeywords = {}) {
-  const idToName = {};
-  const nameToId = {};
-  const idToRestr = {};
-  for (const r of restrictions) {
-    idToName[r.id] = r.name;
-    nameToId[r.name] = r.id;
-    idToRestr[r.id] = r;
-  }
-  // Build child map (parentId → [subset childIds]) from each restriction's
-  // superset_ids list (a restriction lists its less-restrictive parents).
-  const children = {};
-  for (const r of restrictions) {
-    for (const parentId of r.superset_ids) {
-      (children[parentId] ||= []).push(r.id);
-    }
-  }
-  // Transitive subset-closure: each restriction → itself + all more-restrictive descendants.
-  function descendants(id, acc = new Set()) {
-    if (acc.has(id)) return acc;
-    acc.add(id);
-    for (const c of children[id] || []) descendants(c, acc);
-    return acc;
-  }
-  const subsetClosure = {};
-  for (const r of restrictions) {
-    subsetClosure[r.id] = descendants(r.id);
-  }
-  // Transitive superset-closure: each restriction → itself + all less-restrictive ancestors.
-  // Used to detect definite incompatibility when an ancestor is a caterer legend tag.
-  function ancestors(id, acc = new Set()) {
-    if (acc.has(id)) return acc;
-    acc.add(id);
-    const r = idToRestr[id];
-    if (r) for (const parentId of r.superset_ids) ancestors(parentId, acc);
-    return acc;
-  }
-  const supersetClosure = {};
-  for (const r of restrictions) {
-    supersetClosure[r.id] = ancestors(r.id);
-  }
-  // legendTagIdSet is populated later once the caterer record is fetched.
-  return {
-    idToName, nameToId, subsetClosure, supersetClosure,
-    negativeKeywords, legendTagIdSet: new Set(),
-  };
-}
-
-// Returns { compatible, severity, issues } where:
-//   compatible  — true if all constraints satisfied by tags
-//   severity    — "ok" | "maybe" | "no"
-//   issues      — array of { name, severity, label } per unmet constraint
-function checkCompatibility(item, studentReqIds, maps) {
-  if (!studentReqIds.length) return { compatible: true, severity: "ok", issues: [] };
-
-  const itemTagIds = item.dietary_tag_ids || [];
-  const itemNameLower = (item.name || "").toLowerCase();
-  const legendTagIdSet = maps.legendTagIdSet || new Set();
-
-  const issues = [];
-  for (const reqId of studentReqIds) {
-    const reqName = maps.idToName[reqId];
-    if (!reqName || reqName === "Opted out of Catering") continue;
-
-    const closure = maps.subsetClosure[reqId] || new Set([reqId]);
-    const tagMatch = itemTagIds.some(t => closure.has(t));
-    if (tagMatch) continue; // satisfied by a tag in the subset closure
-
-    const phrase = CONSTRAINT_PHRASE[reqName] || reqName.toLowerCase();
-
-    // Legend-based definite incompatibility: if a transitive superset of this
-    // constraint is in the caterer's Dietary Legend and the item lacks any
-    // satisfying tag for that superset, the item DEFINITELY fails this constraint
-    // (the caterer would have tagged it otherwise). Converts "maybe" → "no" and
-    // also propagates downward: absent VO → not Vegetarian → not Vegan either.
-    if (legendTagIdSet.size) {
-      const ancestorIds = maps.supersetClosure[reqId] || new Set([reqId]);
-      let definitelyNo = false;
-      for (const ancestorId of ancestorIds) {
-        if (!legendTagIdSet.has(ancestorId)) continue;
-        const ancestorClosure = maps.subsetClosure[ancestorId] || new Set([ancestorId]);
-        if (!itemTagIds.some(t => ancestorClosure.has(t))) {
-          definitelyNo = true;
-          break;
-        }
-      }
-      if (definitelyNo) {
-        issues.push({ name: reqName, severity: "no", label: `Contains ${phrase}` });
-        continue;
-      }
-    }
-
-    // No legend verdict. Fall back to name-keyword heuristic.
-    const kws = maps.negativeKeywords?.[reqName];
-    if (kws && kws.some(k => itemNameLower.includes(k))) {
-      issues.push({ name: reqName, severity: "no", label: `Contains ${phrase}` });
-    } else {
-      issues.push({ name: reqName, severity: "maybe", label: `May contain ${phrase}` });
-    }
-  }
-
-  if (!issues.length) return { compatible: true, severity: "ok", issues };
-  const severity = issues.some(i => i.severity === "no") ? "no" : "maybe";
-  return { compatible: false, severity, issues };
-}
 
 function hasOptedOut(student, maps) {
   const reqs = student?.dietary_requirement_ids || [];
@@ -1157,59 +982,13 @@ function clearOptedOutLock() {
   document.getElementById("comment").disabled = false;
 }
 
-// ============================================================
-// Confirm modal
-// ============================================================
-
-let confirmCallback = null;
-
-function openConfirm({ title, body, confirmLabel, onConfirm, hideCancel }) {
-  document.getElementById("confirm-title").textContent = title;
-  document.getElementById("confirm-body").textContent = body;
-  document.getElementById("confirm-yes").textContent = confirmLabel || "OK";
-  document.getElementById("confirm-no").classList.toggle("hidden", !!hideCancel);
-  confirmCallback = onConfirm;
-  document.getElementById("confirm-modal").classList.remove("hidden");
-}
-
-function closeConfirm() {
-  document.getElementById("confirm-modal").classList.add("hidden");
-  document.getElementById("confirm-no").classList.remove("hidden");
-  confirmCallback = null;
-}
-
-window.confirmModalYes = () => { if (confirmCallback) confirmCallback(); };
-window.confirmModalNo = () => closeConfirm();
 
 // ============================================================
 // Utility
 // ============================================================
 
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
 function formatSessionLabel(session) {
   return session.session_code || "";
-}
-
-function showError(msg) {
-  document.getElementById("error-text").textContent = msg;
-  document.getElementById("error-banner").classList.remove("hidden");
-}
-
-let toastTimer = null;
-function toast(msg) {
-  const el = document.getElementById("toast");
-  el.textContent = msg;
-  el.classList.remove("hidden");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.add("hidden"), 2400);
 }
 
 // ============================================================
@@ -1300,4 +1079,6 @@ window.confirmVariantModal = function () {
 // ============================================================
 
 window.app = app;
+window.confirmModalYes = confirmModalYes;
+window.confirmModalNo = confirmModalNo;
 document.addEventListener("DOMContentLoaded", () => app.init());

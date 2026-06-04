@@ -6,6 +6,7 @@
  */
 
 import { supabase } from './supabase_client.js'
+import { openConfirm, closeConfirm, confirmModalYes, confirmModalNo } from './ui.js'
 
 // ---------------------------------------------------------------------------
 // DOM helpers
@@ -35,27 +36,6 @@ function ratingDisplay(avg) {
     return `${avg.toFixed(1)} / 5  ${stars}`;
 }
 
-// ---------------------------------------------------------------------------
-// Confirm modal
-// ---------------------------------------------------------------------------
-
-let _confirmCallback = null;
-
-function openConfirm({ title, body, confirmLabel, onConfirm }) {
-    document.getElementById('confirm-title').textContent = title;
-    document.getElementById('confirm-body').textContent  = body;
-    document.getElementById('confirm-yes').textContent   = confirmLabel || 'OK';
-    _confirmCallback = onConfirm;
-    document.getElementById('confirm-modal').classList.remove('hidden');
-}
-
-function closeConfirm() {
-    document.getElementById('confirm-modal').classList.add('hidden');
-    _confirmCallback = null;
-}
-
-window.confirmModalYes = () => { if (_confirmCallback) _confirmCallback(); };
-window.confirmModalNo  = () => closeConfirm();
 
 // ---------------------------------------------------------------------------
 // Main page object
@@ -215,7 +195,9 @@ const page = {
     },
 };
 
-// Expose page globally so onclick attributes in HTML still work with module scripts.
+// Expose globals so onclick attributes in HTML work with module scripts.
 window.page = page;
+window.confirmModalYes = confirmModalYes;
+window.confirmModalNo = confirmModalNo;
 
 page.init();

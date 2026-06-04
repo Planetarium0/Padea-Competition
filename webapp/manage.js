@@ -13,28 +13,14 @@
 "use strict";
 
 import { supabase } from './supabase_client.js'
+import { TAG_SHORT, CONSTRAINT_PHRASE, buildHierarchyMaps, checkCompatibility, buildVariantMap, bestVariantSeverity } from './diet.js'
+import { escapeHtml, toast, showError, openConfirm, closeConfirm, confirmModalYes, confirmModalNo } from './ui.js'
 
 // ── URL params ────────────────────────────────────────────────────────────────
 const _p = new URLSearchParams(location.search);
 const MANAGER_ID = _p.get("manager");
 const STUDENT_ID = _p.get("student");
 const IS_MANAGER = !!MANAGER_ID;
-
-// ── Constants (kept in sync with app.js) ──────────────────────────────────────
-const TAG_SHORT = {
-  "Gluten Free": "GF", "Dairy Free": "DF", "Nut Free": "NF",
-  "Vegetarian": "Veg", "Vegan": "Vegan", "Halal": "Halal",
-  "Kosher": "Kosher", "Pescatarian": "Pesc",
-};
-
-const CONSTRAINT_PHRASE = {
-  "Gluten Free": "gluten", "Dairy Free": "dairy", "Nut Free": "nuts",
-  "Vegetarian": "meat", "Vegan": "animal products", "Pescatarian": "non-fish meat",
-  "Halal": "non-halal ingredients", "Kosher": "non-kosher ingredients",
-  "No Beef": "beef", "No Pork": "pork", "No Lamb": "lamb",
-  "No Fish": "fish", "No Shellfish": "shellfish", "No Seafood": "seafood",
-  "No Red Meat": "red meat",
-};
 
 // Display order for the dietary checkboxes.
 const DIET_DISPLAY_ORDER = [
@@ -74,7 +60,6 @@ let selectedOverrideItemId = null;
 let hasExistingOrder     = false;
 
 let variantModalSelected = null;
-let confirmCallback      = null;
 
 // ── In-memory cache (per page load) ──────────────────────────────────────────
 const _cache = Object.create(null);
@@ -82,11 +67,6 @@ const cacheGet = k => Object.prototype.hasOwnProperty.call(_cache, k) ? _cache[k
 const cacheSet = (k, v) => { _cache[k] = v; };
 
 // ── Utility ───────────────────────────────────────────────────────────────────
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-}
 
 function eqSets(a, b) {
   if (a.size !== b.size) return false;
@@ -101,107 +81,6 @@ function showView(name) {
   }
 }
 
-// ── Toast ─────────────────────────────────────────────────────────────────────
-let _toastTimer = null;
-function toast(msg) {
-  const el = document.getElementById("toast");
-  el.textContent = msg;
-  el.classList.remove("hidden");
-  clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => el.classList.add("hidden"), 2800);
-}
-
-// ── Error banner ──────────────────────────────────────────────────────────────
-function showError(msg) {
-  document.getElementById("error-text").textContent = msg;
-  document.getElementById("error-banner").classList.remove("hidden");
-}
-
-// ── Dietary hierarchy (mirrors app.js exactly) ────────────────────────────────
-function buildHierarchyMaps(restrictions, negativeKeywords = {}) {
-  const idToName = {}, nameToId = {}, idToRestr = {};
-  for (const r of restrictions) {
-    idToName[r.id] = r.name;
-    nameToId[r.name] = r.id;
-    idToRestr[r.id] = r;
-  }
-  const children = {};
-  for (const r of restrictions)
-    for (const pid of r.superset_ids) (children[pid] ||= []).push(r.id);
-
-  function descendants(id, acc = new Set()) {
-    if (acc.has(id)) return acc;
-    acc.add(id);
-    for (const c of children[id] || []) descendants(c, acc);
-    return acc;
-  }
-  function ancestors(id, acc = new Set()) {
-    if (acc.has(id)) return acc;
-    acc.add(id);
-    const r = idToRestr[id];
-    if (r) for (const pid of r.superset_ids) ancestors(pid, acc);
-    return acc;
-  }
-  const subsetClosure = {}, supersetClosure = {};
-  for (const r of restrictions) {
-    subsetClosure[r.id]   = descendants(r.id);
-    supersetClosure[r.id] = ancestors(r.id);
-  }
-  return { idToName, nameToId, subsetClosure, supersetClosure, negativeKeywords, legendTagIdSet: new Set() };
-}
-
-function checkCompatibility(item, studentReqIds, maps) {
-  if (!studentReqIds.length) return { compatible: true, severity: "ok", issues: [] };
-  const itemTagIds    = item.dietary_tag_ids || [];
-  const itemNameLower = (item.name || "").toLowerCase();
-  const legendTagIdSet = maps.legendTagIdSet || new Set();
-  const issues = [];
-  for (const reqId of studentReqIds) {
-    const reqName = maps.idToName[reqId];
-    if (!reqName || reqName === OPTED_OUT_NAME) continue;
-    const closure = maps.subsetClosure[reqId] || new Set([reqId]);
-    if (itemTagIds.some(t => closure.has(t))) continue;
-    const phrase = CONSTRAINT_PHRASE[reqName] || reqName.toLowerCase();
-    if (legendTagIdSet.size) {
-      const ancestorIds = maps.supersetClosure[reqId] || new Set([reqId]);
-      let definitelyNo = false;
-      for (const aid of ancestorIds) {
-        if (!legendTagIdSet.has(aid)) continue;
-        const ac = maps.subsetClosure[aid] || new Set([aid]);
-        if (!itemTagIds.some(t => ac.has(t))) { definitelyNo = true; break; }
-      }
-      if (definitelyNo) { issues.push({ name: reqName, severity: "no", label: `Contains ${phrase}` }); continue; }
-    }
-    const kws = maps.negativeKeywords?.[reqName];
-    if (kws && kws.some(k => itemNameLower.includes(k)))
-      issues.push({ name: reqName, severity: "no",    label: `Contains ${phrase}` });
-    else
-      issues.push({ name: reqName, severity: "maybe", label: `May contain ${phrase}` });
-  }
-  if (!issues.length) return { compatible: true, severity: "ok", issues };
-  return { compatible: false, severity: issues.some(i => i.severity === "no") ? "no" : "maybe", issues };
-}
-
-function buildVariantMap(items) {
-  const map = {};
-  for (const item of items)
-    if (item.is_variant) {
-      const pid = item.variant_of_id;
-      if (pid) (map[pid] ||= []).push(item);
-    }
-  return map;
-}
-
-function bestVariantSeverity(parentSev, variants, reqs, maps) {
-  if (!maps || !reqs.length || !variants.length) return parentSev;
-  let best = parentSev;
-  for (const v of variants) {
-    const { severity } = checkCompatibility(v, reqs, maps);
-    if (severity === "ok") return "ok";
-    if (severity === "maybe" && best === "no") best = "maybe";
-  }
-  return best;
-}
 
 // ── Data loaders ──────────────────────────────────────────────────────────────
 let _restrictionsP = null;
@@ -786,20 +665,6 @@ function confirmVariantModal() {
   commitMealSelection(id);
 }
 
-// ── Confirm modal ─────────────────────────────────────────────────────────────
-function openConfirm({ title, body, confirmLabel, onConfirm }) {
-  document.getElementById("confirm-title").textContent = title;
-  document.getElementById("confirm-body").textContent  = body;
-  document.getElementById("confirm-yes").textContent   = confirmLabel || "OK";
-  confirmCallback = onConfirm;
-  document.getElementById("confirm-modal").classList.remove("hidden");
-}
-
-function closeConfirm() {
-  document.getElementById("confirm-modal").classList.add("hidden");
-  confirmCallback = null;
-}
-
 // ── Dirty check & save button ─────────────────────────────────────────────────
 function isDirty() {
   if (!eqSets(initialDietIds, checkedDietIds)) return true;
@@ -893,11 +758,11 @@ const mgr = {
   openMealPicker, closeMealPicker, selectMeal, commitMealSelection,
   openVariantPicker, selectVariantOption, closeVariantModal, confirmVariantModal,
   toggleDiet, save, editAnother,
-  confirmNo()  { closeConfirm(); },
-  confirmYes() { const cb = confirmCallback; closeConfirm(); if (cb) cb(); },
 };
 
-// Expose mgr globally so onclick attributes in HTML still work with module scripts.
+// Expose globals so onclick attributes in HTML work with module scripts.
 window.mgr = mgr;
+window.confirmModalYes = confirmModalYes;
+window.confirmModalNo = confirmModalNo;
 
 init();

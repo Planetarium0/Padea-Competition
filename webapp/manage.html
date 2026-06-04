@@ -179,13 +179,13 @@
 
         <!-- Confirm modal -->
         <div id="confirm-modal" class="modal hidden"
-             onclick="if(event.target===this) mgr.confirmNo()">
+             onclick="if(event.target===this) confirmModalNo()">
             <div class="modal-card">
                 <h3 id="confirm-title" class="modal-title"></h3>
                 <p id="confirm-body" class="modal-body"></p>
                 <div class="modal-actions">
-                    <button id="confirm-no" class="btn-ghost" onclick="mgr.confirmNo()">Cancel</button>
-                    <button id="confirm-yes" class="btn-primary" onclick="mgr.confirmYes()">OK</button>
+                    <button id="confirm-no" class="btn-ghost" onclick="confirmModalNo()">Cancel</button>
+                    <button id="confirm-yes" class="btn-primary" onclick="confirmModalYes()">OK</button>
                 </div>
             </div>
         </div>
