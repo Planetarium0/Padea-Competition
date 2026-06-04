@@ -267,7 +267,7 @@ def format_email_body(
             *meta_rows,
             List(meal_items),
             Text(f"Subtotal: {session_total} meals", bold=True),
-        ], shaded=True))
+        ]))
         num_deliveries += 1
 
     if fee_structure == "Per school per trip":

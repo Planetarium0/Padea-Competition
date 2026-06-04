@@ -194,31 +194,49 @@ class Table(Generic[FieldsT]):
 
         model = MODEL_MAP.get(self._table)
 
-        inserted: list[Record[FieldsT]] = []
+        # Validate and split all records before touching the database.
+        main_rows: list[dict[str, Any]] = []
+        junction_per_record: list[dict[str, list[Any]]] = []
         for fields in records_list:
             fields = dict(fields)
             if model:
                 model.model_validate(fields)
-
-            # Strip view-only / junction fields from the main insert payload
             junction_data = self._extract_junction_fields(fields)
-            main_fields = {k: v for k, v in fields.items() if k not in self._view_only}
+            main_rows.append({k: v for k, v in fields.items() if k not in self._view_only})
+            junction_per_record.append(junction_data)
 
-            try:
-                result = self._client.table(self._table).insert(main_fields).execute()
-            except Exception as e:
-                _log.error("Error inserting into %s: %s", self._table, e)
-                raise
-            row = result.data[0]
-            row_id = row["id"]
+        # Single bulk INSERT for all rows.
+        try:
+            result = self._client.table(self._table).insert(main_rows).execute()
+        except Exception as e:
+            _log.error("Error inserting into %s: %s", self._table, e)
+            raise
 
-            # Write junction rows
-            self._write_junction_rows(row_id, junction_data)
+        inserted_ids = [row["id"] for row in result.data]
 
-            # Re-fetch through view to get aggregated fields
-            full = self.get(row_id)
-            if full:
-                inserted.append(full)
+        # Batch-write junction rows across all inserted records.
+        self._write_junction_rows_bulk(zip(inserted_ids, junction_per_record))
+
+        # Re-fetch through view only when needed (view adds aggregated/junction fields).
+        needs_view_fetch = (self._view != self._table) or bool(self._junction_fields)
+        if needs_view_fetch:
+            view_result = (
+                self._client.table(self._view)
+                .select("*")
+                .in_("id", inserted_ids)
+                .execute()
+            )
+            row_by_id = {row["id"]: row for row in view_result.data}
+        else:
+            row_by_id = {row["id"]: row for row in result.data}
+
+        inserted: list[Record[FieldsT]] = []
+        for row_id in inserted_ids:
+            row = row_by_id.get(row_id)
+            if row:
+                if model:
+                    model.model_validate(row)
+                inserted.append(Record.from_row(row))
         return inserted
 
     def update(self, record_id: str, fields: Mapping[str, Any]) -> "Record[FieldsT]":
@@ -304,6 +322,27 @@ class Table(Generic[FieldsT]):
                 {parent_fk: record_id, child_fk: val}
                 for val in junction_data[field_name]
             ]
+            if rows:
+                self._client.table(junction_table).insert(rows).execute()
+
+    def _write_junction_rows_bulk(
+        self,
+        id_junction_pairs: Iterable[tuple[str, dict[str, list[Any]]]],
+    ) -> None:
+        """Batch-write junction rows for multiple records, one INSERT per junction table."""
+        rows_by_table: dict[str, list[dict[str, Any]]] = {}
+        for _, jt, _, _ in self._junction_fields:
+            rows_by_table[jt] = []
+
+        for record_id, junction_data in id_junction_pairs:
+            for field_name, junction_table, parent_fk, child_fk in self._junction_fields:
+                if field_name in junction_data:
+                    rows_by_table[junction_table].extend(
+                        {parent_fk: record_id, child_fk: val}
+                        for val in junction_data[field_name]
+                    )
+
+        for junction_table, rows in rows_by_table.items():
             if rows:
                 self._client.table(junction_table).insert(rows).execute()
 

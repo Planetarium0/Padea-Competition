@@ -220,35 +220,70 @@ class TestTableCreate(unittest.TestCase):
     def test_create_does_not_pass_view_only_fields_to_db(self) -> None:
         new_id = "stu-uuid-1"
         table, client, chain = _make_table("students", execute_sequence=[
-            [{"id": new_id}],  # insert into students
-            [],                # junction insert (student_sessions)
+            [{"id": new_id}],  # bulk insert into students
+            [],                # junction bulk insert (student_sessions)
             [{"id": new_id, "name": "Bob", "year_level": 10,
-              "session_ids": ["s1"], "dietary_requirement_ids": []}],  # get via view
+              "session_ids": ["s1"], "dietary_requirement_ids": []}],  # bulk re-fetch via view
         ])
 
         table.create([{"name": "Bob", "year_level": 10, "session_ids": ["s1"]}])
 
-        # chain.insert is called in order: first for the main table, then for junctions.
-        # The first insert call must not include session_ids.
+        # chain.insert is called in order: first for the main table (list of dicts),
+        # then for junctions. The first insert payload is a list; check the first item.
         first_insert_payload = chain.insert.call_args_list[0].args[0]
-        self.assertNotIn("session_ids", first_insert_payload)
-        self.assertIn("name", first_insert_payload)
+        self.assertIsInstance(first_insert_payload, list)
+        self.assertNotIn("session_ids", first_insert_payload[0])
+        self.assertIn("name", first_insert_payload[0])
 
     def test_create_junction_insert_called_with_correct_rows(self) -> None:
         new_id = "stu-uuid-2"
         table, client, chain = _make_table("students", execute_sequence=[
             [{"id": new_id}],
-            [],  # junction insert
+            [],  # junction bulk insert
             [{"id": new_id, "name": "Carol", "year_level": 9,
               "session_ids": ["sess-x"], "dietary_requirement_ids": []}],
         ])
 
         table.create([{"name": "Carol", "year_level": 9, "session_ids": ["sess-x"]}])
 
-        # Second insert call is the junction (student_sessions) row
+        # Second insert call is the junction (student_sessions) bulk row
         self.assertGreaterEqual(len(chain.insert.call_args_list), 2)
         junction_payload = chain.insert.call_args_list[1].args[0]
         self.assertEqual(junction_payload, [{"student_id": new_id, "session_id": "sess-x"}])
+
+    def test_create_bulk_uses_single_insert_for_multiple_records(self) -> None:
+        ids = ["stu-1", "stu-2", "stu-3"]
+        table, client, chain = _make_table("students", execute_sequence=[
+            [{"id": i} for i in ids],   # single bulk insert returns all rows
+            [],                          # junction bulk insert (no session_ids provided)
+            [{"id": i, "name": f"S{i}", "year_level": 10,
+              "session_ids": [], "dietary_requirement_ids": []} for i in ids],
+        ])
+
+        table.create([{"name": f"S{i}", "year_level": 10} for i in ids])
+
+        # Only one INSERT call to the main table, not one per record.
+        main_inserts = [c for c in client.table.call_args_list if c.args == ("students",)]
+        self.assertEqual(len(main_inserts), 1)
+        payload = chain.insert.call_args_list[0].args[0]
+        self.assertIsInstance(payload, list)
+        self.assertEqual(len(payload), 3)
+
+    def test_create_no_view_fetch_skips_refetch(self) -> None:
+        # weekly_orders has no view and no junction fields — re-fetch must be skipped.
+        new_id = "wo-uuid-1"
+        table, client, chain = _make_table("weekly_orders", execute_sequence=[
+            [{"id": new_id, "order_code": "2026-W01", "caterer_id": "c1",
+              "week_start": "2026-01-05", "total_meals": 10, "total_cost": 200.0}],
+        ])
+
+        result = table.create([{"order_code": "2026-W01", "caterer_id": "c1",
+                                 "week_start": "2026-01-05", "total_meals": 10, "total_cost": 200.0}])
+
+        # Only the single bulk INSERT should have been executed; no extra SELECT.
+        self.assertEqual(chain.execute.call_count, 1)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].id, new_id)
 
 
 # ---------------------------------------------------------------------------
