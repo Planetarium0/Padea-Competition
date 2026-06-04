@@ -27,6 +27,8 @@ Usage:
   $0 forms send {parents|students} [--dry-run] [--first] [--limit N]
   $0 caterer evaluate [--dry-run] [--limit N]
   $0 caterer switch <proposal_id> [--approve] [--dry-run]
+  $0 dietary clarify <school> [--caterer ID] [--restriction NAME] [--dry-run]
+  $0 dietary escalate [--dry-run]
   $0 test [name]
   $0 script [name]
   $0 fix [--latest-error|--run-and-heal CMD|...]
@@ -185,6 +187,30 @@ case "$COMMAND" in
             *)
                 echo "[ERROR] Unknown caterer subcommand: ${SUBCOMMAND:-<none>}"
                 echo "Use: caterer evaluate | caterer switch <proposal_id>"
+                exit 1
+                ;;
+        esac
+        ;;
+
+    dietary)
+        SUBCOMMAND="${2:-}"
+        case "$SUBCOMMAND" in
+            clarify)
+                SCHOOL="${3:-}"
+                if [[ -z "$SCHOOL" ]]; then
+                    echo "[ERROR] Usage: $0 dietary clarify <school_name_or_id> [--caterer ID] [--restriction NAME] [--dry-run]"
+                    exit 1
+                fi
+                echo "Running dietary clarification sweep for '$SCHOOL'..."
+                $PYTHON scripts/actions/clarify_dietary.py "$SCHOOL" "${@:4}"
+                ;;
+            escalate)
+                echo "Running dietary escalation check..."
+                $PYTHON scripts/actions/escalate_dietary.py "${@:3}"
+                ;;
+            *)
+                echo "[ERROR] Unknown dietary subcommand: ${SUBCOMMAND:-<none>}"
+                echo "Use: dietary clarify <school> | dietary escalate"
                 exit 1
                 ;;
         esac

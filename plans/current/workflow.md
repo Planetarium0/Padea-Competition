@@ -98,6 +98,39 @@ Coordinator decides →  Approve  →  /api equivalent / supabase call →
                        Reject   →  proposal.status = Rejected
 ```
 
+## Dietary clarification loop (coordinator-initiated, term-start)
+
+```
+Coordinator runs     →  ./run dietary clarify <school>
+  (after parent forms     Per caterer serving the school:
+  are in and student        walk (menu items × student restriction union)
+  restrictions are          through the 3-step ladder
+  entered)                  Collect every MAYBE triple
+                            Build dietary_clarification_requests row
+                            Send one email per caterer listing open items
+                            Print: caterer name, open-question count,
+                                   7-day clock expiry
+                          Also runs escalation sweep for prior-term requests
+
+7 days later        →  ./run dietary escalate  (or auto-triggered at end of clarify)
+  (or any time after)     Walk Open requests where sent_at + 7d < now()
+                          Mark status='Escalated'
+                          Write cache/notifications/clarify_<id>.md
+                          Email COORDINATOR_EMAIL (fallback DEV_NOTIFICATION_EMAIL)
+
+Coordinator follows →  Direct conversation with caterer
+  up manually            Coordinator transcribes caterer's answers:
+                           Compatible → INSERT into menu_item_dietary_tags
+                           Contains   → record provisionally
+                         When full restriction column answered Compatible/Contains
+                           INSERT into caterer_legend_tags (earned-legend rule)
+                         Update request status to Resolved in Supabase Studio
+```
+
+Note: MAYBE verdicts remain assignable in `register_orders.py` throughout.
+The clarification loop is a hygiene pass that reduces MAYBEs over time; it
+does not gate orders.
+
 ## Decision points (where business rules concentrate)
 
 The places an agent is most likely to need to think carefully, with the
@@ -114,6 +147,8 @@ files where the rules currently live. Use graphify (`graphify explain
 | Which on-site manager is on duty on date D? | `support.database.resolve_manager_id` — `manager_substitutions` for the date wins, else `sessions.on_site_manager_id` |
 | Is a caterer rolling badly enough to swap? | `evaluate_caterers.py` — window, unique-rater count, candidate scoring |
 | Can candidate caterer cover this school's students? | `evaluate_caterers.py → caterer_covers_all_students` — dietary coverage hard filter |
+| Is a (item, restriction) verdict OK / NO / MAYBE? | `scripts/support/compatibility.py → item_verdict` — exposes three-state result used by clarify sweep |
+| Has a clarification request gone unanswered for 7 days? | `escalate_dietary.py → _is_overdue` + `notify_coordinator` in `scripts/support/email.py` |
 
 ## Critical invariants
 

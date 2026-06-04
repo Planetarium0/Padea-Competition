@@ -215,30 +215,30 @@ class TestSendMealsLinksResendApiKeyMissing(unittest.TestCase):
         db = MockDatabase()
         populate_mock_db(db, snapshot)
 
-        tmp = Path(tempfile.mkdtemp(prefix="padea_regression_resend_"))
+        tmp = Path(tempfile.mkdtemp(prefix="padea_regression_mailslurp_"))
         try:
             with mock.patch.object(eh_module, "_FAILURES_DIR", tmp), \
                  mock.patch.dict(os.environ, {"URL_ORIGIN": "http://test:8000"}, clear=False), \
                  contextlib.redirect_stderr(io.StringIO()):
-                os.environ.pop("RESEND_API_KEY", None)
+                os.environ.pop("MAILSLURP_API_KEY", None)
                 os.environ.pop("APP_ENV", None)
                 with self_healing_error_handler("send_meals_links"):
                     send_links(target="parents", limit=1, db=db)
 
             jsons = sorted(tmp.glob("failure_*.json"))
             self.assertEqual(len(jsons), 1,
-                "Missing RESEND_API_KEY should write a failure artifact")
+                "Missing MAILSLURP_API_KEY should write a failure artifact")
 
             payload = json.loads(jsons[0].read_text(encoding="utf-8"))
             self.assertEqual(len(payload["logged_failures"]), 1)
             failure_msg = payload["logged_failures"][0]
 
             # After fix: clear, human-readable message
-            self.assertIn("RESEND_API_KEY", failure_msg)
+            self.assertIn("MAILSLURP_API_KEY", failure_msg)
             self.assertIn("not configured", failure_msg,
                 "Message should say the key is not configured, not a bare KeyError repr")
-            # Before fix: bare KeyError repr was ": 'RESEND_API_KEY'" at the end
-            self.assertNotIn(": 'RESEND_API_KEY'", failure_msg,
+            # Before fix: bare KeyError repr was ": 'MAILSLURP_API_KEY'" at the end
+            self.assertNotIn(": 'MAILSLURP_API_KEY'", failure_msg,
                 "Message must not be the opaque KeyError repr string")
 
             # Audit record must be marked Failed

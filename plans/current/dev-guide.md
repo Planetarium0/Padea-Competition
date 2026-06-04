@@ -46,11 +46,13 @@ code, not before.
 │   │   ├── schemas.py             Pydantic models. Validate on every I/O.
 │   │   ├── records.py             TypedDicts mirroring view shapes.
 │   │   ├── compatibility.py       Dietary verdict (mirrored in webapp/app.js).
-│   │   ├── email.py               schedule_email — audit-log + Resend dispatch.
+│   │   ├── email.py               schedule_email — audit-log + MailSlurp dispatch.
 │   │   ├── error_handler.py       self_healing_error_handler context manager.
 │   │   ├── run_claude_agent.py    Sandboxed agent harness.
 │   │   └── support.py             log, ask_llm, env bootstrap.
 │   ├── actions/              One file per operational goal.
+│   │   ├── clarify_dietary.py       Term-start sweep: asks caterers about MAYBE items.
+│   │   ├── escalate_dietary.py      Marks overdue Open requests Escalated; notifies coordinator.
 │   ├── migrations/           Destructive seed scripts (PDFs/Excel → DB).
 │   └── tests/                Pure-in-memory tests (MockDatabase).
 ├── cache/
@@ -115,6 +117,10 @@ publishable anon key (today: everything; eventually: gated by RLS).
 ./run caterer switch <id>         # execute an Approved switch
 ./run forms qr [send]             # generate or email per-session QR codes
 ./run forms send {parents|students}  # email preference links direct to people
+./run dietary clarify <school>    # ask caterers for MAYBE item confirmation; also runs escalation
+./run dietary clarify <school> --restriction <name>  # single restriction only
+./run dietary clarify <school> --caterer <id>        # single caterer only
+./run dietary escalate            # mark overdue Open requests Escalated + notify coordinator
 ./run test [name]                 # full suite or a single test_*.py module
 ./run script <name>               # ad-hoc: scripts/actions/<name>.py
 ```
@@ -124,9 +130,11 @@ publishable anon key (today: everything; eventually: gated by RLS).
 ```
 SUPABASE_URL=…
 SUPABASE_SERVICE_KEY=…       # service key bypasses RLS for backend scripts
-RESEND_API_KEY=…             # email send
-RESEND_FROM="Padea <orders@padea.com.au>"   # optional; default shown
+MAILSLURP_API_KEY=…          # email send
+MAILSLURP_INBOX_ID=…         # optional; created as a virtual inbox on first use if unset
 DEV_NOTIFICATION_EMAIL=…     # where escalate_to_dev sends "agent stuck" alerts
+COORDINATOR_EMAIL=…          # where notify_coordinator sends dietary escalations
+                             # (falls back to DEV_NOTIFICATION_EMAIL if unset)
 URL_ORIGIN=https://…         # used in QR codes + preference links
 ANTHROPIC_API_KEY=…          # optional, only for LLM-assisted migrations
 LOG_LEVEL=info               # verbose|info|warning|error

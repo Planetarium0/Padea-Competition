@@ -4,11 +4,11 @@ Two surfaces:
 
 - :func:`schedule_email` — operational mail (caterer orders, QR codes,
   preference links, switch alerts). Writes an audit row to
-  ``scheduled_emails`` and dispatches via Resend.
+  ``scheduled_emails`` and dispatches via MailSlurp.
 - :func:`escalate_to_dev` — last-resort human-in-the-loop notification
   used by the self-healing harness when an agent rules out a logical
   fix. Writes an artifact to ``cache/failures/escalation_<id>.md`` first
-  so the escalation survives even if Resend is the thing failing, then
+  so the escalation survives even if MailSlurp is the thing failing, then
   best-effort sends a one-line notification.
 """
 
@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Optional
 
-import resend
+import mailslurp_client
 
 from .records import ScheduledEmailFields
 from .support import log
@@ -205,6 +205,67 @@ def compose_email(components: list[Component]) -> str:
     return html_email("".join(c.render() for c in components))
 
 
+# ---------------------------------------------------------------------------
+# MailSlurp dispatch helpers
+# ---------------------------------------------------------------------------
+
+# Process-lifetime cache so we don't create a new virtual inbox on every call
+# when MAILSLURP_INBOX_ID is not set in the environment.
+_inbox_id_cache: str | None = None
+
+
+def _resolve_inbox_id(api_client: mailslurp_client.ApiClient) -> str:
+    """Return the inbox ID from env, or create a virtual inbox once per process."""
+    global _inbox_id_cache
+    if _inbox_id_cache:
+        return _inbox_id_cache
+    inbox_id = os.environ.get("MAILSLURP_INBOX_ID")
+    if inbox_id:
+        _inbox_id_cache = inbox_id
+        return inbox_id
+    controller = mailslurp_client.InboxControllerApi(api_client)
+    inbox = controller.create_inbox_with_options(
+        mailslurp_client.CreateInboxDto(
+            name="Padea",
+            prefix="padea",
+        )
+    )
+    _inbox_id_cache = inbox.id
+    log.warning(
+        f"[MAILSLURP] Created virtual inbox {inbox.id} ({inbox.email_address}). "
+        f"Persist it by setting MAILSLURP_INBOX_ID={inbox.id} in .env"
+    )
+    return _inbox_id_cache
+
+
+def _send_via_mailslurp(
+    *,
+    to: list[str],
+    subject: str,
+    body: str,
+    cc: list[str] | None = None,
+    is_html: bool = True,
+) -> None:
+    """Dispatch an email via MailSlurp. Raises RuntimeError if the API key is missing."""
+    api_key = os.environ.get("MAILSLURP_API_KEY")
+    if not api_key:
+        raise RuntimeError("MAILSLURP_API_KEY is not configured")
+    configuration = mailslurp_client.Configuration()
+    configuration.api_key["x-api-key"] = api_key
+    with mailslurp_client.ApiClient(configuration) as api_client:
+        inbox_id = _resolve_inbox_id(api_client)
+        controller = mailslurp_client.InboxControllerApi(api_client)
+        options = mailslurp_client.SendEmailOptions(
+            to=to,
+            subject=subject,
+            body=body,
+            is_html=is_html,
+        )
+        if cc:
+            options.cc = cc
+        controller.send_email(inbox_id, options)
+
+
 def schedule_email(
     db:                          Database,
     to_email:                    str,
@@ -255,27 +316,8 @@ def schedule_email(
         actual_to = to_email
         actual_cc = cc_email
 
-    from_addr = os.environ.get("RESEND_FROM", "Padea <orders@padea.com.au>")
-    send_params: resend.Emails.SendParams = {
-        "from": from_addr,
-        "to": [actual_to],
-        "subject": subject,
-        "html": body,
-    }
-    if actual_cc:
-        send_params["cc"] = actual_cc
-    api_key = os.environ.get("RESEND_API_KEY")
-    if not api_key:
-        if se_record:
-            db.ScheduledEmails.update(se_record.id, {"status": "Failed"})
-        log.failure(
-            f"[FAILED] RESEND_API_KEY is not configured — cannot send email to {actual_to}"
-        )
-        return se_record
-
-    resend.api_key = api_key
     try:
-        resend.Emails.send(send_params)
+        _send_via_mailslurp(to=[actual_to], cc=actual_cc, subject=subject, body=body)
         if se_record:
             db.ScheduledEmails.update(se_record.id, {"status": "Sent"})
         log.info(f"[SENT] Email sent to {actual_to}")
@@ -293,8 +335,9 @@ def schedule_email(
 # drift, etc.) and not a logical bug it can patch.
 # ---------------------------------------------------------------------------
 
-# Resolved from the project root: scripts/support/email.py -> ../../cache/failures
+# Resolved from the project root: scripts/support/email.py -> ../../cache/
 _ESCALATION_DIR = Path(__file__).resolve().parents[2] / "cache" / "failures"
+_NOTIFICATIONS_DIR = Path(__file__).resolve().parents[2] / "cache" / "notifications"
 
 
 def _escalation_artifact_path(failure_id: str) -> Path:
@@ -403,31 +446,114 @@ def escalate_to_dev(
         )
         return artifact_path
 
-    from_addr = os.environ.get("RESEND_FROM", "Padea <orders@padea.com.au>")
     subject = f"[Padea escalation] {workflow or 'workflow'} needs you — {failure_id}"
     short_body = (
         f"The self-healing agent cannot resolve this without human input.\n\n"
         f"Reason: {reason.strip().splitlines()[0]}\n\n"
         f"Full details on disk: {artifact_path}\n"
     )
-    send_params: resend.Emails.SendParams = {
-        "from": from_addr,
-        "to": [recipient],
-        "subject": subject,
-        "text": short_body,
-    }
     try:
-        resend.api_key = os.environ["RESEND_API_KEY"]
-        resend.Emails.send(send_params)
+        _send_via_mailslurp(to=[recipient], subject=subject, body=short_body, is_html=False)
         log.warning(f"[ESCALATION] Notification sent to {recipient}")
-    except KeyError:
-        log.error(
-            "[ESCALATION] RESEND_API_KEY not set — artifact written but no "
-            "email sent. Check the artifact directly."
-        )
     except Exception as exc:
         log.error(
             f"[ESCALATION] Notification email failed ({exc}). Artifact "
+            f"at {artifact_path} is the source of truth."
+        )
+
+    return artifact_path
+
+
+# ---------------------------------------------------------------------------
+# Coordinator notification — used by escalate_dietary when a caterer has not
+# responded to a dietary clarification request within 7 days.
+# ---------------------------------------------------------------------------
+
+def _coordinator_artifact_path(request_id: str) -> Path:
+    return _NOTIFICATIONS_DIR / f"clarify_{request_id}.md"
+
+
+def notify_coordinator(
+    request_id: str,
+    *,
+    caterer_name: str,
+    school_name: Optional[str] = None,
+    num_open_questions: int = 0,
+    sent_at_str: Optional[str] = None,
+    notify_email: Optional[str] = None,
+) -> Path:
+    """Notify the program coordinator that a dietary clarification request went unanswered.
+
+    Writes ``cache/notifications/clarify_<request_id>.md`` first so the
+    notification survives email failures, then best-effort emails
+    ``COORDINATOR_EMAIL`` (falling back to ``DEV_NOTIFICATION_EMAIL``).
+
+    Deduplicates by ``request_id``: if the artifact already exists, returns
+    the existing path without re-notifying.
+
+    Args:
+        request_id: the ``id`` UUID of the dietary_clarification_requests row.
+        caterer_name: human-readable caterer name for the notification body.
+        school_name: optional school name for context.
+        num_open_questions: count of unanswered (item, restriction) pairs.
+        sent_at_str: ISO timestamp when the clarification email was first sent.
+        notify_email: override the env-resolved recipient.
+
+    Returns:
+        Path to the (possibly pre-existing) notification artifact.
+    """
+    artifact_path = _coordinator_artifact_path(request_id)
+    if artifact_path.exists():
+        log.info(
+            f"[COORDINATOR NOTIFY DEDUPE] {artifact_path.name} already exists; "
+            f"not re-notifying"
+        )
+        return artifact_path
+
+    _NOTIFICATIONS_DIR.mkdir(parents=True, exist_ok=True)
+    school_line = f" / {school_name}" if school_name else ""
+    body_lines = [
+        f"# Dietary clarification unanswered — {caterer_name}{school_line}",
+        "",
+        f"- **Request ID**: `{request_id}`",
+        f"- **Caterer**: {caterer_name}{school_line}",
+        f"- **Open questions**: {num_open_questions}",
+        f"- **Email sent at**: {sent_at_str or 'unknown'}",
+        f"- **Escalated at**: {datetime.datetime.now().isoformat()}",
+        "",
+        "The caterer did not respond to the dietary clarification email within 7 days.",
+        "Please follow up directly and transcribe their answers.",
+        "",
+        "_Generated by `support.email.notify_coordinator`._",
+    ]
+    artifact_path.write_text("\n".join(body_lines), encoding="utf-8")
+    log.warning(f"[COORDINATOR NOTIFY] Written to {artifact_path}")
+
+    recipient = (
+        notify_email
+        or os.environ.get("COORDINATOR_EMAIL")
+        or os.environ.get("DEV_NOTIFICATION_EMAIL")
+    )
+    if not recipient:
+        log.error(
+            "[COORDINATOR NOTIFY] Neither COORDINATOR_EMAIL nor DEV_NOTIFICATION_EMAIL "
+            "is set — artifact written but no email was sent."
+        )
+        return artifact_path
+
+    subject = f"[Padea] Dietary clarification unanswered — {caterer_name}{school_line}"
+    short_body = (
+        f"The caterer {caterer_name}{school_line} did not respond to the dietary "
+        f"clarification email within 7 days.\n\n"
+        f"There are {num_open_questions} open question(s). Please follow up directly.\n\n"
+        f"Full details: {artifact_path}\n"
+    )
+    try:
+        _send_via_mailslurp(to=[recipient], subject=subject, body=short_body, is_html=False)
+        log.warning(f"[COORDINATOR NOTIFY] Notification sent to {recipient}")
+    except Exception as exc:
+        log.error(
+            f"[COORDINATOR NOTIFY] Notification email failed ({exc}). Artifact "
             f"at {artifact_path} is the source of truth."
         )
 

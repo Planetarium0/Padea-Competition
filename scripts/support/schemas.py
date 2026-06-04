@@ -8,13 +8,14 @@ validation, not field-presence checking.
 
 from __future__ import annotations
 
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 Region = Literal["Redlands", "South Brisbane", "West Brisbane", "Central Brisbane"]
 DayName = Literal["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 DeliveryFeeStructure = Literal["Per trip", "Per school per trip"]
+ClarificationStatus = Literal["Open", "Resolved", "Escalated", "Cancelled"]
 EmailStatus = Literal["Queued", "Send Immediately", "Sent", "Failed"]
 ProposalStatus = Literal["Pending", "Approved", "Rejected", "Executed"]
 YearLevel = Literal["All", "12", "11", "10", "9", "8", "7", "6"]
@@ -198,6 +199,18 @@ class CatererSwitchProposal(_Base):
     notes: Optional[str] = None
 
 
+class DietaryClarificationRequest(_Base):
+    id: Optional[str] = None
+    request_code: Optional[str] = None
+    caterer_id: Optional[str] = None
+    school_id: Optional[str] = None
+    sent_at: Optional[str] = None
+    responded_at: Optional[str] = None
+    status: Optional[ClarificationStatus] = None
+    question_set: List[Dict[str, str]] = Field(default_factory=list)
+    notes: Optional[str] = None
+
+
 # Maps Postgres table names to their Pydantic validation models.
 MODEL_MAP = {
     "schools":                  School,
@@ -215,4 +228,5 @@ MODEL_MAP = {
     "scheduled_emails":         ScheduledEmail,
     "manager_substitutions":    ManagerSubstitution,
     "caterer_switch_proposals": CatererSwitchProposal,
+    "dietary_clarification_requests": DietaryClarificationRequest,
 }

@@ -24,7 +24,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Literal
 
 from .database import Record
 from .records import DietaryRestrictionFields, MenuItemFields
@@ -147,6 +147,51 @@ def is_item_compatible(
     return not item_incompatibility_ids(
         item_fields, student_dietary_ids, hierarchy, caterer_legend_tag_ids,
     )
+
+
+def item_verdict(
+    item_fields: MenuItemFields,
+    restriction_id: str,
+    hierarchy: DietaryHierarchy,
+    caterer_legend_tag_ids: Iterable[str] | None = None,
+) -> Literal["OK", "NO", "MAYBE"]:
+    """Return the three-state compatibility verdict for a single (item, restriction) pair.
+
+    OK    — item has a tag satisfying the restriction via subset closure.
+    NO    — definite incompatibility: caterer legend blocks it, or a negative
+            keyword appears in the item name.
+    MAYBE — no positive tag evidence and no definite block; the caterer needs
+            to confirm.
+
+    This is the same per-restriction logic as :func:`item_incompatibility_ids`
+    but exposed as a named verdict rather than a boolean.  Use it when you need
+    to distinguish MAYBE from OK (e.g. dietary clarification sweep).
+    """
+    item_tag_ids = set(item_fields.get("dietary_tag_ids") or [])
+    item_name_lower = item_fields.get("name", "").lower()
+    legend_ids = set(caterer_legend_tag_ids or [])
+    req_name = hierarchy.id_to_name.get(restriction_id, "")
+
+    # Step 1: positive tag satisfies the constraint via subset closure → OK
+    closure = hierarchy.subset_closure.get(restriction_id, {restriction_id})
+    if item_tag_ids & closure:
+        return "OK"
+
+    # Step 2: caterer legend tracks an ancestor and item lacks any satisfying tag → NO
+    if legend_ids:
+        for ancestor_id in hierarchy.superset_closure.get(restriction_id, {restriction_id}):
+            if ancestor_id not in legend_ids:
+                continue
+            ancestor_closure = hierarchy.subset_closure.get(ancestor_id, {ancestor_id})
+            if not (item_tag_ids & ancestor_closure):
+                return "NO"
+
+    # Step 3: item name contains a definite negative keyword → NO
+    for kw in NEGATIVE_KEYWORDS.get(req_name, ()):
+        if kw in item_name_lower:
+            return "NO"
+
+    return "MAYBE"
 
 
 def item_incompatibility_ids(

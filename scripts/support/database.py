@@ -35,6 +35,7 @@ from .records import (
     CatererFeedbackFields,
     CatererFields,
     CatererSwitchProposalFields,
+    DietaryClarificationRequestFields,
     DietaryRestrictionFields,
     ExclusionFields,
     ManagerSubstitutionFields,
@@ -395,6 +396,10 @@ class Database:
     @property
     def CatererSwitchProposals(self) -> Table[CatererSwitchProposalFields]:
         return self._table("caterer_switch_proposals")
+
+    @property
+    def DietaryClarificationRequests(self) -> Table[DietaryClarificationRequestFields]:
+        return self._table("dietary_clarification_requests")
 
 
 # ---------------------------------------------------------------------------

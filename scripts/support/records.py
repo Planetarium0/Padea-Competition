@@ -27,6 +27,7 @@ Region = Literal[
 ]
 DayName = Literal["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 DeliveryFeeStructure = Literal["Per trip", "Per school per trip"]
+ClarificationStatus = Literal["Open", "Resolved", "Escalated", "Cancelled"]
 EmailStatus = Literal["Queued", "Send Immediately", "Sent", "Failed"]
 ProposalStatus = Literal["Pending", "Approved", "Rejected", "Executed"]
 YearLevel = Literal["All", "12", "11", "10", "9", "8", "7", "6"]
@@ -271,9 +272,27 @@ CatererSwitchProposalFields = TypedDict(
 )
 
 
+DietaryClarificationRequestFields = TypedDict(
+    "DietaryClarificationRequestFields",
+    {
+        "id": str,
+        "request_code": str,
+        "caterer_id": str,
+        "school_id": str,
+        "sent_at": str,
+        "responded_at": str,
+        "status": ClarificationStatus,
+        "question_set": list[dict[str, str]],   # [{menu_item_id, restriction_id}]
+        "notes": str,
+    },
+    total=False,
+)
+
+
 __all__ = [
     "Region",
     "DayName",
+    "ClarificationStatus",
     "DeliveryFeeStructure",
     "EmailStatus",
     "ProposalStatus",
@@ -293,4 +312,5 @@ __all__ = [
     "ScheduledEmailFields",
     "ManagerSubstitutionFields",
     "CatererSwitchProposalFields",
+    "DietaryClarificationRequestFields",
 ]
