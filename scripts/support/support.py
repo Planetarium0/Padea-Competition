@@ -17,7 +17,6 @@ from typing import Any
 from dotenv import load_dotenv
 
 from .database import Database, Record, Table  # noqa: F401 — re-exported
-from .prompt_user import prompt_user
 
 
 # ---------------------------------------------------------------------------
@@ -112,28 +111,47 @@ log.setLevel(_log_level)
 # ---------------------------------------------------------------------------
 
 def ask_llm(prompt: str) -> str | None:
-    """Send a prompt to Claude (Anthropic SDK) or fall back to a Tk prompt.
+    """Send a prompt to Claude via the Anthropic SDK, or fall back to the Claude CLI.
 
     Returns the model's text response, or ``None`` if both routes fail.
     """
-    key = os.environ.get("CLAUDE_CODE_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
-    if not key:
-        log.warning("No Claude or Anthropic API key found. LLM queries will try prompt the user.")
-        return prompt_user(prompt)
-    try:
-        from anthropic import Anthropic
+    import subprocess
 
-        client = Anthropic(api_key=key)
-        response = client.messages.create(
-            model="claude-3-5-sonnet-latest",
-            max_tokens=4000,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        block = response.content[0]
-        return getattr(block, "text", None)
-    except Exception as e:
-        log.error(f"Error calling Anthropic API: {e}")
-        return None
+    key = os.environ.get("CLAUDE_CODE_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
+    if key:
+        try:
+            from anthropic import Anthropic
+
+            client = Anthropic(api_key=key)
+            response = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=4000,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            block = response.content[0]
+            return getattr(block, "text", None)
+        except Exception as e:
+            log.error(f"Error calling Anthropic API: {e}")
+            return None
+    else:
+        log.warning("No Claude or Anthropic API key found. Falling back to Claude CLI.")
+        try:
+            result = subprocess.run(
+                ["claude", "-p", prompt],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip() or None
+            log.error(f"Claude CLI returned exit code {result.returncode}: {result.stderr[:200]}")
+            return None
+        except FileNotFoundError:
+            log.error("Claude CLI not found. Install it or set ANTHROPIC_API_KEY.")
+            return None
+        except Exception as e:
+            log.error(f"Error calling Claude CLI: {e}")
+            return None
 
 
 __all__ = [

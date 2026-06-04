@@ -125,6 +125,7 @@ publishable anon key (today: everything; eventually: gated by RLS).
 ./run dietary clarify <school> --caterer <id>        # single caterer only
 ./run dietary escalate            # mark overdue Open/Clarifying requests Escalated + notify coordinator
 ./run dietary poll [--dry-run]    # drain dietary_inbound_messages, parse replies, run escalation
+./run support poll [--dry-run]    # drain support_inbound_messages, run AI handler for parent emails
 ./run test [name]                 # full suite or a single test_*.py module
 ./run script <name>               # ad-hoc: scripts/actions/<name>.py
 ```
@@ -141,8 +142,9 @@ COORDINATOR_EMAIL=…          # where notify_coordinator sends dietary escalati
                              # (falls back to DEV_NOTIFICATION_EMAIL if unset)
 URL_ORIGIN=https://…         # used in QR codes + preference links
 ANTHROPIC_API_KEY=…          # optional, only for LLM-assisted migrations
-SENDGRID_INBOUND_VERIFICATION_KEY=… # ECDSA P-256 public key for the receive-dietary-reply Edge Function
+SENDGRID_INBOUND_VERIFICATION_KEY=… # ECDSA P-256 public key for inbound Edge Functions
 APP_DOMAIN=…                 # e.g. padea.com.au; used to construct reply-to addresses
+SUPPORT_EMAIL=support@help.<APP_DOMAIN>  # inbound support address; used to validate To: and send replies from
 LOG_LEVEL=info               # verbose|info|warning|error
 ```
 

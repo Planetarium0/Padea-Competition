@@ -30,6 +30,7 @@ Usage:
   $0 dietary clarify <school> [--caterer ID] [--restriction NAME] [--dry-run]
   $0 dietary escalate [--dry-run]
   $0 dietary poll [--dry-run]
+  $0 support poll [--dry-run]
   $0 test [name]
   $0 script [name]
   $0 fix [--latest-error|--run-and-heal CMD|...]
@@ -216,6 +217,21 @@ case "$COMMAND" in
             *)
                 echo "[ERROR] Unknown dietary subcommand: ${SUBCOMMAND:-<none>}"
                 echo "Use: dietary clarify <school> | dietary escalate | dietary poll [--dry-run]"
+                exit 1
+                ;;
+        esac
+        ;;
+
+    support)
+        SUBCOMMAND="${2:-}"
+        case "$SUBCOMMAND" in
+            poll)
+                echo "Running support inbox poll..."
+                $PYTHON scripts/actions/poll_support_inbox.py "${@:3}"
+                ;;
+            *)
+                echo "[ERROR] Unknown support subcommand: ${SUBCOMMAND:-<none>}"
+                echo "Use: support poll [--dry-run]"
                 exit 1
                 ;;
         esac

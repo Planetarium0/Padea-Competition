@@ -47,6 +47,8 @@ from .records import (
     ScheduledEmailFields,
     SessionFields,
     StudentFields,
+    SupportCaseFields,
+    SupportInboundMessageFields,
     WeeklyOrderFields,
 )
 
@@ -405,6 +407,14 @@ class Database:
     @property
     def DietaryInboundMessages(self) -> Table[DietaryInboundMessageFields]:
         return self._table("dietary_inbound_messages")
+
+    @property
+    def SupportInboundMessages(self) -> Table[SupportInboundMessageFields]:
+        return self._table("support_inbound_messages")
+
+    @property
+    def SupportCases(self) -> Table[SupportCaseFields]:
+        return self._table("support_cases")
 
 
 # ---------------------------------------------------------------------------

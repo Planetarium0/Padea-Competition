@@ -36,6 +36,7 @@ import test_register_orders
 import test_send_meals_links
 import test_send_orders
 import test_send_qr_emails
+import test_handle_support_email
 import test_substitutions
 import test_edge_cases
 
@@ -58,6 +59,7 @@ def suite() -> unittest.TestSuite:
         test_substitutions,
         test_evaluate_caterers,
         test_execute_caterer_switch,
+        test_handle_support_email,
         test_edge_cases,
     ):
         s.addTests(loader.loadTestsFromModule(module))

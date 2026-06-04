@@ -16,6 +16,7 @@ Region = Literal["Redlands", "South Brisbane", "West Brisbane", "Central Brisban
 DayName = Literal["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 DeliveryFeeStructure = Literal["Per trip", "Per school per trip"]
 ClarificationStatus = Literal["Open", "Clarifying", "Resolved", "Escalated", "Cancelled"]
+SupportCaseStatus = Literal["Open", "Resolved", "Escalated"]
 EmailStatus = Literal["Queued", "Send Immediately", "Sent", "Failed"]
 ProposalStatus = Literal["Pending", "Approved", "Rejected", "Executed"]
 YearLevel = Literal["All", "12", "11", "10", "9", "8", "7", "6"]
@@ -214,6 +215,30 @@ class DietaryClarificationRequest(_Base):
     notes: Optional[str] = None
 
 
+class SupportInboundMessage(_Base):
+    id: Optional[str] = None
+    received_at: Optional[str] = None
+    seen: Optional[bool] = None
+    from_address: Optional[str] = None
+    subject: Optional[str] = None
+    body_text: Optional[str] = None
+    message_id: Optional[str] = None
+    in_reply_to: Optional[str] = None
+    to_address: Optional[str] = None
+    raw_payload: Optional[Dict[str, Any]] = None
+
+
+class SupportCase(_Base):
+    id: Optional[str] = None
+    case_code: Optional[str] = None
+    parent_email: Optional[str] = None
+    status: Optional[SupportCaseStatus] = None
+    opened_at: Optional[str] = None
+    resolved_at: Optional[str] = None
+    messages: List[Dict[str, Any]] = Field(default_factory=list)
+    notes: Optional[str] = None
+
+
 class DietaryInboundMessage(_Base):
     id: Optional[str] = None
     received_at: Optional[str] = None
@@ -246,4 +271,6 @@ MODEL_MAP = {
     "caterer_switch_proposals": CatererSwitchProposal,
     "dietary_clarification_requests": DietaryClarificationRequest,
     "dietary_inbound_messages": DietaryInboundMessage,
+    "support_inbound_messages":       SupportInboundMessage,
+    "support_cases":                  SupportCase,
 }

@@ -123,3 +123,5 @@ class MockDatabase:
         self.CatererSwitchProposals:        MockTable = MockTable()
         self.DietaryClarificationRequests:  MockTable = MockTable()
         self.DietaryInboundMessages:        MockTable = MockTable()
+        self.SupportInboundMessages:        MockTable = MockTable()
+        self.SupportCases:                  MockTable = MockTable()
