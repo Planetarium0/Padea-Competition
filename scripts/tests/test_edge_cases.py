@@ -273,7 +273,7 @@ class TestSendMealsLinksResendApiKeyMissing(unittest.TestCase):
                 os.environ.pop("SENDGRID_API_KEY", None)
                 os.environ.pop("APP_ENV", None)
                 with self_healing_error_handler("send_meals_links"):
-                    send_links(target="parents", limit=1, db=db)
+                    send_links(target="parents", db=db)
 
             jsons = sorted(tmp.glob("failure_*.json"))
             self.assertEqual(len(jsons), 1,

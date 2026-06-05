@@ -7,7 +7,7 @@ caterer email, sends it via SendGrid, and logs a record in the scheduled_emails
 table with the final status.
 
 Usage:
-  python scripts/send_orders.py [--preview] [--limit N]
+  python scripts/send_orders.py [--preview]
 """
 
 from __future__ import annotations
@@ -298,7 +298,6 @@ def format_email_body(
 def process_orders(
     db:           Database | None = None,
     preview_only: bool = False,
-    limit:        int | None = None,
 ) -> None:
     db = db or Database.from_env()
     pending_orders = load_pending_orders(db)
@@ -308,9 +307,6 @@ def process_orders(
 
     sent = 0
     for wo_record in pending_orders:
-        if limit is not None and sent >= limit:
-            log.info(f"Reached --limit {limit}; stopping.")
-            break
         wo_fields   = wo_record.fields
         wo_id_label = wo_fields.get("order_code", wo_record.id)
         log.info(f"\nProcessing: {wo_id_label}")
@@ -380,12 +376,6 @@ if __name__ == "__main__":
         "--preview", action="store_true",
         help="Preview emails without sending or marking as Sent",
     )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=None,
-        help="Cap the number of caterer order emails this run will queue (useful for testing)",
-    )
     args = parser.parse_args()
 
     # Dynamic database state provider to serialize DB context if an edge case fails
@@ -407,4 +397,4 @@ if __name__ == "__main__":
             return {"error_loading_db_state": str(e)}
 
     with self_healing_error_handler("send_orders", state_provider=db_state_provider):
-        process_orders(preview_only=args.preview, limit=args.limit)
+        process_orders(preview_only=args.preview)

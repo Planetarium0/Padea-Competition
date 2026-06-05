@@ -7,7 +7,7 @@ session they run.  QR code images are rendered inline via api.qrserver.com so
 no attachment handling is needed.
 
 Usage:
-  python scripts/actions/forms/send_qr_emails.py [--immediate] [--dry-run] [--first] [--limit N]
+  python scripts/actions/forms/send_qr_emails.py [--immediate] [--dry-run] [--first]
 
 Requires URL_ORIGIN in .env (or as an environment variable):
   URL_ORIGIN=http://<server-ip>:8000
@@ -115,7 +115,6 @@ def format_manager_email(
 def send_qr_emails(
     dry_run: bool = False,
     first:   bool = False,
-    limit:   int | None = None,
     db:      Database | None = None,
 ) -> None:
     db = db or Database.from_env()
@@ -168,9 +167,6 @@ def send_qr_emails(
     sent = 0
 
     for mgr_id, entries in by_manager.items():
-        if limit is not None and sent >= limit:
-            log.info(f"Reached --limit {limit}; stopping.")
-            break
         mgr_fields: OnSiteManagerFields = manager_map[mgr_id].fields
         mgr_name  = mgr_fields.get("name") or ""
         mgr_email = mgr_fields.get("email", "")
@@ -220,12 +216,6 @@ if __name__ == "__main__":
         action="store_true",
         help="Append &first=1 to each link, hiding the caterer rating card in the webapp",
     )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=None,
-        help="Cap the number of manager emails this run will queue (useful for testing)",
-    )
     args = parser.parse_args()
 
     def db_state_provider():
@@ -241,4 +231,4 @@ if __name__ == "__main__":
             return {"error_loading_db_state": str(e)}
 
     with self_healing_error_handler("send_qr_emails", state_provider=db_state_provider):
-        send_qr_emails(dry_run=args.dry_run, first=args.first, limit=args.limit)
+        send_qr_emails(dry_run=args.dry_run, first=args.first)

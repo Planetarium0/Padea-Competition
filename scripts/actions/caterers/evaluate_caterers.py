@@ -15,7 +15,7 @@ Dietary hard filter: a candidate caterer is only eligible if it has at least
 one compatible menu item for EVERY non-opted-out student at the session.
 
 Usage:
-  python scripts/actions/caterers/evaluate_caterers.py [--dry-run] [--limit N]
+  python scripts/actions/caterers/evaluate_caterers.py [--dry-run]
 """
 
 from __future__ import annotations
@@ -761,7 +761,6 @@ def queue_alert_email(
 def evaluate(
     db:      Database | None = None,
     dry_run: bool = False,
-    limit:   int | None = None,
 ) -> None:
     db = db or Database.from_env()
 
@@ -778,9 +777,6 @@ def evaluate(
     evaluated      = 0
     emails_queued  = 0
     for (session_id, caterer_id), entries in index.feedback_index.items():
-        if limit is not None and emails_queued >= limit:
-            log.info(f"Reached --limit {limit}; stopping evaluation.")
-            break
         session_name = index.session_labels.get(session_id, session_id)
         caterer_name = index.caterer_names.get(caterer_id, caterer_id)
 
@@ -1040,12 +1036,6 @@ if __name__ == "__main__":
         "--incoming",
         help="Incoming caterer record ID (optional with --force; auto-selected if omitted)",
     )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=None,
-        help="Cap the number of emails this run will queue (useful for testing)",
-    )
     args = parser.parse_args()
 
     # Dynamic database state provider to serialize DB context if an edge case fails
@@ -1069,13 +1059,10 @@ if __name__ == "__main__":
         if args.force:
             if not args.session:
                 parser.error("--force requires --session <record_id>")
-            if args.limit == 0:
-                log.info("--limit 0 set; skipping forced proposal email.")
-            else:
-                force_proposal(
-                    session_ref=args.session,
-                    incoming_caterer_id=args.incoming,
-                    dry_run=args.dry_run,
-                )
+            force_proposal(
+                session_ref=args.session,
+                incoming_caterer_id=args.incoming,
+                dry_run=args.dry_run,
+            )
         else:
-            evaluate(dry_run=args.dry_run, limit=args.limit)
+            evaluate(dry_run=args.dry_run)

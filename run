@@ -21,17 +21,17 @@ usage() {
     cat <<EOF
 Usage:
   $0 migrate [resource] [--wipe] [--yes]
-  $0 orders [generate [--dry-run]|preview|send] [--limit N]
+  $0 orders [generate [--dry-run]|preview|send]
   $0 forms qr [--origin URL] [--base-url URL] [--session ID] [--first]
-  $0 forms qr send [--dry-run] [--first] [--limit N]
-  $0 forms send {parents|students} [--dry-run] [--first] [--limit N]
-  $0 caterer evaluate [--dry-run] [--limit N]
+  $0 forms qr send [--dry-run] [--first]
+  $0 forms send {parents|students} [--dry-run] [--first]
+  $0 caterer evaluate [--dry-run]
   $0 caterer switch <proposal_id> [--approve] [--dry-run]
   $0 dietary clarify [<caterer>] [--restriction NAME] [--dry-run]
   $0 dietary escalate [--dry-run]
   $0 dietary poll [--dry-run]
   $0 support poll [--dry-run]
-  $0 emails retry [--dry-run] [--limit N]
+  $0 emails retry [--dry-run]
   $0 procedure {start-of-term|weekly|polling} [--dry-run]
   $0 logs [index]
   $0 test [name]
@@ -49,7 +49,6 @@ procedure shortcuts:
   polling        support poll, dietary poll, dietary escalate, dietary clarify,
                  emails retry, then fix --latest-error (self-healing)
 
---limit N caps the number of emails the script will queue or retry (testing aid).
 EOF
 }
 
@@ -272,7 +271,7 @@ case "$COMMAND" in
                 ;;
             *)
                 echo "[ERROR] Unknown emails subcommand: ${SUBCOMMAND:-<none>}"
-                echo "Use: emails retry [--dry-run] [--limit N]"
+                echo "Use: emails retry [--dry-run]"
                 exit 1
                 ;;
         esac

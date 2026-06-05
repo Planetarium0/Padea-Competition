@@ -9,7 +9,7 @@ Idempotent: safe to run multiple times. Only rows currently in 'Failed'
 status are retried.
 
 Usage:
-  python scripts/actions/emails/retry_failed_emails.py [--dry-run] [--limit N]
+  python scripts/actions/emails/retry_failed_emails.py [--dry-run]
 """
 
 from __future__ import annotations
@@ -23,7 +23,6 @@ from support.email import _send_via_sendgrid
 def retry_failed_emails(
     db: Database | None = None,
     dry_run: bool = False,
-    limit: int | None = None,
 ) -> None:
     db = db or Database.from_env()
 
@@ -41,10 +40,6 @@ def retry_failed_emails(
     succeeded = 0
 
     for record in failed:
-        if limit is not None and retried >= limit:
-            log.info(f"Reached --limit {limit}; stopping.")
-            break
-
         fields = record.fields
         email_id  = fields.get("email_code", record.id)
         to_addr   = fields.get("to_address")
@@ -97,10 +92,6 @@ if __name__ == "__main__":
         "--dry-run", action="store_true",
         help="Log what would happen without sending",
     )
-    parser.add_argument(
-        "--limit", type=int, default=None,
-        help="Cap the number of retries this run",
-    )
     args = parser.parse_args()
 
     def db_state_provider():
@@ -111,4 +102,4 @@ if __name__ == "__main__":
             return {"error_loading_db_state": str(e)}
 
     with self_healing_error_handler("retry_failed_emails", state_provider=db_state_provider):
-        retry_failed_emails(dry_run=args.dry_run, limit=args.limit)
+        retry_failed_emails(dry_run=args.dry_run)
