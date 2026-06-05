@@ -84,7 +84,7 @@ class Button(Component):
 
     def render(self) -> str:
         return (
-            f'<p style="margin:12px 0 0;">'
+            f'<p style="margin:12px 0 16px;">'
             f'<a href="{self.href}" style="display:inline-block;background-color:#A51C30;'
             f'color:#FFFFFF;padding:10px 20px;border-radius:8px;text-decoration:none;'
             f'font-weight:600;font-size:15px;">{self.label}</a>'
@@ -260,7 +260,7 @@ def _send_via_sendgrid(
         payload["reply_to"] = {"email": reply_to}
 
     if in_reply_to_header:
-        payload["headers"] = [{"key": "In-Reply-To", "value": in_reply_to_header}]
+        payload["headers"] = {"In-Reply-To": in_reply_to_header}
 
     if os.environ.get("PADEA_TEST_MODE") == "1":
         raise RuntimeError(
@@ -502,45 +502,49 @@ def escalate_to_dev(
 
 
 # ---------------------------------------------------------------------------
-# Coordinator notification — used by escalate_dietary when a caterer has not
-# responded to a dietary clarification request within 7 days.
+# Coordinator notification — used whenever a workflow needs a human to step in.
 # ---------------------------------------------------------------------------
 
-def _coordinator_artifact_path(request_id: str) -> Path:
-    return _NOTIFICATIONS_DIR / f"clarify_{request_id}.md"
+def _coordinator_artifact_path(notification_id: str) -> Path:
+    return _NOTIFICATIONS_DIR / f"notify_{notification_id}.md"
 
 
 def notify_coordinator(
-    request_id: str,
+    notification_id: str,
     *,
-    caterer_name: str,
+    reason: str,
     school_name: Optional[str] = None,
     num_open_questions: int = 0,
     sent_at_str: Optional[str] = None,
     notify_email: Optional[str] = None,
     custom_message: Optional[str] = None,
 ) -> Path:
-    """Notify the program coordinator that a dietary clarification request went unanswered.
+    """Notify the program coordinator that a workflow needs human attention.
 
-    Writes ``cache/notifications/clarify_<request_id>.md`` first so the
+    Writes ``cache/notifications/notify_<notification_id>.md`` first so the
     notification survives email failures, then best-effort emails
     ``COORDINATOR_EMAIL`` (falling back to ``DEV_NOTIFICATION_EMAIL``).
 
-    Deduplicates by ``request_id``: if the artifact already exists, returns
+    Deduplicates by ``notification_id``: if the artifact already exists, returns
     the existing path without re-notifying.
 
     Args:
-        request_id: the ``id`` UUID of the dietary_clarification_requests row.
-        caterer_name: human-readable caterer name for the notification body.
-        school_name: optional school name for context.
-        num_open_questions: count of unanswered (item, restriction) pairs.
-        sent_at_str: ISO timestamp when the clarification email was first sent.
+        notification_id: stable identifier for this notification (e.g. a row UUID
+            or a descriptive slug). Used for deduplication.
+        reason: short human-readable description of why the coordinator is being
+            notified (e.g. a caterer name, a sender address, a workflow label).
+        school_name: optional school name for additional context.
+        num_open_questions: count of open items, if applicable.
+        sent_at_str: ISO timestamp of the triggering event, if applicable.
         notify_email: override the env-resolved recipient.
 
     Returns:
         Path to the (possibly pre-existing) notification artifact.
     """
-    artifact_path = _coordinator_artifact_path(request_id)
+    if os.environ.get("PADEA_TEST_MODE") == "1":
+        return _coordinator_artifact_path(notification_id)
+
+    artifact_path = _coordinator_artifact_path(notification_id)
     if artifact_path.exists():
         log.info(
             f"[COORDINATOR NOTIFY DEDUPE] {artifact_path.name} already exists; "
@@ -550,17 +554,18 @@ def notify_coordinator(
 
     _NOTIFICATIONS_DIR.mkdir(parents=True, exist_ok=True)
     school_line = f" / {school_name}" if school_name else ""
+    detail_lines: list[str] = []
+    if num_open_questions:
+        detail_lines.append(f"- **Open questions**: {num_open_questions}")
+    if sent_at_str:
+        detail_lines.append(f"- **Triggered at**: {sent_at_str}")
     body_lines = [
-        f"# Dietary clarification unanswered — {caterer_name}{school_line}",
+        f"# Coordinator action needed — {reason}{school_line}",
         "",
-        f"- **Request ID**: `{request_id}`",
-        f"- **Caterer**: {caterer_name}{school_line}",
-        f"- **Open questions**: {num_open_questions}",
-        f"- **Email sent at**: {sent_at_str or 'unknown'}",
+        f"- **Notification ID**: `{notification_id}`",
+        f"- **Reason**: {reason}{school_line}",
+        *detail_lines,
         f"- **Escalated at**: {datetime.datetime.now().isoformat()}",
-        "",
-        "The caterer did not respond to the dietary clarification email within 7 days.",
-        "Please follow up directly and transcribe their answers.",
         "",
         "_Generated by `support.email.notify_coordinator`._",
     ]
@@ -579,15 +584,15 @@ def notify_coordinator(
         )
         return artifact_path
 
-    subject = f"[Padea] Dietary clarification unanswered — {caterer_name}{school_line}"
+    email_subject = f"[Padea] Action needed — {reason}{school_line}"
     short_body = custom_message or (
-        f"The caterer {caterer_name}{school_line} did not respond to the dietary "
-        f"clarification email within 7 days.\n\n"
-        f"There are {num_open_questions} open question(s). Please follow up directly.\n\n"
-        f"Full details: {artifact_path}\n"
+        f"Coordinator action is required.\n\n"
+        f"Reason: {reason}{school_line}\n\n"
+        + (f"Open questions: {num_open_questions}\n\n" if num_open_questions else "")
+        + f"Full details: {artifact_path}\n"
     )
     try:
-        _send_via_sendgrid(to=[recipient], subject=subject, body=short_body, from_email=_support_from(), is_html=False)
+        _send_via_sendgrid(to=[recipient], subject=email_subject, body=short_body, from_email=_support_from(), is_html=False)
         log.warning(f"[COORDINATOR NOTIFY] Notification sent to {recipient}")
     except Exception as exc:
         log.error(

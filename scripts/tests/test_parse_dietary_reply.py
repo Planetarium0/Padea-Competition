@@ -133,7 +133,7 @@ class TestParseReply(unittest.TestCase):
         msg = _make_message(body_text="Chicken Fried Rice is vegetarian-safe.")
         llm = _llm_response(
             confident_writes=[
-                {"menu_item_id": ITEM_CHICKEN_RICE_ID, "restriction_id": DIET_VEG_ID, "answer": "compatible"},
+                {"item_name": "Chicken Fried Rice", "restriction_name": "Vegetarian", "answer": "compatible"},
             ]
         )
         self._parse(db, request, msg, llm)
@@ -157,7 +157,7 @@ class TestParseReply(unittest.TestCase):
         msg = _make_message(body_text="Chicken Fried Rice contains chicken — not vegetarian.")
         llm = _llm_response(
             confident_writes=[
-                {"menu_item_id": ITEM_CHICKEN_RICE_ID, "restriction_id": DIET_VEG_ID, "answer": "contains"},
+                {"item_name": "Chicken Fried Rice", "restriction_name": "Vegetarian", "answer": "contains"},
             ]
         )
         self._parse(db, request, msg, llm)
@@ -186,8 +186,8 @@ class TestParseReply(unittest.TestCase):
         msg = _make_message()
         llm = _llm_response(
             confident_writes=[
-                {"menu_item_id": ITEM_CHICKEN_RICE_ID, "restriction_id": DIET_VEG_ID, "answer": "contains"},
-                {"menu_item_id": ITEM_VEG_PASTA_ID, "restriction_id": DIET_VEGAN_ID, "answer": "compatible"},
+                {"item_name": "Chicken Fried Rice", "restriction_name": "Vegetarian", "answer": "contains"},
+                {"item_name": "Vegetarian Pasta", "restriction_name": "Vegan", "answer": "compatible"},
             ]
         )
         self._parse(db, request, msg, llm)
@@ -216,7 +216,7 @@ class TestParseReply(unittest.TestCase):
         llm = _llm_response(
             confident_writes=[],
             clarification_questions=["Could you confirm the Chicken Fried Rice?"],
-            still_unknown=[{"menu_item_id": ITEM_CHICKEN_RICE_ID, "restriction_id": DIET_VEG_ID}],
+            still_unknown=[{"item_name": "Chicken Fried Rice", "restriction_name": "Vegetarian"}],
         )
 
         with patch("actions.dietary.parse_dietary_reply.ask_llm", return_value=llm), \
@@ -247,7 +247,7 @@ class TestParseReply(unittest.TestCase):
         msg = _make_message(body_text="Yes, confirmed — Chicken Fried Rice is NOT vegetarian.")
         llm = _llm_response(
             confident_writes=[
-                {"menu_item_id": ITEM_CHICKEN_RICE_ID, "restriction_id": DIET_VEG_ID, "answer": "contains"},
+                {"item_name": "Chicken Fried Rice", "restriction_name": "Vegetarian", "answer": "contains"},
             ]
         )
         self._parse(db, request, msg, llm)
@@ -263,7 +263,7 @@ class TestParseReply(unittest.TestCase):
         msg = _make_message(body_text="I don't know what you mean.")
         llm = _llm_response(
             clarification_questions=["Still need clarification on the chicken."],
-            still_unknown=[{"menu_item_id": ITEM_CHICKEN_RICE_ID, "restriction_id": DIET_VEG_ID}],
+            still_unknown=[{"item_name": "Chicken Fried Rice", "restriction_name": "Vegetarian"}],
         )
 
         with patch("actions.dietary.parse_dietary_reply.ask_llm", return_value=llm), \
@@ -284,10 +284,10 @@ class TestParseReply(unittest.TestCase):
         msg = _make_message()
         llm = _llm_response(
             confident_writes=[
-                {"menu_item_id": ITEM_CHICKEN_RICE_ID, "restriction_id": DIET_VEG_ID, "answer": "compatible"},
+                {"item_name": "Chicken Fried Rice", "restriction_name": "Vegetarian", "answer": "compatible"},
             ],
             earned_legends=[
-                {"restriction_id": DIET_VEG_ID, "rationale": "Caterer confirmed all items"},
+                {"restriction_name": "Vegetarian", "rationale": "Caterer confirmed all items"},
             ]
         )
         self._parse(db, request, msg, llm)
@@ -346,7 +346,7 @@ class TestParseReply(unittest.TestCase):
         msg = _make_message(body_text="The chickhen fride rice is ok for vegetarrians.")
         llm = _llm_response(
             confident_writes=[
-                {"menu_item_id": ITEM_CHICKEN_RICE_ID, "restriction_id": DIET_VEG_ID, "answer": "compatible"},
+                {"item_name": "Chicken Fried Rice", "restriction_name": "Vegetarian", "answer": "compatible"},
             ]
         )
         self._parse(db, request, msg, llm)
@@ -392,7 +392,7 @@ class TestParseReply(unittest.TestCase):
         msg = _make_message(body_text=body)
         llm = _llm_response(
             confident_writes=[
-                {"menu_item_id": ITEM_CHICKEN_RICE_ID, "restriction_id": DIET_VEG_ID, "answer": "contains"},
+                {"item_name": "Chicken Fried Rice", "restriction_name": "Vegetarian", "answer": "contains"},
             ]
         )
         self._parse(db, request, msg, llm)
@@ -410,7 +410,7 @@ class TestParseReply(unittest.TestCase):
         msg = _make_message(body_text="Vegetarian Pasta is definitely vegetarian.")
         llm = _llm_response(
             confident_writes=[
-                {"menu_item_id": ITEM_VEG_PASTA_ID, "restriction_id": DIET_VEG_ID, "answer": "compatible"},
+                {"item_name": "Vegetarian Pasta", "restriction_name": "Vegetarian", "answer": "compatible"},
             ]
         )
         self._parse(db, request, msg, llm)
@@ -429,7 +429,7 @@ class TestParseReply(unittest.TestCase):
         msg = _make_message(body_text="The Beef Burger contains beef.")
         llm = _llm_response(
             confident_writes=[
-                {"menu_item_id": ITEM_BEEF_BURGER_ID, "restriction_id": DIET_NOBEEF_ID, "answer": "contains"},
+                {"item_name": "Beef Burger", "restriction_name": "No Beef", "answer": "contains"},
             ]
         )
         self._parse(db, request, msg, llm)
@@ -446,7 +446,7 @@ class TestParseReply(unittest.TestCase):
         msg = _make_message()
         llm = _llm_response(
             confident_writes=[
-                {"menu_item_id": ITEM_CHICKEN_RICE_ID, "restriction_id": DIET_VEG_ID, "answer": "compatible"},
+                {"item_name": "Chicken Fried Rice", "restriction_name": "Vegetarian", "answer": "compatible"},
             ]
         )
         self._parse(db, request, msg, llm, dry_run=True)

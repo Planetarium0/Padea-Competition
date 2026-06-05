@@ -3,7 +3,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const SENDGRID_INBOUND_VERIFICATION_KEY = Deno.env.get("SENDGRID_INBOUND_VERIFICATION_KEY") ?? "";
-const APP_DOMAIN = Deno.env.get("APP_DOMAIN") ?? "";
 
 // ECDSA P-256 signature verification for the SendGrid webhook.
 // Signature header: X-Twilio-Email-Event-Webhook-Signature (base64url)
@@ -43,16 +42,67 @@ async function verifySignature(
   }
 }
 
-function parseHeadersString(headersStr: string): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const line of headersStr.split("\n")) {
-    const colonIdx = line.indexOf(":");
-    if (colonIdx === -1) continue;
-    const key = line.slice(0, colonIdx).trim().toLowerCase();
-    const val = line.slice(colonIdx + 1).trim();
-    result[key] = val;
+// Parse headers and text/plain body from the raw MIME email string SendGrid
+// provides in the `email` form field. Handles CRLF line endings and RFC 2822
+// header folding (continuation lines starting with whitespace).
+function parseRawEmail(rawEmail: string): {
+  headers: Record<string, string>;
+  bodyText: string | null;
+} {
+  const splitAt = rawEmail.indexOf("\r\n\r\n");
+  if (splitAt === -1) return { headers: {}, bodyText: null };
+
+  const headerSection = rawEmail.slice(0, splitAt);
+  const bodySection = rawEmail.slice(splitAt + 4);
+
+  // Unfold folded headers before splitting into lines
+  const unfolded = headerSection.replace(/\r\n[ \t]+/g, " ");
+  const headers: Record<string, string> = {};
+  for (const line of unfolded.split("\r\n")) {
+    const idx = line.indexOf(":");
+    if (idx === -1) continue;
+    const key = line.slice(0, idx).trim().toLowerCase();
+    const val = line.slice(idx + 1).trim();
+    if (key && !(key in headers)) headers[key] = val; // first occurrence wins
   }
-  return result;
+
+  // Extract the text/plain part from the body
+  const contentType = headers["content-type"] ?? "";
+  let bodyText: string | null = null;
+
+  if (contentType.includes("multipart/")) {
+    const m = contentType.match(/boundary="([^"]+)"/);
+    if (m) {
+      const boundary = "--" + m[1];
+      for (const part of bodySection.split(boundary)) {
+        const partSplit = part.indexOf("\r\n\r\n");
+        if (partSplit === -1) continue;
+        const partHead = part.slice(0, partSplit);
+        const partBody = part.slice(partSplit + 4);
+        if (partHead.toLowerCase().includes("text/plain")) {
+          const enc = (partHead.match(/content-transfer-encoding:\s*(\S+)/i) ?? [])[1] ?? "";
+          // Decode quoted-printable soft line breaks; leave other encoded chars as-is
+          bodyText = enc.toLowerCase() === "quoted-printable"
+            ? partBody.replace(/=\r\n/g, "").trim()
+            : partBody.trim();
+          break;
+        }
+      }
+    }
+  } else if (contentType.includes("text/plain")) {
+    const enc = headers["content-transfer-encoding"] ?? "";
+    bodyText = enc.toLowerCase() === "quoted-printable"
+      ? bodySection.replace(/=\r\n/g, "").trim()
+      : bodySection.trim();
+  }
+
+  return { headers, bodyText };
+}
+
+// Strip display name from RFC 2822 address — "Alice <alice@example.com>" → "alice@example.com"
+function extractEmail(addr: string): string {
+  const m = addr.match(/<([^>]+)>/);
+  return m ? m[1].trim() : addr.trim();
 }
 
 Deno.serve(async (req: Request) => {
@@ -88,31 +138,38 @@ Deno.serve(async (req: Request) => {
     return new Response("Bad Request", { status: 200 }); // 200 so SendGrid doesn't retry
   }
 
-  const toAddress   = formData.get("to")?.toString() ?? "";
-  const fromAddress = formData.get("from")?.toString() ?? "";
+  // Use the SMTP envelope for a clean recipient address — the To: header can
+  // be malformed (e.g. Outlook sends `"addr"\t<addr>`), but the envelope is
+  // always the raw RCPT TO value.
+  const envelopeStr = formData.get("envelope")?.toString() ?? "{}";
+  let toAddress = "";
+  try {
+    const env = JSON.parse(envelopeStr);
+    toAddress = (env.to as string[])?.[0] ?? "";
+  } catch { /* fall through to empty string */ }
+
+  const fromAddress = extractEmail(formData.get("from")?.toString() ?? "");
   const subject     = formData.get("subject")?.toString() ?? null;
-  const bodyTxt     = formData.get("text")?.toString() ?? null;
-  const headersStr  = formData.get("headers")?.toString() ?? "";
+
+  // SendGrid posts the full raw MIME in the `email` field; parse it for
+  // headers (message-id, in-reply-to) and the plain-text body.
+  const rawEmail = formData.get("email")?.toString() ?? "";
+  const { headers, bodyText: parsedBody } = parseRawEmail(rawEmail);
+  const messageId = headers["message-id"] ?? null;
+  const inReplyTo = headers["in-reply-to"] ?? null;
+
   const rawPayload: Record<string, string> = {};
   for (const [k, v] of formData.entries()) {
     if (typeof v === "string") rawPayload[k] = v;
   }
 
-  const parsedHeaders = parseHeadersString(headersStr);
-  const messageId  = parsedHeaders["message-id"] ?? null;
-  const inReplyTo  = parsedHeaders["in-reply-to"] ?? null;
-
-  // Accept messages addressed to support@help.<APP_DOMAIN>
-  const help_domain = `help.${APP_DOMAIN}`;
-  const to_valid = toAddress.endsWith(`@${help_domain}`);
-
   const { error } = await supabase.from("support_inbound_messages").insert({
     from_address: fromAddress,
     subject,
-    body_text: bodyTxt,
+    body_text: parsedBody,
     message_id: messageId,
     in_reply_to: inReplyTo,
-    to_address: to_valid ? toAddress : null,
+    to_address: toAddress || null,
     raw_payload: rawPayload,
   });
 

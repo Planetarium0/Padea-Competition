@@ -214,7 +214,7 @@ class TestRunEscalation(unittest.TestCase):
 
         self.mock_notify.assert_called_once_with(
             "req-check",
-            caterer_name=fixtures.caterer_a().fields["name"],
+            reason=fixtures.caterer_a().fields["name"],
             school_name=fixtures.school_alpha().fields["name"],
             num_open_questions=2,
             sent_at_str=sent.isoformat(),

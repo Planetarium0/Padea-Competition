@@ -50,6 +50,7 @@ def _build_prompt(
     item_name_map: dict[str, str],
     restriction_name_map: dict[str, str],
     caterer_name: str,
+    all_caterer_items: list[Record],
 ) -> str:
     """Build the LLM extraction prompt."""
     question_set: list[dict] = request.fields.get("question_set") or []
@@ -62,11 +63,22 @@ def _build_prompt(
     ]
 
     questions_text = "\n".join(
-        f"  - Item: {item_name_map.get(q.get('menu_item_id', ''), q.get('menu_item_id', 'Unknown'))}"
-        f" | Restriction: {restriction_name_map.get(q.get('restriction_id', ''), q.get('restriction_id', 'Unknown'))}"
-        f" | menu_item_id={q.get('menu_item_id', '')} | restriction_id={q.get('restriction_id', '')}"
+        f"  - Item: {item_name_map.get(q.get('menu_item_id', ''), 'Unknown')}"
+        f" | Restriction: {restriction_name_map.get(q.get('restriction_id', ''), 'Unknown')}"
         for q in open_questions
     )
+
+    # Build full menu item list with variant context
+    item_by_id = {item.id: item for item in all_caterer_items}
+    menu_lines: list[str] = []
+    for item in all_caterer_items:
+        name = item.fields.get("name", item.id)
+        if item.fields.get("is_variant") and item.fields.get("variant_of_id"):
+            parent_name = item_name_map.get(item.fields["variant_of_id"], item.fields["variant_of_id"])
+            menu_lines.append(f"  - {name} (variant of '{parent_name}')")
+        else:
+            menu_lines.append(f"  - {name}")
+    menu_text = "\n".join(menu_lines) if menu_lines else "  (no items on record)"
 
     # Build thread context
     thread_parts: list[str] = []
@@ -88,6 +100,13 @@ def _build_prompt(
 A caterer ({caterer_name}) has replied to our dietary clarification request. Your job is to
 extract structured answers from their reply.
 
+ALL MENU ITEMS FROM THIS CATERER:
+{menu_text}
+
+Variants are alternate preparations of the same base dish (e.g. a gluten-free version of a
+regular item). A caterer's answer about a base item does not automatically apply to its
+variants — treat each item independently unless the caterer explicitly says otherwise.
+
 OPEN QUESTIONS (items we still need answers for):
 {questions_text if questions_text else '  (none — all questions already answered)'}
 
@@ -99,6 +118,10 @@ For each open question, determine whether the caterer has answered it:
 - "contains": the menu item contains an ingredient that violates the restriction
 - Leave it out of confident_writes if the caterer has not answered clearly
 
+The caterer may mention items that were not in the open questions list (e.g. they answer
+about additional items proactively). Include those in confident_writes too if their answer
+is clear.
+
 Also determine if the caterer's reply, taken together with the conversation,
 gives you enough information to award a "legend": the caterer has explicitly
 accounted for ALL menu items under a single restriction column (either compatible
@@ -108,20 +131,21 @@ If some answers are ambiguous or missing, compose a SHORT clarifying question
 (one paragraph maximum) in clarification_questions. Keep it polite and specific.
 Leave clarification_questions empty if everything is now clear.
 
-IMPORTANT: You must respond with ONLY a JSON object, no other text. The JSON must have exactly these keys:
+IMPORTANT: You must respond with ONLY a JSON object, no other text. Use item and restriction
+names exactly as they appear in the lists above. The JSON must have exactly these keys:
 
 {{
   "confident_writes": [
-    {{"menu_item_id": "...", "restriction_id": "...", "answer": "compatible|contains"}}
+    {{"item_name": "...", "restriction_name": "...", "answer": "compatible|contains"}}
   ],
   "earned_legends": [
-    {{"restriction_id": "...", "rationale": "..."}}
+    {{"restriction_name": "...", "rationale": "..."}}
   ],
   "clarification_questions": [
     "..."
   ],
   "still_unknown": [
-    {{"menu_item_id": "...", "restriction_id": "..."}}
+    {{"item_name": "...", "restriction_name": "..."}}
   ]
 }}
 
@@ -242,9 +266,14 @@ def parse_reply(
 
     restrictions = db.DietaryRestrictions.all()
     restriction_name_map = {r.id: r.fields.get("name", r.id) for r in restrictions}
+    restriction_id_map = {v: k for k, v in restriction_name_map.items()}
 
     items = db.MenuItems.all()
     item_name_map = {i.id: i.fields.get("name", i.id) for i in items}
+    item_id_map = {v: k for k, v in item_name_map.items()}
+
+    # All items belonging to this caterer (for the full menu context in the prompt)
+    caterer_items = [i for i in items if i.fields.get("caterer_id") == caterer_id]
 
     # ------------------------------------------------------------------
     # Call LLM
@@ -255,6 +284,7 @@ def parse_reply(
         item_name_map=item_name_map,
         restriction_name_map=restriction_name_map,
         caterer_name=caterer_name,
+        all_caterer_items=caterer_items,
     )
 
     llm_response = ask_llm(prompt)
@@ -273,10 +303,36 @@ def parse_reply(
         )
         return
 
-    confident_writes: list[dict] = extraction.get("confident_writes") or []
-    earned_legends: list[dict] = extraction.get("earned_legends") or []
+    # Map name-keyed LLM output back to IDs
+    def _resolve_write(w: dict) -> dict | None:
+        mid = item_id_map.get(w.get("item_name", ""))
+        rid = restriction_id_map.get(w.get("restriction_name", ""))
+        if not mid or not rid:
+            log.warning(
+                f"  parse_reply: could not resolve name→id for "
+                f"item={w.get('item_name')!r} restriction={w.get('restriction_name')!r} — skipping"
+            )
+            return None
+        return {"menu_item_id": mid, "restriction_id": rid, "answer": w.get("answer")}
+
+    def _resolve_legend(leg: dict) -> dict | None:
+        rid = restriction_id_map.get(leg.get("restriction_name", ""))
+        if not rid:
+            log.warning(
+                f"  parse_reply: could not resolve restriction name→id for "
+                f"{leg.get('restriction_name')!r} — skipping legend"
+            )
+            return None
+        return {"restriction_id": rid, "rationale": leg.get("rationale")}
+
+    raw_writes: list[dict] = extraction.get("confident_writes") or []
+    raw_legends: list[dict] = extraction.get("earned_legends") or []
+    raw_unknown: list[dict] = extraction.get("still_unknown") or []
+
+    confident_writes: list[dict] = [r for w in raw_writes if (r := _resolve_write(w)) is not None]
+    earned_legends: list[dict] = [r for leg in raw_legends if (r := _resolve_legend(leg)) is not None]
     clarification_questions: list[str] = extraction.get("clarification_questions") or []
-    still_unknown: list[dict] = extraction.get("still_unknown") or []
+    still_unknown: list[dict] = [r for w in raw_unknown if (r := _resolve_write(w)) is not None]
 
     today_str = datetime.date.today().isoformat()
     now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -459,7 +515,7 @@ def parse_reply(
     )
     notify_coordinator(
         request.id,
-        caterer_name=caterer_name,
+        reason=caterer_name,
         school_name=school_name,
         num_open_questions=num_open,
         sent_at_str=request.fields.get("sent_at") or "",

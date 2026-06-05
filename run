@@ -20,7 +20,7 @@ export PYTHONPATH=$PYTHONPATH:"$PWD":"$PWD"/"$SCRIPTS_DIR"
 usage() {
     cat <<EOF
 Usage:
-  $0 migrate [resource]
+  $0 migrate [resource] [--wipe] [--yes]
   $0 orders [generate [--dry-run]|preview|send] [--limit N]
   $0 forms qr [--origin URL] [--base-url URL] [--session ID] [--first]
   $0 forms qr send [--dry-run] [--first] [--limit N]
@@ -82,16 +82,32 @@ fi
 case "$COMMAND" in
 
     migrate)
-        RESOURCE="${2:-all}"
+        # Separate resource name from flags (flags start with --)
+        if [[ -z "${2:-}" || "${2:-}" == --* ]]; then
+            RESOURCE="all"
+        else
+            RESOURCE="${2}"
+        fi
+
+        EXTRA_FLAGS=()
+        for arg in "${@:2}"; do
+            case "$arg" in
+                --wipe|--yes) EXTRA_FLAGS+=("$arg") ;;
+            esac
+        done
+
         case "$RESOURCE" in
             schema)
                 echo "[INFO] 'migrate schema' is not applicable with Supabase — schema is managed via supabase/migrations/."
                 ;;
             all)
                 echo "Migrating all resources (dependency order)..."
-                $PYTHON "$MIGRATION_DIR/migrate.py"
+                $PYTHON "$MIGRATION_DIR/migrate.py" "${EXTRA_FLAGS[@]}"
                 ;;
             *)
+                if [[ "${#EXTRA_FLAGS[@]}" -gt 0 ]]; then
+                    echo "[WARNING] --wipe is only supported with 'migrate all'. Ignoring flags."
+                fi
                 script_file="${RES_MAP[$RESOURCE]}"
                 if [[ -z "$script_file" ]]; then
                     echo "[ERROR] Unknown resource: $RESOURCE"

@@ -106,7 +106,7 @@ def _notify_orphan(msg: InboundMessage) -> None:
         subject_hint = msg.subject or "(no subject)"
         notify_coordinator(
             pseudo_id,
-            caterer_name=sender,
+            reason=sender,
             num_open_questions=0,
             custom_message=(
                 f"An inbound reply was received from {sender!r} that could not be "

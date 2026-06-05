@@ -99,6 +99,12 @@ function parseRawEmail(rawEmail: string): {
   return { headers, bodyText };
 }
 
+// Strip display name from RFC 2822 address — "Alice <alice@example.com>" → "alice@example.com"
+function extractEmail(addr: string): string {
+  const m = addr.match(/<([^>]+)>/);
+  return m ? m[1].trim() : addr.trim();
+}
+
 Deno.serve(async (req: Request) => {
   const bodyText = await req.text();
 
@@ -142,7 +148,7 @@ Deno.serve(async (req: Request) => {
     toAddress = (env.to as string[])?.[0] ?? "";
   } catch { /* fall through to empty string */ }
 
-  const fromAddress = formData.get("from")?.toString() ?? "";
+  const fromAddress = extractEmail(formData.get("from")?.toString() ?? "");
   const subject     = formData.get("subject")?.toString() ?? null;
 
   // SendGrid posts the full raw MIME in the `email` field; parse it for

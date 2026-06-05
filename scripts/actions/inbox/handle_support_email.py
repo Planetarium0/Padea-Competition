@@ -17,7 +17,10 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import email.utils
+import json
 import os
+import re
 import uuid
 from typing import Any
 
@@ -25,17 +28,13 @@ from support import (
     Database,
     Record,
     SupportCaseFields,
+    ask_llm,
     log,
     notify_coordinator,
     schedule_email,
     self_healing_error_handler,
 )
 from support.inbound import InboundMessage
-
-try:
-    from anthropic import Anthropic
-except ImportError:
-    Anthropic = None  # type: ignore[assignment,misc]
 
 
 # ---------------------------------------------------------------------------
@@ -51,84 +50,18 @@ sometimes email in to update their child's dietary needs.
 Your job is to:
 1. Understand what the parent is asking (usually: add or confirm a dietary restriction
    for one of their children).
-2. Use the available tools to look up the parent's children and the available dietary
-   restrictions in the system.
-3. Make the requested change using add_dietary_restriction if appropriate.
-4. Always send a polite reply to the parent summarising what was done (or explaining
-   if something could not be done).
+2. Match the parent's plain-language description (e.g. "nut allergy", "vegetarian",
+   "gluten free") to the closest restriction in the list provided.
+3. Decide what changes to make and draft a polite reply.
 
 Guidelines:
 - Be friendly, concise, and professional.
-- Always call list_students first to know which children belong to this parent.
-- Always call list_dietary_restrictions before trying to match the parent's description
-  to a system restriction — never guess restriction IDs.
-- Match the parent's plain-language description (e.g. "nut allergy", "vegetarian",
-  "gluten free") to the closest system restriction.
-- If the parent's request is ambiguous or no restriction matches, explain clearly in
-  your reply and ask them to contact the coordinator directly.
-- Always end by calling send_reply. Never leave the parent without a response.
-- Do not modify restrictions for students whose parent_email does not match the sender.
+- Only add restrictions for students in the provided list.
+- If the request is ambiguous or no restriction matches, explain clearly in your reply
+  and ask them to contact the coordinator directly.
+- Always include a reply — never leave the parent without a response.
+- Do not modify restrictions for students not in the provided list.
 """
-
-MAX_TOOL_ITERATIONS = 10
-
-# ---------------------------------------------------------------------------
-# Tool definitions (Anthropic format)
-# ---------------------------------------------------------------------------
-
-TOOLS: list[dict[str, Any]] = [
-    {
-        "name": "list_students",
-        "description": (
-            "List the students linked to the parent's email. "
-            "Returns name, year level, and current dietary requirement IDs."
-        ),
-        "input_schema": {"type": "object", "properties": {}, "required": []},
-    },
-    {
-        "name": "list_dietary_restrictions",
-        "description": "List all available dietary restrictions in the system.",
-        "input_schema": {"type": "object", "properties": {}, "required": []},
-    },
-    {
-        "name": "add_dietary_restriction",
-        "description": (
-            "Add a dietary restriction to a student. "
-            "Re-validates that the student belongs to the sender."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "student_id": {
-                    "type": "string",
-                    "description": "The student's UUID from list_students",
-                },
-                "restriction_id": {
-                    "type": "string",
-                    "description": "The restriction UUID from list_dietary_restrictions",
-                },
-            },
-            "required": ["student_id", "restriction_id"],
-        },
-    },
-    {
-        "name": "send_reply",
-        "description": (
-            "Send a reply email to the parent. "
-            "Always call this at the end — never leave the parent without a response."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "body_text": {
-                    "type": "string",
-                    "description": "The plain-text reply to send to the parent.",
-                },
-            },
-            "required": ["body_text"],
-        },
-    },
-]
 
 
 # ---------------------------------------------------------------------------
@@ -305,7 +238,53 @@ def _make_tool_executor(
 
 
 # ---------------------------------------------------------------------------
-# LLM tool loop
+# LLM prompt builder and response parser
+# ---------------------------------------------------------------------------
+
+def _build_llm_prompt(
+    students: list[Record],
+    restrictions: list[Record],
+    thread_text: str,
+) -> str:
+    student_lines = "\n".join(
+        f"  id={s.id!r}  name={s.fields.get('name')!r}  "
+        f"year_level={s.fields.get('year_level')}  "
+        f"current_restriction_ids={s.fields.get('dietary_requirement_ids') or []}"
+        for s in students
+    )
+    restriction_lines = "\n".join(
+        f"  id={r.id!r}  name={r.fields.get('name', r.id)!r}"
+        for r in restrictions
+    )
+    return (
+        f"{SYSTEM_PROMPT}\n\n"
+        f"## Parent's children\n{student_lines}\n\n"
+        f"## Available dietary restrictions\n{restriction_lines}\n\n"
+        f"## Email thread\n{thread_text}\n\n"
+        'Respond with ONLY a JSON object — no markdown fences, no other text:\n'
+        '{"actions": [{"type": "add_restriction", "student_id": "...", "restriction_id": "..."}], '
+        '"reply": "..."}\n'
+        'The "actions" list may be empty. The "reply" must always be present.'
+    )
+
+
+def _parse_llm_response(text: str) -> dict[str, Any]:
+    cleaned = re.sub(r"```(?:json)?\n?", "", text).strip()
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*\}", cleaned, re.DOTALL)
+        if m:
+            try:
+                return json.loads(m.group(0))
+            except json.JSONDecodeError:
+                pass
+    log.warning(f"Could not parse LLM response as JSON: {text[:200]!r}")
+    return {}
+
+
+# ---------------------------------------------------------------------------
+# LLM loop
 # ---------------------------------------------------------------------------
 
 def run_tool_loop(
@@ -317,85 +296,49 @@ def run_tool_loop(
     *,
     dry_run: bool = False,
 ) -> None:
-    """Run the Anthropic tool-use loop for one inbound support message.
+    """Process one inbound support message via ask_llm (SDK or CLI fallback).
 
-    Updates the case in the DB after the loop completes.
+    Fetches all context up front, calls ask_llm with a single structured prompt,
+    parses the JSON response, executes the requested actions, and updates the case.
     """
     case_code = case.fields.get("case_code", case.id)
 
-    api_key = os.environ.get("CLAUDE_CODE_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        log.failure(
-            f"No Anthropic API key — cannot run tool loop for support case {case_code}"
-        )
-        notify_coordinator(
-            case.id,
-            caterer_name=sender_email,
-            num_open_questions=1,
-        )
+    if dry_run:
+        log.info(f"[DRY RUN] Would call LLM for {case_code}")
         return
 
-    if Anthropic is None:
-        log.failure(
-            f"anthropic package not installed — cannot run tool loop for {case_code}"
-        )
-        notify_coordinator(
-            case.id,
-            caterer_name=sender_email,
-            num_open_questions=1,
-        )
-        return
-
-    client = Anthropic(api_key=api_key)
-
-    # Build conversation from prior thread + new message
+    restrictions = db.DietaryRestrictions.all()
     prior_messages: list[dict[str, Any]] = case.fields.get("messages") or []
     thread_text = _build_thread_text(prior_messages, inbound_msg)
-    messages: list[dict[str, Any]] = [{"role": "user", "content": thread_text}]
+
+    prompt = _build_llm_prompt(students, restrictions, thread_text)
+    response_text = ask_llm(prompt)
+
+    if response_text is None:
+        log.failure(f"LLM returned no response for support case {case_code}")
+        notify_coordinator(case.id, reason=sender_email, num_open_questions=1)
+        return
+
+    result = _parse_llm_response(response_text)
+    executor = _make_tool_executor(db, sender_email, students, case, dry_run=False)
 
     tool_call_log: list[dict[str, Any]] = []
+    for action in result.get("actions") or []:
+        if action.get("type") == "add_restriction":
+            tool_input = {
+                "student_id": action.get("student_id", ""),
+                "restriction_id": action.get("restriction_id", ""),
+            }
+            result_str = executor("add_dietary_restriction", tool_input)
+            tool_call_log.append({"tool": "add_dietary_restriction", "input": tool_input, "result": result_str})
+
     reply_sent = False
-    executor = _make_tool_executor(db, sender_email, students, case, dry_run=dry_run)
+    reply_text = result.get("reply", "")
+    if reply_text:
+        result_str = executor("send_reply", {"body_text": reply_text})
+        reply_sent = True
+        tool_call_log.append({"tool": "send_reply", "input": {"body_text": reply_text}, "result": result_str})
 
-    for iteration in range(MAX_TOOL_ITERATIONS):
-        if dry_run:
-            log.info(f"[DRY RUN] Would call LLM (iteration {iteration + 1}) for {case_code}")
-            break
-
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=2000,
-            system=SYSTEM_PROMPT,
-            messages=messages,
-            tools=TOOLS,
-        )
-
-        # Append assistant turn
-        messages.append({"role": "assistant", "content": response.content})
-
-        if response.stop_reason == "end_turn":
-            break
-
-        if response.stop_reason == "tool_use":
-            tool_results: list[dict[str, Any]] = []
-            for block in response.content:
-                if hasattr(block, "type") and block.type == "tool_use":
-                    result_str = executor(block.name, block.input)
-                    if block.name == "send_reply":
-                        reply_sent = True
-                    tool_call_log.append({
-                        "tool": block.name,
-                        "input": block.input,
-                        "result": result_str,
-                    })
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": result_str,
-                    })
-            messages.append({"role": "user", "content": tool_results})
-
-    # Persist the case update
     updated_messages = list(prior_messages) + [{
         "direction": "inbound",
         "sent_at": inbound_msg.received_at.isoformat(),
@@ -408,10 +351,8 @@ def run_tool_loop(
     if reply_sent:
         update_fields["status"] = "Resolved"
         update_fields["resolved_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    # else: keep status="Open" — awaiting parent follow-up
 
-    if not dry_run:
-        db.SupportCases.update(case.id, update_fields)
+    db.SupportCases.update(case.id, update_fields)
 
     log.info(
         f"Support case {case_code}: "
@@ -423,6 +364,17 @@ def run_tool_loop(
 # Orchestrator
 # ---------------------------------------------------------------------------
 
+def _dev_impersonate(sender_email: str, subject: str | None) -> str | None:
+    """Return an impersonated sender if the dev address embeds one in the subject."""
+    dev_email = os.environ.get("DEV_NOTIFICATION_EMAIL", "")
+    if not dev_email or sender_email.lower() != dev_email.lower():
+        return None
+    if not subject:
+        return None
+    match = re.search(r"[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}", subject)
+    return match.group(0) if match else None
+
+
 def handle_message(
     db: Database,
     inbound_msg: InboundMessage,
@@ -430,7 +382,18 @@ def handle_message(
     dry_run: bool = False,
 ) -> None:
     """Orchestrate handling of one inbound support message."""
-    sender_email = inbound_msg.from_address
+    _, sender_email = email.utils.parseaddr(inbound_msg.from_address)
+    if not sender_email:
+        sender_email = inbound_msg.from_address
+
+    impersonated = _dev_impersonate(sender_email, inbound_msg.subject)
+    if impersonated:
+        log.warning(
+            f"[DEV] Impersonating {impersonated!r} "
+            f"(subject override from {sender_email!r})"
+        )
+        sender_email = impersonated
+
     coordinator_email = os.environ.get("COORDINATOR_EMAIL", "")
 
     # 1. Check if this is the coordinator emailing their own support inbox
@@ -441,7 +404,7 @@ def handle_message(
         )
         notify_coordinator(
             f"coordinator-self-{inbound_msg.message_id or uuid.uuid4().hex[:8]}",
-            caterer_name=sender_email,
+            reason=sender_email,
             num_open_questions=0,
         )
         return
@@ -456,7 +419,7 @@ def handle_message(
         log.warning(f"Unrecognised sender {sender_email!r} — notifying coordinator")
         notify_coordinator(
             f"unknown-parent-{inbound_msg.message_id or uuid.uuid4().hex[:8]}",
-            caterer_name=sender_email,
+            reason=sender_email,
             num_open_questions=0,
         )
         return

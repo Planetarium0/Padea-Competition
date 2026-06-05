@@ -24,10 +24,11 @@ Coverage:
 from __future__ import annotations
 
 import datetime
+import json
 import os
 import unittest
-from types import SimpleNamespace
-from typing import Any
+
+os.environ.setdefault("PADEA_TEST_MODE", "1")
 from unittest.mock import MagicMock, call, patch
 
 from mock_db import MockDatabase
@@ -116,37 +117,6 @@ def _db_with_parent(
         _make_restriction(RESTRICTION_VEGAN_ID, "Vegan"),
     ]
     return db
-
-
-# ---------------------------------------------------------------------------
-# Fake Anthropic response builder
-# ---------------------------------------------------------------------------
-
-def _make_text_block(text: str) -> Any:
-    block = SimpleNamespace()
-    block.type = "text"
-    block.text = text
-    return block
-
-
-def _make_tool_use_block(
-    tool_id: str,
-    name: str,
-    input_data: dict,
-) -> Any:
-    block = SimpleNamespace()
-    block.type = "tool_use"
-    block.id = tool_id
-    block.name = name
-    block.input = input_data
-    return block
-
-
-def _make_response(content: list, stop_reason: str = "end_turn") -> Any:
-    resp = SimpleNamespace()
-    resp.content = content
-    resp.stop_reason = stop_reason
-    return resp
 
 
 # ---------------------------------------------------------------------------
@@ -373,60 +343,24 @@ class TestToolExecutor(unittest.TestCase):
 class TestFullToolLoopResolved(unittest.TestCase):
 
     @patch("support.email._send_via_sendgrid")
-    @patch("actions.inbox.handle_support_email.Anthropic")
-    def test_restriction_added_reply_sent_case_resolved(self, MockAnthropic, mock_send):
+    @patch("actions.inbox.handle_support_email.ask_llm")
+    def test_restriction_added_reply_sent_case_resolved(self, mock_ask, mock_send):
         db = _db_with_parent()
         case = _make_case()
         db.SupportCases._records = [case]
         msg = _make_inbound()
 
-        # Set up the mock Anthropic client
-        mock_client = MagicMock()
-        MockAnthropic.return_value = mock_client
+        mock_ask.return_value = json.dumps({
+            "actions": [{"type": "add_restriction", "student_id": STUDENT_ID, "restriction_id": RESTRICTION_VEG_ID}],
+            "reply": "I've added Vegetarian for Alex Smith.",
+        })
 
-        # First call: request list_students
-        resp1 = _make_response(
-            content=[
-                _make_tool_use_block("t1", "list_students", {}),
-            ],
-            stop_reason="tool_use",
-        )
-        # Second call: request add_dietary_restriction
-        resp2 = _make_response(
-            content=[
-                _make_tool_use_block("t2", "add_dietary_restriction", {
-                    "student_id": STUDENT_ID,
-                    "restriction_id": RESTRICTION_VEG_ID,
-                }),
-            ],
-            stop_reason="tool_use",
-        )
-        # Third call: send_reply
-        resp3 = _make_response(
-            content=[
-                _make_tool_use_block("t3", "send_reply", {
-                    "body_text": "I've added Vegetarian for Alex Smith.",
-                }),
-            ],
-            stop_reason="tool_use",
-        )
-        # Final: end_turn
-        resp4 = _make_response(
-            content=[_make_text_block("Done.")],
-            stop_reason="end_turn",
-        )
-        mock_client.messages.create.side_effect = [resp1, resp2, resp3, resp4]
+        hse.run_tool_loop(db, case, msg, PARENT_EMAIL, [_make_student()])
 
-        students = [_make_student()]
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=False):
-            hse.run_tool_loop(db, case, msg, PARENT_EMAIL, students)
-
-        # Case should be updated to Resolved
         self.assertTrue(
             any("status" in u[1] and u[1]["status"] == "Resolved" for u in db.SupportCases.updates),
             f"Expected case status=Resolved, got updates={db.SupportCases.updates}",
         )
-        # Student restriction should have been updated
         self.assertTrue(
             any("dietary_requirement_ids" in u[1] for u in db.Students.updates),
             f"Expected student dietary_requirement_ids update, got={db.Students.updates}",
@@ -440,36 +374,20 @@ class TestFullToolLoopResolved(unittest.TestCase):
 class TestFullToolLoopReplyOnly(unittest.TestCase):
 
     @patch("support.email._send_via_sendgrid")
-    @patch("actions.inbox.handle_support_email.Anthropic")
-    def test_reply_only_case_resolved(self, MockAnthropic, mock_send):
+    @patch("actions.inbox.handle_support_email.ask_llm")
+    def test_reply_only_case_resolved(self, mock_ask, mock_send):
         db = _db_with_parent()
         case = _make_case()
         db.SupportCases._records = [case]
         msg = _make_inbound(body_text="I just had a question, thanks!")
 
-        mock_client = MagicMock()
-        MockAnthropic.return_value = mock_client
+        mock_ask.return_value = json.dumps({
+            "actions": [],
+            "reply": "Thanks for your message!",
+        })
 
-        # Immediately reply, no restriction change
-        resp1 = _make_response(
-            content=[
-                _make_tool_use_block("t1", "send_reply", {
-                    "body_text": "Thanks for your message!",
-                }),
-            ],
-            stop_reason="tool_use",
-        )
-        resp2 = _make_response(
-            content=[_make_text_block("Done.")],
-            stop_reason="end_turn",
-        )
-        mock_client.messages.create.side_effect = [resp1, resp2]
+        hse.run_tool_loop(db, case, msg, PARENT_EMAIL, [_make_student()])
 
-        students = [_make_student()]
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=False):
-            hse.run_tool_loop(db, case, msg, PARENT_EMAIL, students)
-
-        # Resolved because reply was sent
         self.assertTrue(
             any("status" in u[1] and u[1]["status"] == "Resolved" for u in db.SupportCases.updates),
         )
@@ -481,22 +399,16 @@ class TestFullToolLoopReplyOnly(unittest.TestCase):
 
 class TestNoApiKey(unittest.TestCase):
 
-    @patch("support.email._send_via_sendgrid")
-    def test_no_api_key_notifies_coordinator(self, mock_send):
+    @patch("actions.inbox.handle_support_email.ask_llm", return_value=None)
+    def test_ask_llm_none_notifies_coordinator(self, mock_ask):
         db = _db_with_parent()
         case = _make_case()
         msg = _make_inbound()
         students = [_make_student()]
 
-        env = {k: v for k, v in os.environ.items() if k not in (
-            "ANTHROPIC_API_KEY", "CLAUDE_CODE_API_KEY"
-        )}
-
-        with patch.dict(os.environ, env, clear=True):
-            # notify_coordinator writes artifact files; suppress by mocking
-            with patch("actions.inbox.handle_support_email.notify_coordinator") as mock_notify:
-                hse.run_tool_loop(db, case, msg, PARENT_EMAIL, students)
-                mock_notify.assert_called_once()
+        with patch("actions.inbox.handle_support_email.notify_coordinator") as mock_notify:
+            hse.run_tool_loop(db, case, msg, PARENT_EMAIL, students)
+            mock_notify.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -505,31 +417,22 @@ class TestNoApiKey(unittest.TestCase):
 
 class TestDryRun(unittest.TestCase):
 
-    @patch("support.email._send_via_sendgrid")
-    @patch("actions.inbox.handle_support_email.Anthropic")
-    def test_dry_run_no_db_writes(self, MockAnthropic, mock_send):
+    def test_dry_run_no_db_writes(self):
         db = _db_with_parent()
         msg = _make_inbound()
 
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=False):
-            hse.handle_message(db, msg, dry_run=True)
+        hse.handle_message(db, msg, dry_run=True)
 
-        # No students updates (dry run executor should not write)
         self.assertEqual(len(db.Students.updates), 0)
-        # No emails queued
         self.assertEqual(len(db.ScheduledEmails.created_fields), 0)
 
-    @patch("support.email._send_via_sendgrid")
-    @patch("actions.inbox.handle_support_email.Anthropic")
-    def test_dry_run_no_case_created_in_db(self, MockAnthropic, mock_send):
+    def test_dry_run_no_case_created_in_db(self):
         """In dry_run mode, no case row is written to the database."""
         db = _db_with_parent()
         msg = _make_inbound()
 
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=False):
-            hse.handle_message(db, msg, dry_run=True)
+        hse.handle_message(db, msg, dry_run=True)
 
-        # No case created in DB (dry_run returns a stub instead)
         self.assertEqual(len(db.SupportCases.created_fields), 0)
 
 

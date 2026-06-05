@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 import sys
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
@@ -33,21 +32,6 @@ def _clean_str(val: Any) -> str | None:
     return str(val).strip()
 
 
-def _parse_date(val: Any) -> str | None:
-    if pd.isna(val):
-        return None
-    if isinstance(val, pd.Timestamp):
-        return val.strftime("%Y-%m-%d")
-    try:
-        epoch = datetime(1899, 12, 30)
-        return (epoch + timedelta(days=int(val))).strftime("%Y-%m-%d")
-    except Exception:
-        str_val = str(val).strip()
-        if " " in str_val:
-            str_val = str_val.split()[0]
-        return str_val
-
-
 def run(db: Database | None = None) -> None:
     db = db or Database.from_env()
     log.info("Migrating sessions.xlsx → Supabase")
@@ -61,7 +45,7 @@ def run(db: Database | None = None) -> None:
 
     df = pd.read_excel(xlsx_path, sheet_name="sessions")
     expected = [
-        "school", "region", "caterer", "date", "day", "manager",
+        "school", "region", "caterer", "day", "manager",
         "manager-mobile", "start-time", "end-time", "dinner-time",
         "year-levels", "Building",
     ]
@@ -121,11 +105,6 @@ def run(db: Database | None = None) -> None:
 
         manager_name = _clean_str(row["manager"])
         manager_id = manager_name_to_id.get(manager_name) if manager_name else None
-
-        session_date = _parse_date(row["date"])
-        if not session_date:
-            log.warning(f"Session at '{school_name}' missing a valid date. Skipping.")
-            continue
 
         day_name = _clean_str(row["day"])
         session_id = f"{school_name} - {day_name}"

@@ -112,7 +112,7 @@ def run_escalation(
 
         notify_coordinator(
             req.id,
-            caterer_name=caterer_name,
+            reason=caterer_name,
             school_name=school_name,
             num_open_questions=num_open,
             sent_at_str=sent_at_str,
