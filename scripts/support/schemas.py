@@ -240,6 +240,13 @@ class SupportCase(_Base):
     notes: Optional[str] = None
 
 
+class SchoolTerm(_Base):
+    id: Optional[str] = None
+    term_code: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+
 class DietaryInboundMessage(_Base):
     id: Optional[str] = None
     received_at: Optional[str] = None
@@ -270,6 +277,7 @@ MODEL_MAP = {
     "scheduled_emails":         ScheduledEmail,
     "manager_substitutions":    ManagerSubstitution,
     "caterer_switch_proposals": CatererSwitchProposal,
+    "school_terms":                   SchoolTerm,
     "dietary_clarification_requests": DietaryClarificationRequest,
     "dietary_inbound_messages": DietaryInboundMessage,
     "support_inbound_messages":       SupportInboundMessage,

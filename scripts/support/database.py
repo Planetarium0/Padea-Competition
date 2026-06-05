@@ -45,6 +45,7 @@ from .records import (
     OrderFields,
     PendingChangeFields,
     SchoolFields,
+    SchoolTermFields,
     ScheduledEmailFields,
     SessionFields,
     StudentFields,
@@ -459,6 +460,10 @@ class Database:
     @property
     def PendingChanges(self) -> Table[PendingChangeFields]:
         return self._table("pending_changes")
+
+    @property
+    def SchoolTerms(self) -> Table[SchoolTermFields]:
+        return self._table("school_terms")
 
 
 # ---------------------------------------------------------------------------

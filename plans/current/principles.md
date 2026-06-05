@@ -169,17 +169,20 @@ These exist so an agent doesn't mistake absence-of-implementation for
 intentional design. Resolve a bullet, delete it.
 
 - **RLS / auth.** See principle 1. No real authentication; publishable
-  key only.
+  key only. URL-obscurity model is acceptable for the closed pilot; add
+  policies before opening beyond LAN/QR distribution.
 - **Scheduling.** `register_orders.py`, `send_orders.py`,
-  `evaluate_caterers.py` are all wall-clock-sensitive (Wed 8 PM /
-  Thu 3 PM cadence) but nothing in the repo schedules them. Today
-  they run manually.
+  `evaluate_caterers.py` are wall-clock-sensitive (Wed 8 PM / Thu 3 PM
+  cadence) but are **intentionally run manually** during the testing
+  phase. `./run procedure weekly` executes both in order. Automated
+  scheduling (GitHub Actions cron, Supabase Edge Function, or external
+  scheduler) will be added before the production launch.
 - **Email send semantics.** `scheduled_emails` is an *audit log*, not
   a queue: `schedule_email` writes the row **and** dispatches via
-  Resend in the same call. The earlier Airtable-automation queue model
-  is gone. Don't reintroduce queue semantics by accident (e.g.
-  watching for `Status='Queued'` rows expecting something else to
-  send them).
+  SendGrid in the same call. If a send fails the row is marked
+  `Failed`; `./run emails retry` (or the polling procedure) re-sends.
+  Don't watch for `Status='Queued'` rows expecting something else to
+  send them.
 
 If you add a new known gap, give it a one-line description and a
 pointer to the affected file(s). Don't write a roadmap here.

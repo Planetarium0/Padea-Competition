@@ -343,6 +343,18 @@ SupportCaseFields = TypedDict(
 )
 
 
+SchoolTermFields = TypedDict(
+    "SchoolTermFields",
+    {
+        "id": str,
+        "term_code": str,
+        "start_date": str,
+        "end_date": str,
+    },
+    total=False,
+)
+
+
 class PendingChangeFields(TypedDict, total=False):
     id: str
     requested_at: str
@@ -388,4 +400,5 @@ __all__ = [
     "SupportInboundMessageFields",
     "SupportCaseFields",
     "PendingChangeFields",
+    "SchoolTermFields",
 ]

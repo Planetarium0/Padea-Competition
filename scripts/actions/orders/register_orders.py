@@ -4,16 +4,19 @@ register_orders.py — Snapshot student meal preferences into the Orders table.
 For every session occurring next week, for each attending student (enrolled,
 not absent, not excluded):
   1. Uses Meal Preference (set via webapp) if it belongs to the session's
-     caterer's menu. Honoured even if it conflicts with the student's declared
-     dietary requirements (a warning is logged).
-  2. Falls back to a dietary-safe, popularity-weighted assignment otherwise.
+     caterer's menu AND passes is_item_compatible (definite NO is refused;
+     MAYBE is treated as compatible for explicit preferences only).
+  2. Falls back to a dietary-safe assignment using is_item_strictly_compatible
+     (only OK-verdict items are auto-assigned; MAYBE items require the student
+     to explicitly choose them via the webapp).
+  3. If no strictly-compatible fallback exists, the student is skipped and
+     the program coordinator is notified by email.
 
 After all meals are resolved, enforces caterer min-qty constraints:
   - Items below the per-item minimum are dissolved by proportionally swapping
-    students to more popular items that are compatible with their dietary
-    requirements.
-  - Dietary requirements are always respected during swaps.
-  - If no compatible swap target exists for a student, they are left in place.
+    students to strictly-compatible items (OK verdict only).
+  - If no strictly-compatible swap target exists for a student, the item is
+    left in place (constraint violation logged for coordinator review).
 
 Idempotent: clears any existing Orders and draft Weekly Orders for next week
 before creating fresh records.
@@ -43,12 +46,14 @@ from support import (
     SessionFields,
     StudentFields,
     log,
+    notify_coordinator,
 )
 from support.compatibility import (
     DietaryHierarchy,
     build_hierarchy,
     has_opted_out,
     is_item_compatible,
+    is_item_strictly_compatible,
     resolve_dietary_names,
 )
 
@@ -241,7 +246,7 @@ def assign_fallback_meal(
     """
     compatible = [
         item for item in caterer_menu
-        if is_item_compatible(item.fields, student_dietary_ids, index.dietary_hierarchy, caterer_legend_tag_ids)
+        if is_item_strictly_compatible(item.fields, student_dietary_ids, index.dietary_hierarchy, caterer_legend_tag_ids)
     ]
     if not compatible:
         return None
@@ -294,7 +299,7 @@ def assign_variety_meal(
     """
     compatible = [
         item for item in caterer_menu
-        if is_item_compatible(item.fields, student_dietary_ids, index.dietary_hierarchy, caterer_legend_tag_ids)
+        if is_item_strictly_compatible(item.fields, student_dietary_ids, index.dietary_hierarchy, caterer_legend_tag_ids)
     ]
     if not compatible:
         return None
@@ -382,7 +387,7 @@ def enforce_min_qty(
                 stu_fields  = index.student_by_id.get(a.student_id, {})
                 dietary_ids = stu_fields.get("dietary_requirement_ids") or []
                 has_target  = any(
-                    is_item_compatible(
+                    is_item_strictly_compatible(
                         index.menu_item_by_id.get(iid, {}), dietary_ids, index.dietary_hierarchy, legend_tag_ids,
                     )
                     for iid in valid_items
@@ -407,7 +412,7 @@ def enforce_min_qty(
 
                 compat = {
                     iid: cnt for iid, cnt in valid_items.items()
-                    if is_item_compatible(
+                    if is_item_strictly_compatible(
                         index.menu_item_by_id.get(iid, {}), dietary_ids, index.dietary_hierarchy, legend_tag_ids,
                     )
                 }
@@ -685,7 +690,25 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
                         caterer_legend_tag_ids=legend_tag_ids,
                     )
                 if item_id is None:
-                    log.warning(f"  {stu_name}: no compatible meal found — skipping.")
+                    dietary_names = resolve_dietary_names(dietary_ids, index.dietary_hierarchy)
+                    caterer_name  = index.caterer_by_id.get(caterer_id, {}).get("name", caterer_id)
+                    log.failure(
+                        f"  {stu_name}: no strictly-compatible meal on {caterer_name}'s menu "
+                        f"for dietary {dietary_names} — student will have no meal this week."
+                    )
+                    if not dry_run:
+                        notify_coordinator(
+                            f"no-meal-{stu_id[:8]}-{sess_id[:8]}",
+                            reason=f"{stu_name} — no compatible meal",
+                            school_name=caterer_name,
+                            custom_message=(
+                                f"{stu_name} (session {sess_label}, {day}) has dietary "
+                                f"restrictions {dietary_names} for which no strictly-compatible "
+                                f"meal exists on {caterer_name}'s current menu.\n\n"
+                                f"Please add a compatible menu item or update the caterer's "
+                                f"dietary tags before Thursday's order is sent.\n"
+                            ),
+                        )
                     stats["no_meal"] += 1
                     continue
 

@@ -42,6 +42,7 @@ from support import (
     OnSiteManagerFields,
     Record,
     SchoolFields,
+    SchoolTermFields,
     SessionFields,
     StudentFields,
     Text,
@@ -68,8 +69,8 @@ MIN_SESSIONS     = 2    # minimum distinct sessions with feedback to fire SWITCH
 MIN_RATERS       = 4    # minimum unique students rating in the window for SWITCH
 ROLLING_WINDOW   = 4    # most-recent N sessions to average over
 
-# Approximate Queensland school term starts for 2026.
-QLD_TERM_STARTS = [
+# Fallback Queensland school term starts used when the school_terms table is empty.
+_QLD_TERM_STARTS_FALLBACK = [
     date(2026, 1, 27),
     date(2026, 4, 20),
     date(2026, 7, 14),
@@ -109,6 +110,7 @@ class EvaluationData:
     proposals:            list[Record[CatererSwitchProposalFields]]
     schools:              list[Record[SchoolFields]]
     managers:             list[Record[OnSiteManagerFields]]
+    school_terms:         list[Record[SchoolTermFields]]
 
     @classmethod
     def load(cls, db: Database) -> "EvaluationData":
@@ -123,6 +125,7 @@ class EvaluationData:
             proposals=            db.CatererSwitchProposals.all(),
             schools=              db.Schools.all(),
             managers=             db.OnSiteManagers.all(),
+            school_terms=         db.SchoolTerms.all(),
         )
         log.info(
             f"Loaded: {len(data.sessions)} sessions, "
@@ -260,12 +263,38 @@ def _build_feedback_index(
 # Term helpers
 # ---------------------------------------------------------------------------
 
-def get_term_start(today: date | None = None) -> date:
-    """Return the start date of the current QLD school term."""
+def get_term_start(
+    today: date | None = None,
+    school_terms: list[Record[SchoolTermFields]] | None = None,
+) -> date:
+    """Return the start date of the current school term.
+
+    Prefers the ``school_terms`` database records (populated from the
+    migration seed and editable in Supabase Studio).  Falls back to the
+    hardcoded Queensland 2026 term starts when the table is empty.
+    """
     if today is None:
         today = date.today()
-    term_start = QLD_TERM_STARTS[0]
-    for ts in QLD_TERM_STARTS:
+
+    starts: list[date] = []
+    if school_terms:
+        for rec in school_terms:
+            raw = rec.fields.get("start_date")
+            if raw:
+                try:
+                    starts.append(date.fromisoformat(str(raw)))
+                except ValueError:
+                    pass
+
+    if not starts:
+        log.warning(
+            "school_terms table is empty — falling back to hardcoded 2026 QLD term dates"
+        )
+        starts = list(_QLD_TERM_STARTS_FALLBACK)
+
+    starts.sort()
+    term_start = starts[0]
+    for ts in starts:
         if ts <= today:
             term_start = ts
     return term_start
@@ -739,7 +768,7 @@ def evaluate(
     data  = EvaluationData.load(db)
     index = EvaluationIndex.build(data)
 
-    term_start     = get_term_start()
+    term_start     = get_term_start(school_terms=data.school_terms)
     effective_week = get_effective_week()
 
     log.info(
@@ -1031,6 +1060,7 @@ if __name__ == "__main__":
                 "dietary_restrictions": db.DietaryRestrictions.all(),
                 "students": db.Students.all(),
                 "caterer_switch_proposals": db.CatererSwitchProposals.all(),
+                "school_terms": db.SchoolTerms.all(),
             }
         except Exception as e:
             return {"error_loading_db_state": str(e)}

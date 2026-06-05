@@ -372,6 +372,7 @@ def _build_eval_index(
         proposals=            [],
         schools=              [fixtures.school_alpha(), fixtures.school_beta()],
         managers=             [],
+        school_terms=         [],
     )
     return EvaluationIndex.build(data)
 

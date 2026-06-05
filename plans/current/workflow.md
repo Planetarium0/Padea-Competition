@@ -59,10 +59,15 @@ Wed 8 PM            →  ./run orders generate          (register_orders.py)
                        2. Clear next week's orders + weekly_orders
                        3. Per session, per student:
                             skip if absent/excluded/opted-out
-                            honour meal_preference if compatible
-                            else fallback (popularity ≥10, else variety)
+                            honour meal_preference if compatible (is_item_compatible)
+                              — MAYBE items ARE honoured when student explicitly chose them
+                              — definite NO refuses the preference and forces fallback
+                            fallback uses is_item_strictly_compatible (OK verdicts only)
+                              — MAYBE items are NOT auto-assigned; student must choose them
+                              — if no OK item exists, coordinator is emailed and student is skipped
                        4. Enforce min-qty per caterer
-                          (proportional dissolve of violating items)
+                          (proportional dissolve of violating items;
+                           swap targets must also be strictly compatible)
                        5. Write weekly_orders + orders
                           (one orders row per session+menu_item;
                            student list aggregated by orders_view)
@@ -71,7 +76,7 @@ Thu 3 PM            →  ./run orders send              (send_orders.py)
                        Format markdown body per caterer
                        Resolve effective on-site manager via
                          manager_substitutions for each session-date
-                       Dispatch via Resend
+                       Dispatch via SendGrid (SENDGRID_API_KEY)
                        Audit-log in scheduled_emails
 
 Caterer day         →  Caterer delivers 5–10 min before dinner_time
@@ -98,16 +103,21 @@ Coordinator decides →  Approve  →  /api equivalent / supabase call →
                        Reject   →  proposal.status = Rejected
 ```
 
+> **Scheduling**: The above Wed/Thu triggers currently run **manually**
+> during the testing phase. `./run procedure weekly` executes both steps
+> in order. Automated scheduling (cron, GitHub Actions, or Supabase Edge
+> Function) is a known gap — see `principles.md §6`.
+
 ## Dietary clarification loop
 
 ```
-Daily (./run procedure daily)
+Daily (./run procedure polling)
   →  ./run dietary clarify   (no arg = all caterers)
        Per caterer:
          walk (menu items × student restriction union)
          through the 3-step ladder
          Collect every MAYBE triple
-         If no Open/Escalated request exists for caterer:
+         If no Open/Clarifying request exists for caterer:
            Build dietary_clarification_requests row
            Send one email listing open items
          If caterer.pending_dietary_clarify is true:
@@ -132,18 +142,25 @@ Coordinator-targeted run:
                           Write cache/notifications/clarify_<id>.md
                           Email COORDINATOR_EMAIL (fallback DEV_NOTIFICATION_EMAIL)
 
-Coordinator follows →  Direct conversation with caterer
-  up manually            Coordinator transcribes caterer's answers:
-                           Compatible → INSERT into menu_item_dietary_tags
-                           Contains   → record provisionally
-                         When full restriction column answered Compatible/Contains
-                           INSERT into caterer_legend_tags (earned-legend rule)
-                         Update request status to Resolved in Supabase Studio
+Caterer replies     →  Inbound email arrives in the dietary inbox
+                       ./run dietary poll (poll_dietary_inbox.py) drains it:
+                         Matches the reply to the open request via to_address code
+                         Calls parse_dietary_reply.py (LLM-driven extraction)
+                         LLM extracts compatible/contains answers per item+restriction
+                         Confident answers → INSERT into menu_item_dietary_tags
+                         Earned legend → INSERT into caterer_legend_tags
+                         Ambiguous answers → sends a clarifying follow-up (≤2 rounds)
+                         Round cap or orphan reply → escalates to coordinator
+
+                       The entire caterer reply workflow is automated.
+                       Manual coordinator intervention is only needed when:
+                         a) Escalated status is reached (cap hit or orphan reply)
+                         b) The caterer responds outside the email thread
 ```
 
-Note: MAYBE verdicts remain assignable in `register_orders.py` throughout.
-The clarification loop is a hygiene pass that reduces MAYBEs over time; it
-does not gate orders.
+Note: MAYBE verdicts remain assignable via explicit student preference throughout.
+The clarification loop is a hygiene pass that converts MAYBEs to OK/NO over time;
+it does not gate orders. Autonomous fallback assignment only uses OK items.
 
 ## Decision points (where business rules concentrate)
 
@@ -155,14 +172,16 @@ files where the rules currently live. Use graphify (`graphify explain
 |---|---|
 | Is this student eligible to eat next week? | `register_orders.py → is_student_excluded` (absences, exclusions, opted-out) |
 | Is item X compatible with student Y? | `scripts/support/compatibility.py → is_item_compatible` and `webapp/app.js → checkCompatibility` (mirror) |
-| Should we honour an explicit `meal_preference`? | `register_orders.py` — yes unless `is_item_compatible` returns *definite no* |
+| Should we honour an explicit `meal_preference`? | `register_orders.py` — yes unless `is_item_compatible` returns *definite no* (MAYBE items are honoured when student explicitly chose them) |
+| Should we auto-assign item X to student Y? | `register_orders.py` — only if `is_item_strictly_compatible` returns True (OK verdicts only; MAYBE items require student opt-in) |
 | Which fallback mode (popularity vs variety)? | `register_orders.py` — ≥10 explicit preferences per caterer ⇒ popularity, else variety |
-| How to dissolve a min-qty violation? | `register_orders.py → enforce_min_qty` — proportional reassignment, gated on dietary safety of every student on the violating item |
+| How to dissolve a min-qty violation? | `register_orders.py → enforce_min_qty` — proportional reassignment, gated on strict dietary safety of every student on the violating item |
 | Which on-site manager is on duty on date D? | `support.database.resolve_manager_id` — `manager_substitutions` for the date wins, else `sessions.on_site_manager_id` |
 | Is a caterer rolling badly enough to swap? | `evaluate_caterers.py` — window, unique-rater count, candidate scoring |
 | Can candidate caterer cover this school's students? | `evaluate_caterers.py → caterer_covers_all_students` — dietary coverage hard filter |
 | Is a (item, restriction) verdict OK / NO / MAYBE? | `scripts/support/compatibility.py → item_verdict` — exposes three-state result used by clarify sweep |
 | Has a clarification request gone unanswered for 7 days? | `escalate_dietary.py → _is_overdue` + `notify_coordinator` in `scripts/support/email.py` |
+| What is the current school term start date? | `evaluate_caterers.py → get_term_start` — reads `school_terms` DB table; falls back to hardcoded 2026 QLD dates if empty |
 
 ## Critical invariants
 
@@ -173,7 +192,9 @@ business outcome silently. Add a test if you suspect a change might.
   student list aggregated by `orders_view` (junction table:
   `order_students`). `quantity = len(student_ids)`.
 - **`scheduled_emails` is an audit log.** It records what was sent, not
-  what should be sent. Don't poll it expecting deferred dispatch.
+  what should be sent. If a send fails the row is marked `Failed`; use
+  `./run emails retry` to re-dispatch. Don't poll it expecting deferred
+  dispatch.
 - **`last_submitted == today` is a one-way roster lock**: a student
   who has submitted today vanishes from the picker on every device. The
   webapp also keeps a `localStorage` device-side lock. Both must hold

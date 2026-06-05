@@ -4,11 +4,11 @@ Two surfaces:
 
 - :func:`schedule_email` — operational mail (caterer orders, QR codes,
   preference links, switch alerts). Writes an audit row to
-  ``scheduled_emails`` and dispatches via SendGrid.
+  ``scheduled_emails`` and dispatches via SendGrid (``SENDGRID_API_KEY``).
 - :func:`escalate_to_dev` — last-resort human-in-the-loop notification
   used by the self-healing harness when an agent rules out a logical
   fix. Writes an artifact to ``cache/failures/escalation_<id>.md`` first
-  so the escalation survives even if SendGrid is the thing failing, then
+  so the escalation survives even if SendGrid is unavailable, then
   best-effort sends a one-line notification.
 """
 
@@ -300,7 +300,7 @@ def schedule_email(
     in_reply_to_header:          str | None = None,
     from_email:                  str | None = None,
 ) -> Record[ScheduledEmailFields] | None:
-    """Create an audit record in scheduled_emails and immediately send via Resend.
+    """Create an audit record in scheduled_emails and immediately send via SendGrid.
 
     Exactly one of ``weekly_order_id`` or ``caterer_switch_proposal_id`` should
     be provided so the email is traceable back to its source record.
@@ -445,7 +445,7 @@ def escalate_to_dev(
 
     Writes ``cache/failures/escalation_<failure_id>.md`` first so the
     escalation survives email failures, then dispatches a one-line
-    notification via Resend pointing at the artifact.
+    notification via SendGrid pointing at the artifact.
 
     Deduplicates by ``failure_id``: if the artifact already exists, the
     call is a no-op — returns the existing path without re-sending. This
@@ -456,7 +456,7 @@ def escalate_to_dev(
         failure_id: stable identifier tying the escalation to a captured
             failure under ``cache/failures/failure_<id>.json``.
         reason: free-text explanation of why the agent cannot patch this
-            (e.g. "Resend returned 401 Unauthorized; tested with two
+            (e.g. "SendGrid returned 401 Unauthorized; tested with two
             different payloads, same response — likely invalid API key").
         workflow: the workflow name from ``self_healing_error_handler``
             (e.g. ``"register_orders"``).

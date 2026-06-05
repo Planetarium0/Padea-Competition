@@ -194,6 +194,36 @@ def item_verdict(
     return "MAYBE"
 
 
+def is_item_strictly_compatible(
+    item_fields: MenuItemFields,
+    student_dietary_ids: Iterable[str] | None,
+    hierarchy: DietaryHierarchy,
+    caterer_legend_tag_ids: Iterable[str] | None = None,
+) -> bool:
+    """Like :func:`is_item_compatible` but treats MAYBE as incompatible.
+
+    Returns True only when every dietary restriction the student has yields an
+    "OK" verdict (positive tag evidence via subset-closure, legend, or keyword).
+    MAYBE items — those with no positive tag and no definite block — are
+    excluded, so this function is safe for autonomous fallback assignment where
+    the student has not explicitly chosen the item themselves.
+
+    Students with no dietary restrictions always pass (vacuous truth).
+    """
+    dietary_ids = list(student_dietary_ids or [])
+    if not dietary_ids:
+        return True
+    legend_ids = list(caterer_legend_tag_ids or [])
+    for restriction_id in dietary_ids:
+        name = hierarchy.id_to_name.get(restriction_id, "")
+        if name == OPTED_OUT:
+            return False
+        verdict = item_verdict(item_fields, restriction_id, hierarchy, legend_ids)
+        if verdict != "OK":
+            return False
+    return True
+
+
 def item_incompatibility_ids(
     item_fields: MenuItemFields,
     student_dietary_ids: Iterable[str] | None,

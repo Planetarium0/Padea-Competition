@@ -31,6 +31,7 @@ Usage:
   $0 dietary escalate [--dry-run]
   $0 dietary poll [--dry-run]
   $0 support poll [--dry-run]
+  $0 emails retry [--dry-run] [--limit N]
   $0 procedure {start-of-term|weekly|polling} [--dry-run]
   $0 logs [index]
   $0 test [name]
@@ -45,9 +46,10 @@ If no resource is supplied to migrate, all migrations run in dependency order.
 procedure shortcuts:
   start-of-term  forms send parents --first, then forms qr send
   weekly         orders (generate + send), then caterer evaluate
-  polling          support poll, dietary poll, dietary escalate, dietary clarify
+  polling        support poll, dietary poll, dietary escalate, dietary clarify,
+                 emails retry, then fix --latest-error (self-healing)
 
---limit N caps the number of emails the script will queue (testing aid).
+--limit N caps the number of emails the script will queue or retry (testing aid).
 EOF
 }
 
@@ -261,6 +263,21 @@ case "$COMMAND" in
         esac
         ;;
 
+    emails)
+        SUBCOMMAND="${2:-}"
+        case "$SUBCOMMAND" in
+            retry)
+                echo "Retrying failed emails..."
+                $PYTHON scripts/actions/emails/retry_failed_emails.py "${@:3}"
+                ;;
+            *)
+                echo "[ERROR] Unknown emails subcommand: ${SUBCOMMAND:-<none>}"
+                echo "Use: emails retry [--dry-run] [--limit N]"
+                exit 1
+                ;;
+        esac
+        ;;
+
     test)
         if [[ "${2:-}" == "webapp" ]]; then
             (cd webapp && npm test)
@@ -312,6 +329,9 @@ case "$COMMAND" in
                 run_step dietary poll "${PASS_FLAGS[@]}"
                 run_step dietary escalate "${PASS_FLAGS[@]}"
                 run_step dietary clarify "${PASS_FLAGS[@]}"
+                run_step emails retry "${PASS_FLAGS[@]}"
+                # Attempt self-healing on any captured failure from this run.
+                "$0" fix --latest-error || true
                 ;;
             *)
                 echo "[ERROR] Unknown procedure: ${SUBCOMMAND:-<none>}"

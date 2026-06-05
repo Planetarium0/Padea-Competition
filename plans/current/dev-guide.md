@@ -54,6 +54,7 @@ code, not before.
 │   │   └── run_claude_agent.py    Sandboxed agent harness.
 │   ├── actions/              One file per operational goal, grouped by domain.
 │   │   ├── dietary/               clarify_dietary, escalate_dietary, parse_dietary_reply, poll_dietary_inbox
+│   │   ├── emails/                retry_failed_emails
 │   │   ├── orders/                register_orders, send_orders
 │   │   ├── caterers/              evaluate_caterers, execute_caterer_switch, cache_pdf
 │   │   ├── forms/                 generate_qr, send_qr_emails, send_meals_links
@@ -128,10 +129,12 @@ publishable anon key (today: everything; eventually: gated by RLS).
 ./run dietary clarify <caterer> --restriction <name>  # single restriction only
 ./run dietary escalate            # mark overdue Open/Clarifying requests Escalated + notify coordinator
 ./run dietary poll [--dry-run]    # drain dietary_inbound_messages, parse replies, run escalation
+./run emails retry [--dry-run] [--limit N]  # re-send scheduled_emails rows with status=Failed
 ./run support poll [--dry-run]    # drain support_inbound_messages, run AI handler for parent emails
 ./run procedure start-of-term [--dry-run]  # forms send parents --first, then forms qr send
 ./run procedure weekly [--dry-run]         # orders (generate + send), then caterer evaluate
-./run procedure daily [--dry-run]          # support poll, dietary poll, dietary escalate, dietary clarify
+./run procedure polling [--dry-run]        # support poll, dietary poll, escalate, clarify, emails retry, fix
+./run fix [--latest-error|--run-and-heal CMD|...]  # self-healing agent harness
 ./run test [name]                 # full suite or a single test_*.py module
 ./run script <domain>/<name>      # ad-hoc: scripts/actions/<domain>/<name>.py
 ```
@@ -141,13 +144,12 @@ publishable anon key (today: everything; eventually: gated by RLS).
 ```
 SUPABASE_URL=…
 SUPABASE_SERVICE_KEY=…       # service key bypasses RLS for backend scripts
-MAILSLURP_API_KEY=…          # email send
-MAILSLURP_INBOX_ID=…         # optional; created as a virtual inbox on first use if unset
+SENDGRID_API_KEY=…           # SendGrid API key for outbound email dispatch
 DEV_NOTIFICATION_EMAIL=…     # where escalate_to_dev sends "agent stuck" alerts
 COORDINATOR_EMAIL=…          # where notify_coordinator sends dietary escalations
                              # (falls back to DEV_NOTIFICATION_EMAIL if unset)
 URL_ORIGIN=https://…         # used in QR codes + preference links
-ANTHROPIC_API_KEY=…          # optional, only for LLM-assisted migrations
+ANTHROPIC_API_KEY=…          # optional, only for LLM-assisted workflows
 SENDGRID_INBOUND_VERIFICATION_KEY=… # ECDSA P-256 public key for inbound Edge Functions
 APP_DOMAIN=…                 # e.g. padea.com.au; used to construct reply-to addresses
 SUPPORT_EMAIL=support@help.<APP_DOMAIN>  # inbound support address; used to validate To: and send replies from
@@ -181,9 +183,11 @@ LOG_LEVEL=info               # verbose|info|warning|error
 
 The harness `scripts/tools/run_claude_agent.py` automates steps 1–4
 under a sandbox (PATH allowlist + edit-path guard + post-edit
-revert-on-unauthorized). Invoke it via
-`python scripts/tools/run_claude_agent.py --latest-error` or
-`--run-and-heal "<command>"`.
+revert-on-unauthorized). Invoke it via `./run fix --latest-error` or
+`./run fix --run-and-heal "<command>"`.
+
+`./run procedure polling` runs the harness automatically after every
+polling cycle — the system is self-healing in normal operation.
 
 ## Keeping graphify and docs in sync
 

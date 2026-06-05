@@ -3,7 +3,7 @@ send_orders.py — Format and send caterer order emails for next week.
 
 Reads all Weekly Orders whose week_start is >= today, aggregates the
 per-session Orders records linked to each into per-item counts, formats a
-caterer email, sends it via Resend, and logs a record in the scheduled_emails
+caterer email, sends it via SendGrid, and logs a record in the scheduled_emails
 table with the final status.
 
 Usage:
