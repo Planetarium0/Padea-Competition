@@ -25,8 +25,10 @@ import re
 import shutil
 import subprocess
 import uuid
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from support import (
     Database,
@@ -45,6 +47,94 @@ from support.llm_tools import make_tool_executor
 
 # Allow tests to reach executor factory via this module (backward-compat alias)
 _make_tool_executor = make_tool_executor
+
+
+# ---------------------------------------------------------------------------
+# Sender identity resolution
+# ---------------------------------------------------------------------------
+
+SenderRole = Literal[
+    "developer", "coordinator", "parent", "student", "caterer", "on_site_manager", "unknown"
+]
+
+
+@dataclass
+class SenderIdentity:
+    """Resolved identity of an inbound email sender."""
+    role: SenderRole
+    email: str
+    is_impersonating: bool = False
+    original_email: str = ""
+    # Role-specific DB records (at most one group will be populated)
+    students: list[Record] = dataclass_field(default_factory=list)        # parent's children
+    student_record: Record | None = None                                    # student's own row
+    caterer_record: Record | None = None
+    on_site_manager_record: Record | None = None
+
+
+def resolve_sender_identity(
+    db: Database,
+    sender_email: str,
+    *,
+    original_email: str = "",
+    is_impersonating: bool = False,
+) -> SenderIdentity:
+    """Look up sender_email against all DB tables and return the resolved identity.
+
+    Resolution order (first match wins):
+      coordinator env var → parent (parent_email) → student (email) →
+      caterer (contact_email or chef_email) → on_site_manager → unknown
+    """
+    lower = sender_email.lower()
+    base = dict(email=sender_email, original_email=original_email, is_impersonating=is_impersonating)
+
+    coordinator_email = os.environ.get("COORDINATOR_EMAIL", "")
+    if coordinator_email and lower == coordinator_email.lower():
+        return SenderIdentity(role="coordinator", **base)
+
+    dev_email = os.environ.get("DEV_NOTIFICATION_EMAIL", "")
+    if dev_email and lower == dev_email.lower() and not is_impersonating:
+        return SenderIdentity(role="developer", **base)
+
+    all_students = db.Students.all()
+
+    children = [s for s in all_students if (s.fields.get("parent_email") or "").lower() == lower]
+    if children:
+        return SenderIdentity(role="parent", students=children, **base)
+
+    for student in all_students:
+        if (student.fields.get("email") or "").lower() == lower:
+            return SenderIdentity(role="student", student_record=student, **base)
+
+    for caterer in db.Caterers.all():
+        contact = (caterer.fields.get("contact_email") or "").lower()
+        chef = (caterer.fields.get("chef_email") or "").lower()
+        if lower in (contact, chef):
+            return SenderIdentity(role="caterer", caterer_record=caterer, **base)
+
+    for mgr in db.OnSiteManagers.all():
+        if (mgr.fields.get("email") or "").lower() == lower:
+            return SenderIdentity(role="on_site_manager", on_site_manager_record=mgr, **base)
+
+    return SenderIdentity(role="unknown", **base)
+
+
+def _identity_description(identity: SenderIdentity) -> str:
+    """Return a one-line human-readable description of the sender identity."""
+    role = identity.role
+    if role == "parent":
+        names = [s.fields.get("name", "?") for s in identity.students]
+        return f"parent (children: {', '.join(names)})"
+    if role == "student" and identity.student_record:
+        name = identity.student_record.fields.get("name", "?")
+        return f"student ({name})"
+    if role == "caterer" and identity.caterer_record:
+        name = identity.caterer_record.fields.get("name", "?")
+        return f"caterer ({name})"
+    if role == "on_site_manager" and identity.on_site_manager_record:
+        name = identity.on_site_manager_record.fields.get("name", "?")
+        return f"on-site manager ({name})"
+    return role
 
 
 # ---------------------------------------------------------------------------
@@ -181,24 +271,90 @@ def find_or_create_case(
 # LLM prompt builder
 # ---------------------------------------------------------------------------
 
+def _build_sender_context(identity: SenderIdentity, restrictions: list[Record]) -> str:
+    """Build a '## Sender' section for the LLM prompt describing who is emailing."""
+    lines: list[str] = ["## Sender"]
+    lines.append(f"Role: {identity.role}")
+    lines.append(f"Email: {identity.email}")
+    if identity.is_impersonating:
+        lines.append(f"(Developer {identity.original_email!r} is impersonating this address)")
+
+    if identity.role == "parent":
+        for s in identity.students:
+            f = s.fields
+            restrictions_for_s = [
+                r.fields.get("name", r.id)
+                for r in restrictions
+                if r.id in (f.get("dietary_requirement_ids") or [])
+            ]
+            lines.append(
+                f"  child  id={s.id!r}  name={f.get('name')!r}  "
+                f"year_level={f.get('year_level')}  "
+                f"current_restrictions={restrictions_for_s!r}"
+            )
+
+    elif identity.role == "student" and identity.student_record:
+        f = identity.student_record.fields
+        restrictions_for_s = [
+            r.fields.get("name", r.id)
+            for r in restrictions
+            if r.id in (f.get("dietary_requirement_ids") or [])
+        ]
+        lines.append(
+            f"  id={identity.student_record.id!r}  name={f.get('name')!r}  "
+            f"year_level={f.get('year_level')}  subjects={f.get('subjects')!r}  "
+            f"current_restrictions={restrictions_for_s!r}  "
+            f"parent_name={f.get('parent_name')!r}  parent_email={f.get('parent_email')!r}"
+        )
+
+    elif identity.role == "caterer" and identity.caterer_record:
+        f = identity.caterer_record.fields
+        lines.append(
+            f"  id={identity.caterer_record.id!r}  name={f.get('name')!r}  "
+            f"region={f.get('region')!r}  "
+            f"contact_name={f.get('contact_name')!r}  contact_email={f.get('contact_email')!r}  "
+            f"chef_name={f.get('chef_name')!r}  chef_email={f.get('chef_email')!r}"
+        )
+
+    elif identity.role == "on_site_manager" and identity.on_site_manager_record:
+        f = identity.on_site_manager_record.fields
+        lines.append(
+            f"  id={identity.on_site_manager_record.id!r}  name={f.get('name')!r}  "
+            f"mobile={f.get('mobile')!r}  email={f.get('email')!r}"
+        )
+
+    return "\n".join(lines)
+
+
 def _build_llm_prompt(
     students: list[Record],
     restrictions: list[Record],
     thread_text: str,
+    identity: SenderIdentity | None = None,
 ) -> str:
-    student_lines = "\n".join(
-        f"  id={s.id!r}  name={s.fields.get('name')!r}  "
-        f"year_level={s.fields.get('year_level')}  "
-        f"current_restrictions={[r.fields.get('name', r.id) for r in restrictions if r.id in (s.fields.get('dietary_requirement_ids') or [])]!r}"
-        for s in students
-    )
+    if identity is not None:
+        sender_section = _build_sender_context(identity, restrictions)
+        # For backward-compat: if identity is parent, students come from identity.students
+        effective_students = identity.students if identity.role == "parent" else students
+    else:
+        sender_section = (
+            "## Parent's children\n"
+            + "\n".join(
+                f"  id={s.id!r}  name={s.fields.get('name')!r}  "
+                f"year_level={s.fields.get('year_level')}  "
+                f"current_restrictions={[r.fields.get('name', r.id) for r in restrictions if r.id in (s.fields.get('dietary_requirement_ids') or [])]!r}"
+                for s in students
+            )
+        )
+        effective_students = students
+
     restriction_lines = "\n".join(
         f"  name={r.fields.get('name', r.id)!r}"
         for r in restrictions
     )
     return (
         f"{SYSTEM_PROMPT}\n\n"
-        f"## Parent's children\n{student_lines}\n\n"
+        f"{sender_section}\n\n"
         f"## Available dietary restrictions (names only)\n{restriction_lines}\n\n"
         f"## Email thread\n{thread_text}\n\n"
         "## Action types\n"
@@ -243,6 +399,7 @@ def run_tool_loop(
     sender_email: str,
     students: list[Record],
     *,
+    identity: SenderIdentity | None = None,
     dry_run: bool = False,
 ) -> None:
     """Process one inbound support message via ask_llm (single-turn JSON response).
@@ -259,7 +416,7 @@ def run_tool_loop(
     restrictions = db.DietaryRestrictions.all()
     prior_messages: list[dict[str, Any]] = case.fields.get("messages") or []
     thread_text = _build_thread_text(prior_messages, inbound_msg)
-    prompt = _build_llm_prompt(students, restrictions, thread_text)
+    prompt = _build_llm_prompt(students, restrictions, thread_text, identity=identity)
 
     response_text = ask_llm(prompt)
 
@@ -654,6 +811,7 @@ def handle_message(
     if not sender_email:
         sender_email = inbound_msg.from_address
 
+    original_sender = sender_email
     impersonated = _dev_impersonate(sender_email, inbound_msg.subject)
     if impersonated:
         log.warning(
@@ -682,11 +840,21 @@ def handle_message(
         )
         return
 
-    # 2. Look up students by parent_email
-    students = [
-        s for s in db.Students.all()
-        if s.fields.get("parent_email", "").lower() == sender_email.lower()
-    ]
+    # 2. Resolve sender identity (always; logged prominently for new threads)
+    is_new_thread = inbound_msg.in_reply_to is None
+    identity = resolve_sender_identity(
+        db,
+        sender_email,
+        original_email=original_sender if impersonated else "",
+        is_impersonating=bool(impersonated),
+    )
+    if is_new_thread:
+        log.info(
+            f"[NEW THREAD] {sender_email!r} identified as {_identity_description(identity)}"
+        )
+
+    # 3. Derive students list from identity (parent role) or fall back to empty
+    students = identity.students if identity.role == "parent" else []
 
     if not students:
         # Check if this is a system requirement from an external contact (e.g. caterer).
@@ -695,24 +863,28 @@ def handle_message(
             from actions.system.register_edge_case import register_edge_case
             register_edge_case(summary, source="email")
             log.info(
-                f"[PLAN] Auto-registered system requirement from {sender_email!r}: {summary!r}"
+                f"[PLAN] Auto-registered system requirement from {sender_email!r} "
+                f"({identity.role}): {summary!r}"
             )
             return
 
-        log.warning(f"Unrecognised sender {sender_email!r} — notifying coordinator")
+        log.warning(
+            f"No students linked to {sender_email!r} "
+            f"(role={identity.role}) — notifying coordinator"
+        )
         notify_coordinator(
-            f"unknown-parent-{inbound_msg.message_id or uuid.uuid4().hex[:8]}",
-            reason=sender_email,
+            f"unknown-sender-{inbound_msg.message_id or uuid.uuid4().hex[:8]}",
+            reason=f"{sender_email} (role={identity.role}, desc={_identity_description(identity)})",
             num_open_questions=0,
         )
         return
 
     log.info(
-        f"Support email from {sender_email!r}: "
+        f"Support email from {sender_email!r} ({_identity_description(identity)}): "
         f"{len(students)} student(s) found"
     )
 
-    # 3. Find or create case
+    # 4. Find or create case
     case, is_new = find_or_create_case(db, inbound_msg, sender_email, dry_run=dry_run)
     case_code = case.fields.get("case_code", case.id)
     log.info(
@@ -720,8 +892,8 @@ def handle_message(
         f"for {sender_email!r}"
     )
 
-    # 4. Run the AI tool loop
-    run_tool_loop(db, case, inbound_msg, sender_email, students, dry_run=dry_run)
+    # 5. Run the AI tool loop with full sender context
+    run_tool_loop(db, case, inbound_msg, sender_email, students, identity=identity, dry_run=dry_run)
 
 
 # ---------------------------------------------------------------------------

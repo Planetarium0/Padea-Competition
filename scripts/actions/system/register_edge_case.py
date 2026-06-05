@@ -30,6 +30,7 @@ from support.email import (
     Text,
     _send_via_sendgrid,
     _support_from,
+    _support_reply_to,
     compose_email,
 )
 
@@ -223,6 +224,7 @@ def send_approval_email(plan: dict[str, Any], *, dry_run: bool = False) -> None:
             subject=subject,
             body=body,
             from_email=_support_from(),
+            reply_to=_support_reply_to(),
             message_id_header=message_id,
         )
         log.info(f"[PLAN] Approval email sent to {actual_to}, plan_id={plan_id}")

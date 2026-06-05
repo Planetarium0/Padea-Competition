@@ -233,6 +233,10 @@ def support_help_email() -> str:
     return f"support@help.{os.environ.get('APP_DOMAIN', 'padea.com.au')}"
 
 
+def _support_reply_to() -> str:
+    return f"support@reply.{os.environ.get('APP_DOMAIN', 'padea.com.au')}"
+
+
 def _send_via_sendgrid(
     *,
     to: list[str],
