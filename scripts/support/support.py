@@ -167,7 +167,7 @@ def ask_llm(prompt: str) -> str | None:
                 ["claude", "-p", prompt],
                 capture_output=True,
                 text=True,
-                timeout=120,
+                timeout=500,
             )
             if result.returncode == 0:
                 text = result.stdout.strip() or None
@@ -181,7 +181,7 @@ def ask_llm(prompt: str) -> str | None:
             _log_llm_call(prompt, None, None, source="cli-missing")
             return None
         except Exception as e:
-            log.failure(f"Error calling Claude CLI: {e}")
+            log.error(f"Error calling Claude CLI: {e}")
             _log_llm_call(prompt, None, None, source="cli-error")
             return None
 

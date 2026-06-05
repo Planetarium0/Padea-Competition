@@ -109,19 +109,19 @@ def _read_doc(filename: str) -> str:
 def draft_plan(description: str) -> tuple[str, str]:
     """Use LLM to draft a title and implementation plan. Returns (title, plan_markdown)."""
     principles = _read_doc("principles.md")
-    workflow = _read_doc("workflow.md")
 
     prompt = (
         "You are a senior software architect for the Padea after-school tutoring catering system.\n\n"
         "A new edge case or requirement needs to be implemented in the codebase.\n\n"
         "## Project Principles\n"
-        f"{principles[:3000]}\n\n"
-        "## Weekly Workflow\n"
-        f"{workflow[:2000]}\n\n"
+        f"{principles}\n\n"
         "## Edge Case / Requirement\n"
         f"{description}\n\n"
         "## Your Task\n"
-        "Draft a concise, actionable implementation plan.\n\n"
+        "Draft a concise, high-level implementation plan,\n"
+        "talk about what things need to be changed and how.\n"
+        "Write mostly in natural language,\n"
+        "code should be included only when it is directly relevant.\n\n"
         "Respond with ONLY a JSON object (no markdown fences, no other text):\n"
         '{"title": "Short descriptive title (max 8 words)", '
         '"plan_markdown": "## Summary\\n...\\n\\n## Code Changes\\n...\\n\\n'
@@ -188,7 +188,7 @@ def send_approval_email(plan: dict[str, Any], *, dry_run: bool = False) -> None:
         Card([
             Heading("Proposed Implementation"),
             Text(plan_markdown),
-        ], shaded=True),
+        ]),
         Divider(),
         Alert([
             Heading("Your Action Required"),
