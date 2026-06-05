@@ -207,16 +207,16 @@ def ask_llm_with_tools(
     import subprocess
 
     key = os.environ.get("CLAUDE_CODE_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
+    logged_prompt = f"[SYSTEM]\n{system}\n\n[USER]\n{prompt}"
 
-    # ------------------------------------------------------------------
-    # SDK path — multi-turn tool loop
-    # ------------------------------------------------------------------
     if key:
         try:
             from anthropic import Anthropic
 
             client = Anthropic(api_key=key)
             messages: list[dict] = [{"role": "user", "content": prompt}]
+            tool_call_log: list[dict] = []
+            response = None
 
             while True:
                 response = client.messages.create(
@@ -231,11 +231,16 @@ def ask_llm_with_tools(
                 tool_results = []
                 for block in response.content:
                     if block.type == "tool_use":
-                        result = executor(block.name, block.input)
+                        tool_result = executor(block.name, block.input)
+                        tool_call_log.append({
+                            "tool": block.name,
+                            "input": block.input,
+                            "result": tool_result,
+                        })
                         tool_results.append({
                             "type": "tool_result",
                             "tool_use_id": block.id,
-                            "content": result,
+                            "content": tool_result,
                         })
 
                 if not tool_results:
@@ -243,12 +248,19 @@ def ask_llm_with_tools(
 
                 messages.append({"role": "user", "content": tool_results})
 
-            _log_llm_call(prompt, "(tools)", None, source="api-tools")
+            final_text: str | None = None
+            if response is not None:
+                for block in response.content:
+                    if hasattr(block, "text"):
+                        final_text = block.text
+                        break
+            response_log = _json.dumps({"tool_calls": tool_call_log, "final_text": final_text})
+            _log_llm_call(logged_prompt, response_log, None, source="api-tools")
             return True
 
         except Exception as e:
             log.error(f"Error calling Anthropic API (with tools): {e}")
-            _log_llm_call(prompt, None, None, source="api-tools-error")
+            _log_llm_call(logged_prompt, None, None, source="api-tools-error")
             return None
 
     # ------------------------------------------------------------------
@@ -291,29 +303,33 @@ def ask_llm_with_tools(
             log.error(
                 f"Claude CLI (MCP) returned {result.returncode}: {result.stderr[:200]}"
             )
-            _log_llm_call(prompt, None, None, source="cli-mcp-error")
+            _log_llm_call(logged_prompt, None, None, source="cli-mcp-error")
             return None
 
         # Read back the tool log and replay send_reply to update executor state
+        tool_calls: list[dict] = []
         try:
             with open(log_path) as f:
                 log_data = _json.load(f)
-            for entry in log_data.get("tool_calls", []):
+            tool_calls = log_data.get("tool_calls", [])
+            for entry in tool_calls:
                 if entry["tool"] == "send_reply":
                     executor.reply_sent[0] = True
         except Exception:
             pass
 
-        _log_llm_call(prompt, "(cli-mcp)", None, source="cli-mcp")
+        final_text = result.stdout.strip() or None
+        response_log = _json.dumps({"tool_calls": tool_calls, "final_text": final_text})
+        _log_llm_call(logged_prompt, response_log, None, source="cli-mcp")
         return True
 
     except FileNotFoundError:
         log.error("Claude CLI not found. Install it or set ANTHROPIC_API_KEY.")
-        _log_llm_call(prompt, None, None, source="cli-mcp-missing")
+        _log_llm_call(logged_prompt, None, None, source="cli-mcp-missing")
         return None
     except Exception as e:
         log.failure(f"Error calling Claude CLI (MCP): {e}")
-        _log_llm_call(prompt, None, None, source="cli-mcp-error")
+        _log_llm_call(logged_prompt, None, None, source="cli-mcp-error")
         return None
     finally:
         try:
