@@ -195,10 +195,10 @@ def ask_llm_with_tools(
     parent_email: str | None = None,
     case_id: str | None = None,
 ) -> bool | None:
-    """Run a multi-turn LLM conversation with tool calling.
+    """[WIP — not currently wired in] Multi-turn LLM conversation with tool calling.
 
-    Uses the Anthropic SDK when an API key is present (SDK path), or falls back
-    to the Claude CLI with an MCP server (CLI path) when no key is found.
+    Intended to replace ask_llm for support email handling once the approach is
+    validated. The CLI/MCP path requires the claude CLI with --mcp-config support.
 
     Returns ``True`` on success, ``None`` on total failure.
     Logs every call to cache/llm_logs/llm_calls.jsonl (source "api-tools" / "cli-mcp").

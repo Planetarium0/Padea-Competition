@@ -348,22 +348,17 @@ class TestToolExecutor(unittest.TestCase):
 class TestFullToolLoopResolved(unittest.TestCase):
 
     @patch("support.email._send_via_sendgrid")
-    @patch("actions.inbox.handle_support_email.ask_llm_with_tools")
-    def test_restriction_added_reply_sent_case_resolved(self, mock_tools, mock_send):
+    @patch("actions.inbox.handle_support_email.ask_llm")
+    def test_restriction_added_reply_sent_case_resolved(self, mock_ask, mock_send):
         db = _db_with_parent()
         case = _make_case()
         db.SupportCases._records = [case]
         msg = _make_inbound()
 
-        def side_effect(prompt, system, executor, tools, **kw):
-            executor("update_dietary_restrictions", {
-                "student_id": STUDENT_ID,
-                "restriction_names": ["Vegetarian"],
-            })
-            executor("send_reply", {"body": "I've set Vegetarian for Alex Smith."})
-            return True
-
-        mock_tools.side_effect = side_effect
+        mock_ask.return_value = json.dumps({
+            "actions": [{"type": "update_dietary", "student_id": STUDENT_ID, "restriction_names": ["Vegetarian"]}],
+            "reply": "I've set Vegetarian for Alex Smith.",
+        })
 
         hse.run_tool_loop(db, case, msg, PARENT_EMAIL, [_make_student()])
 
@@ -384,18 +379,17 @@ class TestFullToolLoopResolved(unittest.TestCase):
 class TestFullToolLoopReplyOnly(unittest.TestCase):
 
     @patch("support.email._send_via_sendgrid")
-    @patch("actions.inbox.handle_support_email.ask_llm_with_tools")
-    def test_reply_only_case_resolved(self, mock_tools, mock_send):
+    @patch("actions.inbox.handle_support_email.ask_llm")
+    def test_reply_only_case_resolved(self, mock_ask, mock_send):
         db = _db_with_parent()
         case = _make_case()
         db.SupportCases._records = [case]
         msg = _make_inbound(body_text="I just had a question, thanks!")
 
-        def side_effect(prompt, system, executor, tools, **kw):
-            executor("send_reply", {"body": "Thanks for your message!"})
-            return True
-
-        mock_tools.side_effect = side_effect
+        mock_ask.return_value = json.dumps({
+            "actions": [],
+            "reply": "Thanks for your message!",
+        })
 
         hse.run_tool_loop(db, case, msg, PARENT_EMAIL, [_make_student()])
 
@@ -410,7 +404,7 @@ class TestFullToolLoopReplyOnly(unittest.TestCase):
 
 class TestNoApiKey(unittest.TestCase):
 
-    @patch("actions.inbox.handle_support_email.ask_llm_with_tools", return_value=None)
+    @patch("actions.inbox.handle_support_email.ask_llm", return_value=None)
     def test_ask_llm_none_notifies_coordinator(self, mock_ask):
         db = _db_with_parent()
         case = _make_case()
@@ -920,20 +914,18 @@ class TestEscalation(unittest.TestCase):
         self.assertIn("dry-run", result)
         mock_send.assert_not_called()
 
-    @patch("actions.inbox.handle_support_email.ask_llm_with_tools")
+    @patch("actions.inbox.handle_support_email.ask_llm")
     @patch("support.email._send_via_sendgrid")
-    def test_full_loop_escalate(self, mock_send, mock_tools):
+    def test_full_loop_escalate(self, mock_send, mock_ask):
         db = _db_with_parent()
         case = _make_case()
         db.SupportCases._records = [case]
         msg = _make_inbound(body_text="I want to speak to a coordinator NOW.")
 
-        def side_effect(prompt, system, executor, tools, **kw):
-            executor("escalate_to_coordinator", {"message": "Parent is very upset."})
-            executor("send_reply", {"body": "I've escalated your request."})
-            return True
-
-        mock_tools.side_effect = side_effect
+        mock_ask.return_value = json.dumps({
+            "actions": [{"type": "escalate", "message": "Parent is very upset."}],
+            "reply": "I've escalated your request to the coordinator.",
+        })
 
         with patch.dict(os.environ, {"COORDINATOR_EMAIL": COORDINATOR_EMAIL}, clear=False):
             hse.run_tool_loop(db, case, msg, PARENT_EMAIL, [_make_student()])
