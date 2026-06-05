@@ -291,6 +291,7 @@ def _make_tool_executor(
                     subject="Re: Padea dietary support",
                     body=body_text,
                     email_id=email_id,
+                    from_email=f"support@{os.environ.get('APP_DOMAIN', 'padea.com.au')}",
                 )
             else:
                 log.info(f"[DRY RUN] Would send reply to {sender_email}: {body_text[:80]}...")

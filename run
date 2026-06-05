@@ -31,6 +31,7 @@ Usage:
   $0 dietary escalate [--dry-run]
   $0 dietary poll [--dry-run]
   $0 support poll [--dry-run]
+  $0 logs [index]
   $0 test [name]
   $0 script [name]
   $0 fix [--latest-error|--run-and-heal CMD|...]
@@ -198,13 +199,13 @@ case "$COMMAND" in
         SUBCOMMAND="${2:-}"
         case "$SUBCOMMAND" in
             clarify)
-                SCHOOL="${3:-}"
-                if [[ -z "$SCHOOL" ]]; then
-                    echo "[ERROR] Usage: $0 dietary clarify <school_name_or_id> [--caterer ID] [--restriction NAME] [--dry-run]"
+                CATERER="${3:-}"
+                if [[ -z "$CATERER" ]]; then
+                    echo "[ERROR] Usage: $0 dietary clarify <caterer_name_or_id> [--restriction NAME] [--dry-run]"
                     exit 1
                 fi
-                echo "Running dietary clarification sweep for '$SCHOOL'..."
-                $PYTHON scripts/actions/dietary/clarify_dietary.py "$SCHOOL" "${@:4}"
+                echo "Running dietary clarification sweep for '$CATERER'..."
+                $PYTHON scripts/actions/dietary/clarify_dietary.py "$CATERER" "${@:4}"
                 ;;
             escalate)
                 echo "Running dietary escalation check..."
@@ -216,7 +217,7 @@ case "$COMMAND" in
                 ;;
             *)
                 echo "[ERROR] Unknown dietary subcommand: ${SUBCOMMAND:-<none>}"
-                echo "Use: dietary clarify <school> | dietary escalate | dietary poll [--dry-run]"
+                echo "Use: dietary clarify <caterer> | dietary escalate | dietary poll [--dry-run]"
                 exit 1
                 ;;
         esac
@@ -249,6 +250,10 @@ case "$COMMAND" in
 
     script)
         $PYTHON "scripts/actions/${2:-}.py"
+        ;;
+
+    logs)
+        $PYTHON scripts/tools/view_llm_logs.py "${@:2}"
         ;;
 
     fix)

@@ -30,11 +30,11 @@ class InboundMailbox(Protocol):
 
 
 def extract_request_code(to_address: str | None) -> str | None:
-    """Extract request code from dietary-<request_code>@reply.<domain>."""
+    """Extract request code from replies+<request_code>@reply.<domain>."""
     if not to_address:
         return None
     local, _, _ = to_address.partition("@")
-    prefix = "dietary-"
+    prefix = "replies+"
     if not local.startswith(prefix):
         return None
     code = local[len(prefix):]

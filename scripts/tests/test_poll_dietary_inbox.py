@@ -47,14 +47,14 @@ def _make_request(
             "status": status,
             "sent_at": "2026-06-01T00:00:00+00:00",
             "question_set": [{"menu_item_id": "item1", "restriction_id": "rest1"}],
-            "reply_to_address": f"dietary-{code}@reply.padea.com.au",
+            "reply_to_address": f"replies+{code}@reply.padea.com.au",
         },
     )
 
 
 def _make_inbound(
     message_id: str = "msg-001",
-    to_address: str = "dietary-CDR-TEST@reply.padea.com.au",
+    to_address: str = "replies+CDR-TEST@reply.padea.com.au",
     from_address: str = "caterer@example.com",
     received_at: str = "2026-06-04T10:00:00+00:00",
     seen: bool = False,
@@ -96,8 +96,8 @@ def _make_inbound_msg(
 
 class TestExtractRequestCode(unittest.TestCase):
 
-    def test_valid_dietary_address(self):
-        code = extract_request_code("dietary-CDR-2026-W23-CAFE@reply.padea.com.au")
+    def test_valid_reply_address(self):
+        code = extract_request_code("replies+CDR-2026-W23-CAFE@reply.padea.com.au")
         self.assertEqual(code, "CDR-2026-W23-CAFE")
 
     def test_plain_address_returns_none(self):
@@ -109,7 +109,7 @@ class TestExtractRequestCode(unittest.TestCase):
         self.assertIsNone(code)
 
     def test_empty_local_after_prefix_returns_none(self):
-        code = extract_request_code("dietary-@reply.padea.com.au")
+        code = extract_request_code("replies+@reply.padea.com.au")
         self.assertIsNone(code)
 
     def test_no_at_sign_returns_none(self):
@@ -159,7 +159,7 @@ class TestSupabaseInboundInbox(unittest.TestCase):
         db = self._db_with_messages(
             _make_inbound(
                 "msg-1",
-                to_address="dietary-MY-REQUEST-CODE@reply.padea.com.au",
+                to_address="replies+MY-REQUEST-CODE@reply.padea.com.au",
             )
         )
         inbox = SupabaseInboundInbox(db)

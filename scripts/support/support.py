@@ -10,8 +10,11 @@ top-level types for callers that want to type-annotate function signatures.
 from __future__ import annotations
 
 import contextvars
+import json
 import logging
 import os
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
@@ -37,49 +40,48 @@ _active_handler: contextvars.ContextVar[Any] = contextvars.ContextVar(
 load_dotenv()
 
 
-# ---------------------------------------------------------------------------
-# Custom VERBOSE level — sits below DEBUG (10) at level 5.
-# Enabled only when LOG_LEVEL=verbose; invisible at info/warning/error.
-# ---------------------------------------------------------------------------
-
 VERBOSE: int = 5
 logging.addLevelName(VERBOSE, "VERBOSE")
 
 
-def _verbose(self: logging.Logger, message: str, *args: Any, **kwargs: Any) -> None:
-    if self.isEnabledFor(VERBOSE):
-        self._log(VERBOSE, message, args, **kwargs)
+class CustomLogger(logging.Logger):
+    # ---------------------------------------------------------------------------
+    # Custom VERBOSE level — sits below DEBUG (10) at level 5.
+    # Enabled only when LOG_LEVEL=verbose; invisible at info/warning/error.
+    # ---------------------------------------------------------------------------
+
+    def verbose(self, message: str, *args: Any, **kwargs: Any) -> None:
+        if self.isEnabledFor(VERBOSE):
+            self._log(VERBOSE, message, args, **kwargs)
+
+    # ---------------------------------------------------------------------------
+    # log.failure — error-level logging PLUS registration with the active
+    # self-healing handler. Use for any error that should trigger an agent-driven
+    # capture; reserve log.error for human-misuse errors (bad CLI args, etc.)
+    # raised outside any wrapped workflow. See plans/current/principles.md §2.
+    # ---------------------------------------------------------------------------
+
+    def failure(self, message: str, *args: Any, **kwargs: Any) -> None:
+        """Log at ERROR and register with the active self_healing_error_handler.
+
+        Execution continues exactly as ``log.error`` would — only the capture
+        behaviour changes. Outside a wrapped workflow the registration is a
+        no-op, so calling ``log.failure`` from helper code (migrations, REPL)
+        is always safe.
+        """
+        self.error(message, *args, **kwargs)
+        try:
+            formatted = message % args if args else message
+        except Exception:
+            formatted = message
+        handler = _active_handler.get()
+        if handler is not None:
+            handler.register_failure(formatted)
 
 
-logging.Logger.verbose = _verbose  # type: ignore[attr-defined]
 
-
-# ---------------------------------------------------------------------------
-# log.failure — error-level logging PLUS registration with the active
-# self-healing handler. Use for any error that should trigger an agent-driven
-# capture; reserve log.error for human-misuse errors (bad CLI args, etc.)
-# raised outside any wrapped workflow. See plans/current/principles.md §2.
-# ---------------------------------------------------------------------------
-
-def _failure(self: logging.Logger, message: str, *args: Any, **kwargs: Any) -> None:
-    """Log at ERROR and register with the active self_healing_error_handler.
-
-    Execution continues exactly as ``log.error`` would — only the capture
-    behaviour changes. Outside a wrapped workflow the registration is a
-    no-op, so calling ``log.failure`` from helper code (migrations, REPL)
-    is always safe.
-    """
-    self.error(message, *args, **kwargs)
-    try:
-        formatted = message % args if args else message
-    except Exception:
-        formatted = message
-    handler = _active_handler.get()
-    if handler is not None:
-        handler.register_failure(formatted)
-
-
-logging.Logger.failure = _failure  # type: ignore[attr-defined]
+logging.Logger.verbose = CustomLogger.verbose  # type: ignore[attr-defined]
+logging.Logger.failure = CustomLogger.failure  # type: ignore[attr-defined]
 
 
 # ---------------------------------------------------------------------------
@@ -102,7 +104,7 @@ logging.basicConfig(
     level=_log_level,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
-log: logging.Logger = logging.getLogger("PadeaMigration")
+log: CustomLogger = logging.getLogger("PadeaMigration")  # type: ignore
 log.setLevel(_log_level)
 
 
@@ -110,10 +112,27 @@ log.setLevel(_log_level)
 # LLM helper
 # ---------------------------------------------------------------------------
 
+_LLM_LOG_FILE = Path(__file__).parents[2] / "cache" / "llm_logs" / "llm_calls.jsonl"
+
+
+def _log_llm_call(prompt: str, response: str | None, thinking: str | None, source: str) -> None:
+    _LLM_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source": source,
+        "prompt": prompt,
+        "thinking": thinking,
+        "response": response,
+    }
+    with _LLM_LOG_FILE.open("a") as f:
+        f.write(json.dumps(entry) + "\n")
+
+
 def ask_llm(prompt: str) -> str | None:
     """Send a prompt to Claude via the Anthropic SDK, or fall back to the Claude CLI.
 
     Returns the model's text response, or ``None`` if both routes fail.
+    Logs every call (prompt, thinking, response) to cache/llm_logs/llm_calls.jsonl.
     """
     import subprocess
 
@@ -128,10 +147,18 @@ def ask_llm(prompt: str) -> str | None:
                 max_tokens=4000,
                 messages=[{"role": "user", "content": prompt}],
             )
-            block = response.content[0]
-            return getattr(block, "text", None)
+            text: str | None = None
+            thinking_text: str | None = None
+            for block in response.content:
+                if block.type == "thinking":
+                    thinking_text = getattr(block, "thinking", None)
+                elif block.type == "text":
+                    text = getattr(block, "text", None)
+            _log_llm_call(prompt, text, thinking_text, source="api")
+            return text
         except Exception as e:
             log.error(f"Error calling Anthropic API: {e}")
+            _log_llm_call(prompt, None, None, source="api-error")
             return None
     else:
         log.warning("No Claude or Anthropic API key found. Falling back to Claude CLI.")
@@ -143,14 +170,19 @@ def ask_llm(prompt: str) -> str | None:
                 timeout=120,
             )
             if result.returncode == 0:
-                return result.stdout.strip() or None
+                text = result.stdout.strip() or None
+                _log_llm_call(prompt, text, None, source="cli")
+                return text
             log.error(f"Claude CLI returned exit code {result.returncode}: {result.stderr[:200]}")
+            _log_llm_call(prompt, None, None, source="cli-error")
             return None
         except FileNotFoundError:
             log.error("Claude CLI not found. Install it or set ANTHROPIC_API_KEY.")
+            _log_llm_call(prompt, None, None, source="cli-missing")
             return None
         except Exception as e:
-            log.error(f"Error calling Claude CLI: {e}")
+            log.failure(f"Error calling Claude CLI: {e}")
+            _log_llm_call(prompt, None, None, source="cli-error")
             return None
 
 

@@ -123,9 +123,8 @@ publishable anon key (today: everything; eventually: gated by RLS).
 ./run caterer switch <id>         # execute an Approved switch
 ./run forms qr [send]             # generate or email per-session QR codes
 ./run forms send {parents|students}  # email preference links direct to people
-./run dietary clarify <school>    # ask caterers for MAYBE item confirmation; also runs escalation
-./run dietary clarify <school> --restriction <name>  # single restriction only
-./run dietary clarify <school> --caterer <id>        # single caterer only
+./run dietary clarify <caterer>    # ask caterer for MAYBE item confirmation; also runs escalation
+./run dietary clarify <caterer> --restriction <name>  # single restriction only
 ./run dietary escalate            # mark overdue Open/Clarifying requests Escalated + notify coordinator
 ./run dietary poll [--dry-run]    # drain dietary_inbound_messages, parse replies, run escalation
 ./run support poll [--dry-run]    # drain support_inbound_messages, run AI handler for parent emails

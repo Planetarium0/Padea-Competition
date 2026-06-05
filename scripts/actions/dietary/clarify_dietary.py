@@ -1,18 +1,20 @@
 """
-clarify_dietary.py — Ask caterers to confirm dietary information for MAYBE items.
+clarify_dietary.py — Ask a caterer to confirm dietary information for MAYBE items.
 
-For each caterer serving a school:
+For a given caterer:
+  - Finds all sessions it serves (across all schools).
+  - Computes the union of dietary restriction IDs for students in those sessions.
   - Computes (item × restriction) pairs where the existing 3-step ladder
     returns MAYBE (no positive tag, no legend block, no keyword hit).
   - Builds a dietary_clarification_requests row recording the open questions.
-  - Sends one email per caterer listing the items and restrictions to confirm.
+  - Sends one email to the caterer listing the items and restrictions to confirm.
 
 After the sweep, runs the escalation check so any prior-term requests that
 have crossed the 7-day mark are also picked up in the same command.
 
 Usage:
-  python scripts/actions/dietary/clarify_dietary.py <school_name_or_id>
-            [--caterer <id>] [--restriction <name>] [--dry-run]
+  python scripts/actions/dietary/clarify_dietary.py <caterer_name_or_id>
+            [--restriction <name>] [--dry-run]
 """
 
 from __future__ import annotations
@@ -22,20 +24,13 @@ import datetime
 import os
 import re
 import sys
-from collections import defaultdict
-
-
 from support import (
-    Alert,
-    Card,
     CatererFields,
     Database,
     DietaryRestrictionFields,
-    Heading,
     List,
     MenuItemFields,
     Record,
-    SchoolFields,
     SessionFields,
     StudentFields,
     Text,
@@ -53,7 +48,6 @@ from support.compatibility import OPTED_OUT, build_hierarchy, item_verdict
 class ClarifyData:
     def __init__(
         self,
-        schools: list[Record[SchoolFields]],
         sessions: list[Record[SessionFields]],
         caterers: list[Record[CatererFields]],
         menu_items: list[Record[MenuItemFields]],
@@ -61,7 +55,6 @@ class ClarifyData:
         students: list[Record[StudentFields]],
         existing_requests: list[Record],
     ) -> None:
-        self.schools = schools
         self.sessions = sessions
         self.caterers = caterers
         self.menu_items = menu_items
@@ -73,7 +66,6 @@ class ClarifyData:
     def load(cls, db: Database) -> "ClarifyData":
         log.info("Loading data for dietary clarification sweep...")
         return cls(
-            schools=db.Schools.all(),
             sessions=db.Sessions.all(),
             caterers=db.Caterers.all(),
             menu_items=db.MenuItems.all(),
@@ -103,17 +95,17 @@ def compute_question_set(
     return questions
 
 
-def school_restriction_union(
-    school_session_ids: set[str],
+def caterer_restriction_union(
+    caterer_session_ids: set[str],
     students: list[Record[StudentFields]],
     hierarchy,
 ) -> set[str]:
-    """Union of dietary restriction IDs for students at school, minus Opted Out."""
+    """Union of dietary restriction IDs for students in the caterer's sessions, minus Opted Out."""
     opted_out_id: str | None = hierarchy.name_to_id.get(OPTED_OUT)
     result: set[str] = set()
     for stu in students:
         session_ids = set(stu.fields.get("session_ids") or [])
-        if not (session_ids & school_session_ids):
+        if not (session_ids & caterer_session_ids):
             continue
         for rid in (stu.fields.get("dietary_requirement_ids") or []):
             if opted_out_id and rid == opted_out_id:
@@ -124,26 +116,22 @@ def school_restriction_union(
 
 def has_open_request(
     caterer_id: str,
-    school_id: str | None,
     existing_requests: list[Record],
 ) -> bool:
-    """True if an Open or Escalated request already exists for (caterer, school)."""
+    """True if an Open or Escalated request already exists for this caterer."""
     for req in existing_requests:
         if req.fields.get("caterer_id") != caterer_id:
-            continue
-        if req.fields.get("school_id") != school_id:
             continue
         if req.fields.get("status") in ("Open", "Escalated"):
             return True
     return False
 
 
-def make_request_code(caterer_name: str, school_id: str | None) -> str:
+def make_request_code(caterer_name: str) -> str:
     today = datetime.date.today()
     week = today.isocalendar()[1]
     slug = re.sub(r"[^a-z0-9]", "", caterer_name.lower())[:12].upper()
-    school_suffix = (school_id or "")[:6]
-    return f"CDR-{today.year}-W{week:02d}-{slug}-{school_suffix}"
+    return f"CDR-{today.year}-W{week:02d}-{slug}"
 
 
 # ---------------------------------------------------------------------------
@@ -152,41 +140,24 @@ def make_request_code(caterer_name: str, school_id: str | None) -> str:
 
 def format_clarification_email(
     caterer_name: str,
-    school_name: str | None,
-    questions_by_item: dict[str, list[str]],
-    item_name_map: dict[str, str],
-    restriction_name_map: dict[str, str],
+    restriction_names: list[str],
 ) -> str:
-    school_text = f" for {school_name}" if school_name else ""
     components = [
         Text(f"Hi {caterer_name},"),
-        Alert([
-            Text(
-                f"We have students{school_text} with specific dietary requirements. "
-                f"Please help us confirm which of your menu items are safe for them to eat."
-            ),
-        ], variant="amber"),
         Text(
-            "For each item below, please reply to this email with "
-            '"Yes, this item is suitable" or "No, this item contains [ingredient]" '
-            "for each requirement listed.",
+            "We have students enrolled in our after-school program with dietary requirements "
+            "we weren't able to confirm from your current menu."
+        ),
+        Text("Could you let us know which of your meals are suitable for:"),
+        List([f"<strong>{r}</strong>" for r in restriction_names]),
+        Text(
+            'Just reply to this email and we\'ll handle the rest.'
+        ),
+        Text(
+            "Thanks in advance,\n"
+            "— Padea"
         ),
     ]
-
-    for item_id, rids in sorted(
-        questions_by_item.items(),
-        key=lambda kv: item_name_map.get(kv[0], kv[0]),
-    ):
-        item_name = item_name_map.get(item_id, item_id)
-        rnames = [restriction_name_map.get(rid, rid) for rid in rids]
-        components.append(Card([
-            Heading(item_name, accent=True),
-            Text("Please confirm suitability for:"),
-            List([f"<strong>{r}</strong>" for r in rnames]),
-        ]))
-
-    components.append(Text("If you have any questions, please reply to this email."))
-    components.append(Text("— Padea"))
     return compose_email(components)
 
 
@@ -196,14 +167,13 @@ def format_clarification_email(
 
 def run_sweep(
     db: Database,
-    school_id: str,
-    school_name: str | None = None,
+    caterer_id: str,
+    caterer_name: str | None = None,
     *,
-    caterer_id_filter: str | None = None,
     restriction_name_filter: str | None = None,
     dry_run: bool = False,
 ) -> int:
-    """Run the clarification sweep for one school.
+    """Run the clarification sweep for one caterer.
 
     Returns the number of new requests created (or that would be created
     in dry-run mode).
@@ -211,15 +181,21 @@ def run_sweep(
     data = ClarifyData.load(db)
     hierarchy = build_hierarchy(data.dietary_restrictions)
 
-    school_sessions = [s for s in data.sessions if s.fields.get("school_id") == school_id]
-    school_session_ids = {s.id for s in school_sessions}
-    if not school_sessions:
-        log.warning(f"No sessions found for school {school_name or school_id!r}")
+    caterer = next((c for c in data.caterers if c.id == caterer_id), None)
+    if caterer is None:
+        log.warning(f"Caterer {caterer_id!r} not found")
+        return 0
+    caterer_name = caterer_name or caterer.fields.get("name", caterer_id)
+
+    caterer_sessions = [s for s in data.sessions if s.fields.get("caterer_id") == caterer_id]
+    caterer_session_ids = {s.id for s in caterer_sessions}
+    if not caterer_sessions:
+        log.warning(f"No sessions found for caterer {caterer_name!r}")
         return 0
 
-    restriction_ids = school_restriction_union(school_session_ids, data.students, hierarchy)
+    restriction_ids = caterer_restriction_union(caterer_session_ids, data.students, hierarchy)
     if not restriction_ids:
-        log.info("No dietary restrictions in enrolment — nothing to clarify.")
+        log.info("No dietary restrictions in caterer sessions — nothing to clarify.")
         return 0
 
     if restriction_name_filter:
@@ -230,167 +206,130 @@ def run_sweep(
         restriction_ids = {filtered_id} & restriction_ids
         if not restriction_ids:
             log.info(
-                f"No students at {school_name!r} have restriction "
+                f"No students served by {caterer_name!r} have restriction "
                 f"{restriction_name_filter!r}."
             )
             return 0
 
     log.info(
-        f"Restriction union for {school_name!r}: "
+        f"Restriction union for {caterer_name!r}: "
         + ", ".join(
             hierarchy.id_to_name.get(r, r)
             for r in sorted(restriction_ids)
         )
     )
 
-    caterer_ids_at_school: set[str] = {
-        s.fields["caterer_id"]
-        for s in school_sessions
-        if s.fields.get("caterer_id")
-    }
-    caterers_at_school = [c for c in data.caterers if c.id in caterer_ids_at_school]
-    if caterer_id_filter:
-        caterers_at_school = [c for c in caterers_at_school if c.id == caterer_id_filter]
-        if not caterers_at_school:
-            log.error(
-                f"Caterer {caterer_id_filter!r} does not serve school "
-                f"{school_name!r}."
-            )
-            sys.exit(1)
+    if has_open_request(caterer_id, data.existing_requests):
+        log.info(f"  {caterer_name}: open request already exists — skipping")
+        return 0
 
-    items_by_caterer: dict[str, list[Record[MenuItemFields]]] = defaultdict(list)
+    legend_tag_ids: list[str] = caterer.fields.get("legend_tag_ids") or []
+
+    items_by_caterer: dict[str, list[Record[MenuItemFields]]] = {}
     for item in data.menu_items:
         cid = item.fields.get("caterer_id")
         if cid:
-            items_by_caterer[cid].append(item)
+            items_by_caterer.setdefault(cid, []).append(item)
+
+    caterer_items = items_by_caterer.get(caterer_id, [])
+    if not caterer_items:
+        log.info(f"  {caterer_name}: no menu items — skipping")
+        return 0
+
+    question_set = compute_question_set(
+        caterer_items, restriction_ids, hierarchy, legend_tag_ids
+    )
+    if not question_set:
+        log.info(f"  {caterer_name}: no MAYBE items — nothing to ask")
+        return 0
+
+    log.info(f"  {caterer_name}: {len(question_set)} open question(s)")
+    request_code = make_request_code(caterer_name)
+    sent_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+    if dry_run:
+        log.info(
+            f"  [DRY RUN] Would create request {request_code} and email "
+            f"{caterer_name}"
+        )
+        return 1
+
+    created = db.DietaryClarificationRequests.create([{
+        "request_code": request_code,
+        "caterer_id": caterer.id,
+        "sent_at": sent_at,
+        "status": "Open",
+        "question_set": question_set,
+    }])
+    log.info(f"  Created request {request_code}")
+
+    reply_domain = f"reply.{os.environ.get('APP_DOMAIN', 'padea.com.au')}"
+    reply_to_address = f"replies+{request_code}@{reply_domain}"
+    db.DietaryClarificationRequests.update(
+        created[0].id, {"reply_to_address": reply_to_address}
+    )
 
     restriction_name_map = {
         r.id: r.fields.get("name", r.id)
         for r in data.dietary_restrictions
     }
-    requests_created = 0
 
-    for caterer in caterers_at_school:
-        caterer_name = caterer.fields.get("name", caterer.id)
-        legend_tag_ids: list[str] = caterer.fields.get("legend_tag_ids") or []
-        caterer_items = items_by_caterer.get(caterer.id, [])
-
-        if not caterer_items:
-            log.info(f"  {caterer_name}: no menu items — skipping")
-            continue
-
-        if has_open_request(caterer.id, school_id, data.existing_requests):
-            log.info(f"  {caterer_name}: open request already exists — skipping")
-            continue
-
-        question_set = compute_question_set(
-            caterer_items, restriction_ids, hierarchy, legend_tag_ids
-        )
-        if not question_set:
-            log.info(f"  {caterer_name}: no MAYBE items — nothing to ask")
-            continue
-
-        log.info(f"  {caterer_name}: {len(question_set)} open question(s)")
-        request_code = make_request_code(caterer_name, school_id)
-        sent_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
-
-        if dry_run:
-            log.info(
-                f"  [DRY RUN] Would create request {request_code} and email "
-                f"{caterer_name}"
-            )
-            requests_created += 1
-            continue
-
-        created = db.DietaryClarificationRequests.create([{
-            "request_code": request_code,
-            "caterer_id": caterer.id,
-            "school_id": school_id,
-            "sent_at": sent_at,
-            "status": "Open",
-            "question_set": question_set,
-        }])
-        log.info(f"  Created request {request_code}")
-
-        # Compute the Reply-To address for this request and persist it.
-        reply_domain = f"reply.{os.environ.get('APP_DOMAIN', 'padea.com.au')}"
-        reply_to_address = f"dietary-{request_code}@{reply_domain}"
-        db.DietaryClarificationRequests.update(
-            created[0].id, {"reply_to_address": reply_to_address}
+    contact_email = caterer.fields.get("contact_email")
+    if not contact_email:
+        log.warning(f"  {caterer_name}: no contact_email — skipping email")
+    else:
+        restriction_ids_asked = {q["restriction_id"] for q in question_set}
+        restriction_names_asked = sorted(
+            restriction_name_map.get(rid, rid) for rid in restriction_ids_asked
         )
 
-        contact_email = caterer.fields.get("contact_email")
-        if not contact_email:
-            log.warning(f"  {caterer_name}: no contact_email — skipping email")
-        else:
-            questions_by_item: dict[str, list[str]] = defaultdict(list)
-            for q in question_set:
-                questions_by_item[q["menu_item_id"]].append(q["restriction_id"])
+        body = format_clarification_email(
+            caterer_name=caterer_name,
+            restriction_names=restriction_names_asked,
+        )
 
-            item_name_map = {
-                item.id: item.fields.get("name", item.id)
-                for item in caterer_items
-            }
+        subject = f"[{request_code}] Padea dietary check — {caterer_name}"
+        schedule_email(
+            db,
+            to_email=contact_email,
+            cc_email=None,
+            subject=subject,
+            body=body,
+            email_id=request_code,
+            reply_to=reply_to_address,
+        )
 
-            body = format_clarification_email(
-                caterer_name=caterer_name,
-                school_name=school_name,
-                questions_by_item=dict(questions_by_item),
-                item_name_map=item_name_map,
-                restriction_name_map=restriction_name_map,
-            )
-
-            school_label = school_name or school_id
-            subject = (
-                f"[{request_code}] Padea dietary check — {caterer_name}"
-            )
-            schedule_email(
-                db,
-                to_email=contact_email,
-                cc_email=None,
-                subject=subject,
-                body=body,
-                email_id=request_code,
-                reply_to=reply_to_address,
-            )
-
-        requests_created += 1
-
-    log.info(
-        f"Sweep complete: {requests_created} request(s) created for "
-        f"{school_name or school_id!r}."
-    )
-    return requests_created
+    log.info(f"Sweep complete: request created for {caterer_name!r}.")
+    return 1
 
 
 # ---------------------------------------------------------------------------
-# School resolution helper
+# Caterer resolution helper
 # ---------------------------------------------------------------------------
 
-def resolve_school(
+def resolve_caterer(
     ref: str,
-    schools: list[Record[SchoolFields]],
+    caterers: list[Record[CatererFields]],
 ) -> tuple[str, str | None]:
-    """Return (school_id, school_name) for a name or raw UUID.
+    """Return (caterer_id, caterer_name) for a name or raw UUID.
 
     Matches case-insensitively on the ``name`` field; falls back to treating
     ``ref`` as a record UUID.
     """
     needle = ref.strip().lower()
-    matches = [s for s in schools if (s.fields.get("name") or "").lower() == needle]
+    matches = [c for c in caterers if (c.fields.get("name") or "").lower() == needle]
     if len(matches) == 1:
         return matches[0].id, matches[0].fields.get("name")
     if len(matches) > 1:
-        names = ", ".join(s.fields.get("name", s.id) for s in matches)
-        log.error(f"Ambiguous school name {ref!r} — matched: {names}")
+        names = ", ".join(c.fields.get("name", c.id) for c in matches)
+        log.error(f"Ambiguous caterer name {ref!r} — matched: {names}")
         sys.exit(1)
-    # No name match — try raw UUID
-    for s in schools:
-        if s.id == ref:
-            return s.id, s.fields.get("name")
+    for c in caterers:
+        if c.id == ref:
+            return c.id, c.fields.get("name")
     log.error(
-        f"No school found matching {ref!r}. "
-        "Pass the school name (e.g. 'Alpha Academy') or its record UUID."
+        f"No caterer found matching {ref!r}. "
+        "Pass the caterer name (e.g. 'Café Deluxe') or its record UUID."
     )
     sys.exit(1)
 
@@ -403,17 +342,11 @@ if __name__ == "__main__":
     from support import self_healing_error_handler
 
     parser = argparse.ArgumentParser(
-        description="Ask caterers to confirm dietary information for MAYBE items",
+        description="Ask a caterer to confirm dietary information for MAYBE items",
     )
     parser.add_argument(
-        "school",
-        help="School name (e.g. 'Alpha Academy') or record UUID",
-    )
-    parser.add_argument(
-        "--caterer",
-        dest="caterer_id",
-        default=None,
-        help="Limit sweep to one caterer (record UUID)",
+        "caterer",
+        help="Caterer name (e.g. 'Café Deluxe') or record UUID",
     )
     parser.add_argument(
         "--restriction",
@@ -444,14 +377,13 @@ if __name__ == "__main__":
 
     with self_healing_error_handler("clarify_dietary", state_provider=db_state_provider):
         db = Database.from_env()
-        schools = db.Schools.all()
-        school_id, school_name = resolve_school(args.school, schools)
+        caterers = db.Caterers.all()
+        caterer_id, caterer_name = resolve_caterer(args.caterer, caterers)
 
         run_sweep(
             db,
-            school_id=school_id,
-            school_name=school_name,
-            caterer_id_filter=args.caterer_id,
+            caterer_id=caterer_id,
+            caterer_name=caterer_name,
             restriction_name_filter=args.restriction_name,
             dry_run=args.dry_run,
         )

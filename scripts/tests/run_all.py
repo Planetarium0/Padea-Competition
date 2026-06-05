@@ -40,6 +40,14 @@ import test_handle_support_email
 import test_substitutions
 import test_edge_cases
 
+# EMAIL_LIMIT is a per-run production throttle (set in .env to cap outbound
+# mail in manual testing). It must not bleed across tests in the same process:
+# load_dotenv() runs during module imports above, so clear it now.
+# Also reset the module-level send counter so it never blocks schedule_email.
+import support.email as _email_module
+os.environ.pop("EMAIL_LIMIT", None)
+_email_module._emails_queued_this_run = 0
+
 
 def suite() -> unittest.TestSuite:
     loader = unittest.TestLoader()

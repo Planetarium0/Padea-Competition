@@ -74,7 +74,7 @@ def run_poll(
             )
             if not dry_run:
                 _notify_orphan(msg)
-                inbox.mark_seen(msg.message_id)
+            inbox.mark_seen(msg.message_id)
             processed += 1
             continue
 
@@ -100,15 +100,25 @@ def run_poll(
 def _notify_orphan(msg: InboundMessage) -> None:
     """Best-effort coordinator notification for an orphan / unmatched reply."""
     pseudo_id = "orphan-" + (msg.message_id or "unknown")[:16]
+    sender = msg.from_address or "unknown"
     # notify_coordinator dedupes by request_id so repeated orphans won't flood.
     try:
+        subject_hint = msg.subject or "(no subject)"
         notify_coordinator(
             pseudo_id,
-            caterer_name=msg.from_address or "unknown",
+            caterer_name=sender,
             num_open_questions=0,
+            custom_message=(
+                f"An inbound reply was received from {sender!r} that could not be "
+                f"matched to an active dietary clarification request "
+                f"(subject: {subject_hint!r}).\n\n"
+                f"Please review the message manually and take action if needed.\n\n"
+                f"Full details: see dietary_inbound_messages row with "
+                f"message_id={msg.message_id!r}.\n"
+            ),
         )
     except Exception as exc:
-        log.warning(f"Could not notify coordinator about orphan reply: {exc}")
+        log.failure(f"Could not notify coordinator about orphan reply: {exc}")
 
 
 # ---------------------------------------------------------------------------

@@ -71,7 +71,7 @@ def _make_request(
             "clarification_rounds": clarification_rounds,
             "question_set": qs,
             "messages": messages or [],
-            "reply_to_address": f"dietary-{request_code}@reply.padea.com.au",
+            "reply_to_address": f"replies+{request_code}@reply.padea.com.au",
         },
     )
 

@@ -102,7 +102,7 @@ class List(Component):
             f'<li style="margin:4px 0;font-size:15px;">{item}</li>'
             for item in self.items
         )
-        return f'<ul style="margin:12px 0 4px;padding-left:20px;">{items}</ul>'
+        return f'<ul style="margin:0 0 16px;padding-left:20px;">{items}</ul>'
 
 
 @dataclass
@@ -150,7 +150,7 @@ class Card(Component):
         inner = "".join(child.render() for child in self.children)
         return (
             f'<div style="{bg}border:1px solid #ECE6E2;border-radius:8px;'
-            f'padding:16px 20px;margin:0 0 16px;">'
+            f'padding:16px 20px 0;margin:0 0 16px;">'
             f'{inner}'
             f'</div>'
         )
@@ -169,7 +169,7 @@ class Alert(Component):
             style = "background-color:#FDECEF;border:1px solid #F6D2D9;"
         inner = "".join(child.render() for child in self.children)
         return (
-            f'<div style="{style}border-radius:8px;padding:14px 18px;margin:0 0 20px;">'
+            f'<div style="{style}border-radius:8px;padding:14px 18px 0;margin:0 0 20px;">'
             f'{inner}'
             f'</div>'
         )
@@ -210,7 +210,23 @@ def compose_email(components: list[Component]) -> str:
 # ---------------------------------------------------------------------------
 
 _SENDGRID_URL = "https://api.sendgrid.com/v3/mail/send"
-_FROM_EMAIL = "padea@kaqe-crgm-vqjj-lacj.cfd"
+
+# Per-process email counter — incremented each time schedule_email queues a send.
+# Checked against EMAIL_LIMIT (from .env) to cap outbound mail during testing.
+_emails_queued_this_run: int = 0
+
+
+def _email_limit() -> int | None:
+    val = os.environ.get("EMAIL_LIMIT", "").strip()
+    return int(val) if val.isdigit() else None
+
+
+def _orders_from() -> str:
+    return f"orders@{os.environ.get('APP_DOMAIN', 'padea.com.au')}"
+
+
+def _support_from() -> str:
+    return f"support@{os.environ.get('APP_DOMAIN', 'padea.com.au')}"
 
 
 def _send_via_sendgrid(
@@ -218,7 +234,9 @@ def _send_via_sendgrid(
     to: list[str],
     subject: str,
     body: str,
+    from_email: str,
     cc: list[str] | None = None,
+    reply_to: str | None = None,
     is_html: bool = True,
     in_reply_to_header: str | None = None,
 ) -> None:
@@ -233,10 +251,13 @@ def _send_via_sendgrid(
 
     payload = {
         "personalizations": [personalization],
-        "from": {"email": _FROM_EMAIL},
+        "from": {"email": from_email},
         "subject": subject,
         "content": [{"type": "text/html" if is_html else "text/plain", "value": body}],
     }
+
+    if reply_to:
+        payload["reply_to"] = {"email": reply_to}
 
     if in_reply_to_header:
         payload["headers"] = [{"key": "In-Reply-To", "value": in_reply_to_header}]
@@ -267,6 +288,7 @@ def schedule_email(
     caterer_switch_proposal_id:  str | None = None,
     reply_to:                    str | None = None,
     in_reply_to_header:          str | None = None,
+    from_email:                  str | None = None,
 ) -> Record[ScheduledEmailFields] | None:
     """Create an audit record in scheduled_emails and immediately send via Resend.
 
@@ -280,6 +302,13 @@ def schedule_email(
     if existing:
         log.info(f"[SKIP] Email already scheduled: {email_id} (status={existing.fields.get('status')})")
         return existing
+
+    global _emails_queued_this_run
+    limit = _email_limit()
+    if limit is not None and _emails_queued_this_run >= limit:
+        log.info(f"[LIMIT] EMAIL_LIMIT={limit} reached — skipping {email_id}")
+        return None
+    _emails_queued_this_run += 1
 
     fields: dict[str, object] = {
         "email_code":  email_id,
@@ -322,6 +351,8 @@ def schedule_email(
             cc=actual_cc,
             subject=subject,
             body=body,
+            from_email=from_email or _orders_from(),
+            reply_to=reply_to,
             in_reply_to_header=in_reply_to_header,
         )
         if se_record:
@@ -459,7 +490,7 @@ def escalate_to_dev(
         f"Full details on disk: {artifact_path}\n"
     )
     try:
-        _send_via_sendgrid(to=[recipient], subject=subject, body=short_body, is_html=False)
+        _send_via_sendgrid(to=[recipient], subject=subject, body=short_body, from_email=_support_from(), is_html=False)
         log.warning(f"[ESCALATION] Notification sent to {recipient}")
     except Exception as exc:
         log.error(
@@ -487,6 +518,7 @@ def notify_coordinator(
     num_open_questions: int = 0,
     sent_at_str: Optional[str] = None,
     notify_email: Optional[str] = None,
+    custom_message: Optional[str] = None,
 ) -> Path:
     """Notify the program coordinator that a dietary clarification request went unanswered.
 
@@ -548,14 +580,14 @@ def notify_coordinator(
         return artifact_path
 
     subject = f"[Padea] Dietary clarification unanswered — {caterer_name}{school_line}"
-    short_body = (
+    short_body = custom_message or (
         f"The caterer {caterer_name}{school_line} did not respond to the dietary "
         f"clarification email within 7 days.\n\n"
         f"There are {num_open_questions} open question(s). Please follow up directly.\n\n"
         f"Full details: {artifact_path}\n"
     )
     try:
-        _send_via_sendgrid(to=[recipient], subject=subject, body=short_body, is_html=False)
+        _send_via_sendgrid(to=[recipient], subject=subject, body=short_body, from_email=_support_from(), is_html=False)
         log.warning(f"[COORDINATOR NOTIFY] Notification sent to {recipient}")
     except Exception as exc:
         log.error(

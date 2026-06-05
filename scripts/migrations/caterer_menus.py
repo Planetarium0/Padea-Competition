@@ -168,15 +168,20 @@ Raw Menu Text:
     if not diet_name_to_id:
         log.error("No Dietary Restrictions found. Run dietary_restrictions migration first.")
         sys.exit(1)
+    diet_id_to_name = {v: k for k, v in diet_name_to_id.items()}
+    veg_id = diet_name_to_id.get("Vegetarian")
 
-    # Detect the dietary legend from the preamble (before the first caterer header).
+    # Detect any globally-declared legend codes from the preamble (before the
+    # first caterer header), used as a starting seed for each caterer.
     header_pattern_simple = r"[^\n(]+\s*Menu\s*\(\$"
     first_header = re.search(header_pattern_simple, raw_text)
     first_header_pos = first_header.start() if first_header else len(raw_text)
-    legend_restriction_names = _detect_legend_codes(raw_text, first_header_pos)
-    legend_tag_ids = [diet_name_to_id[n] for n in legend_restriction_names if n in diet_name_to_id]
-    if legend_tag_ids:
-        log.info(f"Detected dietary legend restrictions: {legend_restriction_names}")
+    preamble_legend_names = _detect_legend_codes(raw_text, first_header_pos)
+    preamble_legend_ids: set[str] = {
+        diet_name_to_id[n] for n in preamble_legend_names if n in diet_name_to_id
+    }
+    if preamble_legend_ids:
+        log.info(f"Detected preamble dietary legend: {preamble_legend_names}")
 
     # (item_fields, has_vo, base_tag_ids) — tracked so we can build variants after insertion.
     pending_items: list[tuple[MenuItemFields, bool, list[str]]] = []
@@ -198,8 +203,23 @@ Raw Menu Text:
             "delivery_fee_structure": menu["Delivery Fee Structure"],
             "price_per_item":         price,
         }
-        if legend_tag_ids:
-            caterer_update["legend_tag_ids"] = legend_tag_ids
+
+        # Infer the caterer's legend from item markers: any dietary restriction
+        # that appears on at least one item means the caterer explicitly tracks
+        # it across their whole menu. Items without that marker are therefore
+        # definitively incompatible — item_verdict returns NO, not MAYBE.
+        inferred_legend: set[str] = set(preamble_legend_ids)
+        for item in menu["Items"]:
+            for tag_name in item.get("Dietary Tags", []):
+                rid = diet_name_to_id.get(tag_name)
+                if rid:
+                    inferred_legend.add(rid)
+            if item.get("Has Vegetarian Option") and veg_id:
+                inferred_legend.add(veg_id)
+        if inferred_legend:
+            legend_names = sorted(diet_id_to_name.get(rid, rid) for rid in inferred_legend)
+            log.info(f"  {caterer_name}: legend covers {legend_names}")
+        caterer_update["legend_tag_ids"] = sorted(inferred_legend)
         caterer_updates.append(caterer_update)
 
         for item in menu["Items"]:
@@ -235,7 +255,6 @@ Raw Menu Text:
     created = db.MenuItems.create(base_records)
 
     # Pass 2 — create a vegetarian variant for each VO-flagged item.
-    veg_id = diet_name_to_id.get("Vegetarian")
     variant_records: list[MenuItemFields] = []
     for created_rec, (_, has_vo, base_tag_ids) in zip(created, pending_items):
         if not has_vo:
