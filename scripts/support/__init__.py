@@ -37,7 +37,7 @@ from .inbound import (
     SupabaseInboundInbox,
     extract_request_code,
 )
-from .support import VERBOSE, ask_llm, log
+from .support import VERBOSE, ask_llm, ask_llm_with_tools, log
 from .error_handler import UnhandledEdgeCaseError, self_healing_error_handler
 from .email import (
     Alert,
@@ -106,6 +106,7 @@ __all__ = [
     "Meta",
     "Text",
     "ask_llm",
+    "ask_llm_with_tools",
     "compose_email",
     "escalate_to_dev",
     "extract_request_code",

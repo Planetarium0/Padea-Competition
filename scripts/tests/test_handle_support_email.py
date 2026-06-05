@@ -328,12 +328,12 @@ class TestToolExecutor(unittest.TestCase):
         self.assertEqual(len(db.Students.updates), 0)
 
     # 10. send_reply — schedule_email called with correct args
-    @patch("actions.inbox.handle_support_email.schedule_email")
+    @patch("support.email.schedule_email")
     def test_send_reply_calls_schedule_email(self, mock_schedule):
         db = _db_with_parent()
         executor = _make_executor(db)
 
-        result = executor("send_reply", {"body_text": "Hello parent!"})
+        result = executor("send_reply", {"body": "Hello parent!"})
 
         self.assertEqual(result, "Reply sent.")
         mock_schedule.assert_called_once()
@@ -348,17 +348,22 @@ class TestToolExecutor(unittest.TestCase):
 class TestFullToolLoopResolved(unittest.TestCase):
 
     @patch("support.email._send_via_sendgrid")
-    @patch("actions.inbox.handle_support_email.ask_llm")
-    def test_restriction_added_reply_sent_case_resolved(self, mock_ask, mock_send):
+    @patch("actions.inbox.handle_support_email.ask_llm_with_tools")
+    def test_restriction_added_reply_sent_case_resolved(self, mock_tools, mock_send):
         db = _db_with_parent()
         case = _make_case()
         db.SupportCases._records = [case]
         msg = _make_inbound()
 
-        mock_ask.return_value = json.dumps({
-            "actions": [{"type": "update_dietary", "student_id": STUDENT_ID, "restriction_names": ["Vegetarian"]}],
-            "reply": "I've set Vegetarian for Alex Smith.",
-        })
+        def side_effect(prompt, system, executor, tools, **kw):
+            executor("update_dietary_restrictions", {
+                "student_id": STUDENT_ID,
+                "restriction_names": ["Vegetarian"],
+            })
+            executor("send_reply", {"body": "I've set Vegetarian for Alex Smith."})
+            return True
+
+        mock_tools.side_effect = side_effect
 
         hse.run_tool_loop(db, case, msg, PARENT_EMAIL, [_make_student()])
 
@@ -379,17 +384,18 @@ class TestFullToolLoopResolved(unittest.TestCase):
 class TestFullToolLoopReplyOnly(unittest.TestCase):
 
     @patch("support.email._send_via_sendgrid")
-    @patch("actions.inbox.handle_support_email.ask_llm")
-    def test_reply_only_case_resolved(self, mock_ask, mock_send):
+    @patch("actions.inbox.handle_support_email.ask_llm_with_tools")
+    def test_reply_only_case_resolved(self, mock_tools, mock_send):
         db = _db_with_parent()
         case = _make_case()
         db.SupportCases._records = [case]
         msg = _make_inbound(body_text="I just had a question, thanks!")
 
-        mock_ask.return_value = json.dumps({
-            "actions": [],
-            "reply": "Thanks for your message!",
-        })
+        def side_effect(prompt, system, executor, tools, **kw):
+            executor("send_reply", {"body": "Thanks for your message!"})
+            return True
+
+        mock_tools.side_effect = side_effect
 
         hse.run_tool_loop(db, case, msg, PARENT_EMAIL, [_make_student()])
 
@@ -404,7 +410,7 @@ class TestFullToolLoopReplyOnly(unittest.TestCase):
 
 class TestNoApiKey(unittest.TestCase):
 
-    @patch("actions.inbox.handle_support_email.ask_llm", return_value=None)
+    @patch("actions.inbox.handle_support_email.ask_llm_with_tools", return_value=None)
     def test_ask_llm_none_notifies_coordinator(self, mock_ask):
         db = _db_with_parent()
         case = _make_case()
@@ -571,7 +577,7 @@ class TestUpdateContact(unittest.TestCase):
 
 class TestRequestChange(unittest.TestCase):
 
-    @patch("actions.inbox.handle_support_email._send_via_sendgrid")
+    @patch("support.email._send_via_sendgrid")
     def test_request_change_creates_pending_row(self, mock_send):
         db = _db_with_parent()
         case = _make_case()
@@ -597,7 +603,7 @@ class TestRequestChange(unittest.TestCase):
         self.assertEqual(pending_fields["status"], "Pending")
         self.assertEqual(pending_fields["parent_email"], PARENT_EMAIL)
 
-    @patch("actions.inbox.handle_support_email._send_via_sendgrid")
+    @patch("support.email._send_via_sendgrid")
     def test_request_change_sets_notification_message_id(self, mock_send):
         db = _db_with_parent()
         case = _make_case()
@@ -623,7 +629,7 @@ class TestRequestChange(unittest.TestCase):
         self.assertIsNotNone(msg_id_update)
         self.assertIn("@padea.support", msg_id_update[1]["notification_message_id"])
 
-    @patch("actions.inbox.handle_support_email._send_via_sendgrid")
+    @patch("support.email._send_via_sendgrid")
     def test_request_change_sends_coordinator_email(self, mock_send):
         db = _db_with_parent()
         case = _make_case()
@@ -645,7 +651,7 @@ class TestRequestChange(unittest.TestCase):
         self.assertEqual(call_kwargs["to"], [COORDINATOR_EMAIL])
         self.assertIn("year_level", call_kwargs["subject"])
 
-    @patch("actions.inbox.handle_support_email._send_via_sendgrid")
+    @patch("support.email._send_via_sendgrid")
     def test_request_change_invalid_field(self, mock_send):
         db = _db_with_parent()
         executor = _make_executor(db)
@@ -660,7 +666,7 @@ class TestRequestChange(unittest.TestCase):
         self.assertIn("Error", result)
         self.assertEqual(len(db.PendingChanges.created_fields), 0)
 
-    @patch("actions.inbox.handle_support_email._send_via_sendgrid")
+    @patch("support.email._send_via_sendgrid")
     def test_request_change_wrong_student(self, mock_send):
         db = _db_with_parent()
         other_student = _make_student(student_id=STUDENT_B_ID, parent_email="other@example.com")
@@ -677,7 +683,7 @@ class TestRequestChange(unittest.TestCase):
         self.assertIn("Error", result)
         self.assertEqual(len(db.PendingChanges.created_fields), 0)
 
-    @patch("actions.inbox.handle_support_email._send_via_sendgrid")
+    @patch("support.email._send_via_sendgrid")
     def test_request_change_dry_run(self, mock_send):
         db = _db_with_parent()
         students = [_make_student()]
@@ -879,7 +885,7 @@ class TestApprovalFlow(unittest.TestCase):
 
 class TestEscalation(unittest.TestCase):
 
-    @patch("actions.inbox.handle_support_email._send_via_sendgrid")
+    @patch("support.email._send_via_sendgrid")
     def test_escalate_sends_coordinator_email(self, mock_send):
         db = _db_with_parent()
         msg = _make_inbound(body_text="I need to speak with someone urgently.")
@@ -898,7 +904,7 @@ class TestEscalation(unittest.TestCase):
         self.assertEqual(call_kwargs["to"], [COORDINATOR_EMAIL])
         self.assertIn("escalation", call_kwargs["subject"].lower())
 
-    @patch("actions.inbox.handle_support_email._send_via_sendgrid")
+    @patch("support.email._send_via_sendgrid")
     def test_escalate_dry_run_no_email(self, mock_send):
         db = _db_with_parent()
         msg = _make_inbound()
@@ -914,18 +920,20 @@ class TestEscalation(unittest.TestCase):
         self.assertIn("dry-run", result)
         mock_send.assert_not_called()
 
-    @patch("actions.inbox.handle_support_email.ask_llm")
-    @patch("actions.inbox.handle_support_email._send_via_sendgrid")
-    def test_full_loop_escalate(self, mock_send, mock_ask):
+    @patch("actions.inbox.handle_support_email.ask_llm_with_tools")
+    @patch("support.email._send_via_sendgrid")
+    def test_full_loop_escalate(self, mock_send, mock_tools):
         db = _db_with_parent()
         case = _make_case()
         db.SupportCases._records = [case]
         msg = _make_inbound(body_text="I want to speak to a coordinator NOW.")
 
-        mock_ask.return_value = json.dumps({
-            "actions": [{"type": "escalate", "message": "Parent is very upset."}],
-            "reply": "I've escalated your request to the coordinator.",
-        })
+        def side_effect(prompt, system, executor, tools, **kw):
+            executor("escalate_to_coordinator", {"message": "Parent is very upset."})
+            executor("send_reply", {"body": "I've escalated your request."})
+            return True
+
+        mock_tools.side_effect = side_effect
 
         with patch.dict(os.environ, {"COORDINATOR_EMAIL": COORDINATOR_EMAIL}, clear=False):
             hse.run_tool_loop(db, case, msg, PARENT_EMAIL, [_make_student()])

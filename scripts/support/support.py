@@ -186,11 +186,152 @@ def ask_llm(prompt: str) -> str | None:
             return None
 
 
+def ask_llm_with_tools(
+    prompt: str,
+    system: str,
+    executor: Any,          # callable (tool_name, tool_input) -> str
+    tools: list[dict],
+    *,
+    parent_email: str | None = None,
+    case_id: str | None = None,
+) -> bool | None:
+    """Run a multi-turn LLM conversation with tool calling.
+
+    Uses the Anthropic SDK when an API key is present (SDK path), or falls back
+    to the Claude CLI with an MCP server (CLI path) when no key is found.
+
+    Returns ``True`` on success, ``None`` on total failure.
+    Logs every call to cache/llm_logs/llm_calls.jsonl (source "api-tools" / "cli-mcp").
+    """
+    import json as _json
+    import subprocess
+
+    key = os.environ.get("CLAUDE_CODE_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
+
+    # ------------------------------------------------------------------
+    # SDK path — multi-turn tool loop
+    # ------------------------------------------------------------------
+    if key:
+        try:
+            from anthropic import Anthropic
+
+            client = Anthropic(api_key=key)
+            messages: list[dict] = [{"role": "user", "content": prompt}]
+
+            while True:
+                response = client.messages.create(
+                    model="claude-sonnet-4-6",
+                    max_tokens=4000,
+                    system=system,
+                    messages=messages,
+                    tools=tools,
+                )
+                messages.append({"role": "assistant", "content": response.content})
+
+                tool_results = []
+                for block in response.content:
+                    if block.type == "tool_use":
+                        result = executor(block.name, block.input)
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": block.id,
+                            "content": result,
+                        })
+
+                if not tool_results:
+                    break  # no more tool calls, done
+
+                messages.append({"role": "user", "content": tool_results})
+
+            _log_llm_call(prompt, "(tools)", None, source="api-tools")
+            return True
+
+        except Exception as e:
+            log.error(f"Error calling Anthropic API (with tools): {e}")
+            _log_llm_call(prompt, None, None, source="api-tools-error")
+            return None
+
+    # ------------------------------------------------------------------
+    # CLI path — Claude CLI with MCP server
+    # ------------------------------------------------------------------
+    log.warning("No Claude or Anthropic API key found. Falling back to Claude CLI (MCP).")
+
+    import os as _os
+    import tempfile
+
+    mcp_server = Path(__file__).resolve().parent / "mcp_server.py"
+    python = Path(__file__).resolve().parents[2] / ".venv" / "bin" / "python"
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as log_f:
+        log_path = log_f.name
+
+    config = {
+        "mcpServers": {
+            "padea-support": {
+                "command": str(python),
+                "args": [
+                    str(mcp_server),
+                    "--parent-email", parent_email or "",
+                    "--case-id", case_id or "",
+                    "--log-file", log_path,
+                ],
+            }
+        }
+    }
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as cfg_f:
+        _json.dump(config, cfg_f)
+        cfg_path = cfg_f.name
+
+    try:
+        result = subprocess.run(
+            ["claude", "-p", f"{system}\n\n{prompt}", "--mcp-config", cfg_path],
+            capture_output=True, text=True, timeout=180,
+        )
+        if result.returncode != 0:
+            log.error(
+                f"Claude CLI (MCP) returned {result.returncode}: {result.stderr[:200]}"
+            )
+            _log_llm_call(prompt, None, None, source="cli-mcp-error")
+            return None
+
+        # Read back the tool log and replay send_reply to update executor state
+        try:
+            with open(log_path) as f:
+                log_data = _json.load(f)
+            for entry in log_data.get("tool_calls", []):
+                if entry["tool"] == "send_reply":
+                    executor.reply_sent[0] = True
+        except Exception:
+            pass
+
+        _log_llm_call(prompt, "(cli-mcp)", None, source="cli-mcp")
+        return True
+
+    except FileNotFoundError:
+        log.error("Claude CLI not found. Install it or set ANTHROPIC_API_KEY.")
+        _log_llm_call(prompt, None, None, source="cli-mcp-missing")
+        return None
+    except Exception as e:
+        log.failure(f"Error calling Claude CLI (MCP): {e}")
+        _log_llm_call(prompt, None, None, source="cli-mcp-error")
+        return None
+    finally:
+        try:
+            _os.unlink(cfg_path)
+        except FileNotFoundError:
+            pass
+        try:
+            _os.unlink(log_path)
+        except FileNotFoundError:
+            pass
+
+
 __all__ = [
     "Database",
     "Record",
     "Table",
     "ask_llm",
+    "ask_llm_with_tools",
     "log",
     "VERBOSE",
 ]
