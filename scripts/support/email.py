@@ -239,6 +239,7 @@ def _send_via_sendgrid(
     reply_to: str | None = None,
     is_html: bool = True,
     in_reply_to_header: str | None = None,
+    message_id_header: str | None = None,
 ) -> None:
     """Dispatch an email via SendGrid. Raises RuntimeError if the API key is missing."""
     api_key = os.environ.get("SENDGRID_API_KEY")
@@ -259,8 +260,13 @@ def _send_via_sendgrid(
     if reply_to:
         payload["reply_to"] = {"email": reply_to}
 
+    headers: dict[str, str] = {}
     if in_reply_to_header:
-        payload["headers"] = {"In-Reply-To": in_reply_to_header}
+        headers["In-Reply-To"] = in_reply_to_header
+    if message_id_header:
+        headers["Message-ID"] = message_id_header
+    if headers:
+        payload["headers"] = headers
 
     if os.environ.get("PADEA_TEST_MODE") == "1":
         raise RuntimeError(

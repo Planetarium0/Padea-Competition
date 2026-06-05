@@ -12,7 +12,7 @@ For every table we expose:
 
 from __future__ import annotations
 
-from typing import Literal, TypedDict
+from typing import Any, Literal, TypedDict
 
 
 # ---------------------------------------------------------------------------
@@ -342,6 +342,22 @@ SupportCaseFields = TypedDict(
 )
 
 
+class PendingChangeFields(TypedDict, total=False):
+    id: str
+    requested_at: str
+    parent_email: str
+    student_id: str
+    field_name: str
+    current_value: Any
+    new_value: Any
+    reason: str
+    status: str  # 'Pending' | 'Approved' | 'Denied'
+    notification_message_id: str
+    resolved_at: str
+    coordinator_message: str
+    support_case_id: str
+
+
 __all__ = [
     "Region",
     "DayName",
@@ -370,4 +386,5 @@ __all__ = [
     "SupportCaseStatus",
     "SupportInboundMessageFields",
     "SupportCaseFields",
+    "PendingChangeFields",
 ]

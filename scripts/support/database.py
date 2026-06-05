@@ -43,6 +43,7 @@ from .records import (
     MenuItemFields,
     OnSiteManagerFields,
     OrderFields,
+    PendingChangeFields,
     SchoolFields,
     ScheduledEmailFields,
     SessionFields,
@@ -454,6 +455,10 @@ class Database:
     @property
     def SupportCases(self) -> Table[SupportCaseFields]:
         return self._table("support_cases")
+
+    @property
+    def PendingChanges(self) -> Table[PendingChangeFields]:
+        return self._table("pending_changes")
 
 
 # ---------------------------------------------------------------------------

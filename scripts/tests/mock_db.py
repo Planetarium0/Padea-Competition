@@ -125,3 +125,4 @@ class MockDatabase:
         self.DietaryInboundMessages:        MockTable = MockTable()
         self.SupportInboundMessages:        MockTable = MockTable()
         self.SupportCases:                  MockTable = MockTable()
+        self.PendingChanges:                MockTable = MockTable()

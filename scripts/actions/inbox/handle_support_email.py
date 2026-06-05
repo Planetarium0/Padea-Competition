@@ -3,11 +3,12 @@ handle_support_email.py — Process one inbound support email with AI tool use.
 
 For a given support_inbound_messages row:
   1. Identify the parent by from_address → students with matching parent_email.
-  2. If unrecognised sender or coordinator email: notify coordinator and return.
-  3. Find or create a support case (thread by In-Reply-To).
-  4. Run an LLM tool-use loop that can list students, list dietary restrictions,
-     add a restriction to a student, and send a reply.
-  5. Update the support case with the conversation and new status.
+  2. If coordinator email: check for approval/denial reply first, then guard against loops.
+  3. If unrecognised sender: notify coordinator and return.
+  4. Find or create a support case (thread by In-Reply-To).
+  5. Run an LLM action loop that can update dietary restrictions, update contact
+     details, request coordinator approval for structural changes, and escalate.
+  6. Update the support case with the conversation and new status.
 
 Usage:
   python scripts/actions/inbox/handle_support_email.py --message-id <id> [--dry-run]
@@ -26,6 +27,7 @@ from typing import Any
 
 from support import (
     Database,
+    PendingChangeFields,
     Record,
     SupportCaseFields,
     ask_llm,
@@ -34,6 +36,7 @@ from support import (
     schedule_email,
     self_healing_error_handler,
 )
+from support.email import _send_via_sendgrid, _support_from
 from support.inbound import InboundMessage
 
 
@@ -41,26 +44,42 @@ from support.inbound import InboundMessage
 # System prompt
 # ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT = """You are the Padea dietary support assistant. You help parents update
-their children's dietary requirements in the Padea meal ordering system.
+SYSTEM_PROMPT = """You are the Padea parent support assistant. You help parents manage
+their children's details in the Padea meal ordering system.
 
 Padea is an after-school tutoring program that provides catered dinners. Parents
-sometimes email in to update their child's dietary needs.
+sometimes email in to update their child's details.
 
 Your job is to:
-1. Understand what the parent is asking (usually: add or confirm a dietary restriction
-   for one of their children).
-2. Match the parent's plain-language description (e.g. "nut allergy", "vegetarian",
-   "gluten free") to the closest restriction in the list provided.
-3. Decide what changes to make and draft a polite reply.
+1. Understand what the parent is asking.
+2. Choose the correct action(s) from the list below.
+3. Draft a polite, helpful reply.
+
+Available actions:
+
+- **update_dietary**: Set a student's dietary restrictions by name.
+  Use when a parent wants to add, remove, or change dietary restrictions.
+  You set the FULL list — e.g. if they want to add Vegetarian, include all
+  their existing restrictions plus Vegetarian.
+
+- **update_contact**: Update parent contact details (parent_email, parent_mobile,
+  or parent_name). Applied to all of the parent's students automatically.
+
+- **request_change**: Request coordinator approval for a structural change to a
+  student record (name, year_level, subjects, or student email). The coordinator
+  will review and approve or deny.
+
+- **escalate**: Forward a message to the coordinator when the parent wants to
+  speak with someone directly or the request cannot be handled automatically.
 
 Guidelines:
 - Be friendly, concise, and professional.
-- Only add restrictions for students in the provided list.
-- If the request is ambiguous or no restriction matches, explain clearly in your reply
-  and ask them to contact the coordinator directly.
+- Only act on students in the provided list.
+- If the request is ambiguous or no restriction matches, explain clearly in your
+  reply and ask them to contact the coordinator directly.
 - Always include a reply — never leave the parent without a response.
-- Do not modify restrictions for students not in the provided list.
+- Do not modify details for students not in the provided list.
+- Use restriction names only (not IDs) when specifying dietary restrictions.
 """
 
 
@@ -148,6 +167,7 @@ def _make_tool_executor(
     sender_email: str,
     students: list[Record],
     case: Record[SupportCaseFields],
+    inbound_msg: InboundMessage | None = None,
     *,
     dry_run: bool = False,
 ) -> Any:
@@ -155,25 +175,205 @@ def _make_tool_executor(
     reply_count = [0]  # mutable so closure can increment
 
     def execute(tool_name: str, tool_input: dict[str, Any]) -> str:
-        if tool_name == "list_students":
-            result = []
+
+        # ------------------------------------------------------------------
+        # update_dietary: set a student's dietary restrictions by name
+        # ------------------------------------------------------------------
+        if tool_name == "update_dietary":
+            student_id = tool_input.get("student_id", "")
+            restriction_names: list[str] = tool_input.get("restriction_names") or []
+
+            # Validate student ownership
+            student = db.Students.get(student_id)
+            if student is None:
+                return f"Error: student {student_id!r} not found."
+            if student.fields.get("parent_email") != sender_email:
+                return (
+                    f"Error: student {student_id!r} does not belong to {sender_email!r}. "
+                    f"No change made."
+                )
+
+            # Resolve names → IDs (case-insensitive)
+            all_restrictions = db.DietaryRestrictions.all()
+            name_to_id: dict[str, str] = {
+                r.fields.get("name", "").lower(): r.id
+                for r in all_restrictions
+            }
+            resolved_ids: list[str] = []
+            unrecognised: list[str] = []
+            for name in restriction_names:
+                rid = name_to_id.get(name.lower())
+                if rid:
+                    resolved_ids.append(rid)
+                else:
+                    unrecognised.append(name)
+
+            if unrecognised:
+                return f"Error: unrecognised restriction name(s): {unrecognised!r}. No change made."
+
+            student_name = student.fields.get("name", student_id)
+            if not dry_run:
+                db.Students.update(student_id, {"dietary_requirement_ids": resolved_ids})
+
+            dry_suffix = " (dry-run: not written)" if dry_run else ""
+            names_str = ", ".join(restriction_names) if restriction_names else "(none)"
+            return f"Set dietary restrictions for {student_name} to: {names_str}.{dry_suffix}"
+
+        # ------------------------------------------------------------------
+        # update_contact: update parent_email, parent_mobile, or parent_name
+        # ------------------------------------------------------------------
+        elif tool_name == "update_contact":
+            field = tool_input.get("field", "")
+            new_value = tool_input.get("new_value")
+            allowed_fields = {"parent_email", "parent_mobile", "parent_name"}
+            if field not in allowed_fields:
+                return (
+                    f"Error: field {field!r} is not a directly-editable contact field. "
+                    f"Allowed: {sorted(allowed_fields)!r}."
+                )
+
+            # Apply to ALL of sender's students
+            updated_names: list[str] = []
             for stu in students:
-                result.append({
-                    "id": stu.id,
-                    "name": stu.fields.get("name", "Unknown"),
-                    "year_level": stu.fields.get("year_level"),
-                    "dietary_requirement_ids": stu.fields.get("dietary_requirement_ids") or [],
-                })
-            return str(result)
+                student_name = stu.fields.get("name", stu.id)
+                if not dry_run:
+                    db.Students.update(stu.id, {field: new_value})
+                updated_names.append(student_name)
 
-        elif tool_name == "list_dietary_restrictions":
-            restrictions = db.DietaryRestrictions.all()
-            result = [
-                {"id": r.id, "name": r.fields.get("name", r.id)}
-                for r in restrictions
-            ]
-            return str(result)
+            dry_suffix = " (dry-run: not written)" if dry_run else ""
+            return (
+                f"Updated {field!r} to {new_value!r} for: "
+                f"{', '.join(updated_names)}.{dry_suffix}"
+            )
 
+        # ------------------------------------------------------------------
+        # request_change: submit structural change for coordinator approval
+        # ------------------------------------------------------------------
+        elif tool_name == "request_change":
+            student_id = tool_input.get("student_id", "")
+            field = tool_input.get("field", "")
+            new_value = tool_input.get("new_value")
+            reason = tool_input.get("reason", "")
+
+            allowed_fields = {"name", "year_level", "subjects", "email"}
+            if field not in allowed_fields:
+                return (
+                    f"Error: field {field!r} cannot be changed via request_change. "
+                    f"Allowed: {sorted(allowed_fields)!r}."
+                )
+
+            # Validate student ownership
+            student = db.Students.get(student_id)
+            if student is None:
+                return f"Error: student {student_id!r} not found."
+            if student.fields.get("parent_email") != sender_email:
+                return (
+                    f"Error: student {student_id!r} does not belong to {sender_email!r}. "
+                    f"No change made."
+                )
+
+            student_name = student.fields.get("name", student_id)
+            current_value = student.fields.get(field)
+
+            if dry_run:
+                return (
+                    f"(dry-run) Would create pending change request: "
+                    f"{student_name}'s {field!r} → {new_value!r}."
+                )
+
+            # Create the pending_changes row
+            pending_fields: dict[str, Any] = {
+                "parent_email": sender_email,
+                "student_id": student_id,
+                "field_name": field,
+                "current_value": current_value,
+                "new_value": new_value,
+                "reason": reason,
+                "status": "Pending",
+                "support_case_id": case.id if case.id != "dry-run-case" else None,
+            }
+            created = db.PendingChanges.create([pending_fields])
+            pending = created[0]
+
+            # Generate a stable Message-ID and persist it
+            message_id = f"<pending-{pending.id}@padea.support>"
+            db.PendingChanges.update(pending.id, {"notification_message_id": message_id})
+
+            # Email coordinator
+            coordinator_email = (
+                os.environ.get("COORDINATOR_EMAIL")
+                or os.environ.get("DEV_NOTIFICATION_EMAIL", "")
+            )
+            if coordinator_email:
+                subject = f"[Padea] Change request: {student_name}'s {field}"
+                body = (
+                    f"A parent has requested a change to a student record.\n\n"
+                    f"Parent: {sender_email}\n"
+                    f"Student: {student_name} (id: {student_id})\n"
+                    f"Field: {field}\n"
+                    f"Current value: {current_value!r}\n"
+                    f"Requested value: {new_value!r}\n"
+                    + (f"Reason: {reason}\n" if reason else "")
+                    + f"\nReply APPROVE or DENY (optionally followed by a message to the parent)."
+                )
+                try:
+                    _send_via_sendgrid(
+                        to=[coordinator_email],
+                        subject=subject,
+                        body=body,
+                        from_email=_support_from(),
+                        is_html=False,
+                        message_id_header=message_id,
+                    )
+                except Exception as exc:
+                    log.error(f"Failed to send coordinator notification for pending change: {exc}")
+
+            return (
+                f"Change request submitted for {student_name}'s {field!r}. "
+                f"The coordinator will review and contact you with the outcome."
+            )
+
+        # ------------------------------------------------------------------
+        # escalate: forward message to coordinator
+        # ------------------------------------------------------------------
+        elif tool_name == "escalate":
+            message = tool_input.get("message", "")
+
+            coordinator_email = (
+                os.environ.get("COORDINATOR_EMAIL")
+                or os.environ.get("DEV_NOTIFICATION_EMAIL", "")
+            )
+
+            if coordinator_email and not dry_run:
+                prior_messages: list[dict[str, Any]] = case.fields.get("messages") or []
+                thread_text = ""
+                if inbound_msg is not None:
+                    thread_text = _build_thread_text(prior_messages, inbound_msg)
+
+                subject = f"[Padea] Parent escalation — {sender_email}"
+                body = (
+                    f"A parent has requested to speak with someone directly.\n\n"
+                    f"Parent: {sender_email}\n"
+                    f"Message: {message}\n\n"
+                    + (f"Email thread:\n\n{thread_text}" if thread_text else "")
+                )
+                try:
+                    _send_via_sendgrid(
+                        to=[coordinator_email],
+                        subject=subject,
+                        body=body,
+                        from_email=_support_from(),
+                        is_html=False,
+                    )
+                except Exception as exc:
+                    log.error(f"Failed to send coordinator escalation email: {exc}")
+
+            dry_suffix = " (dry-run: not sent)" if dry_run else ""
+            return f"Escalated to coordinator.{dry_suffix}"
+
+        # ------------------------------------------------------------------
+        # add_dietary_restriction: legacy handler (kept for test compatibility)
+        # ------------------------------------------------------------------
         elif tool_name == "add_dietary_restriction":
             student_id = tool_input.get("student_id", "")
             restriction_id = tool_input.get("restriction_id", "")
@@ -211,6 +411,9 @@ def _make_tool_executor(
             dry_suffix = " (dry-run: not written)" if dry_run else ""
             return f"Added '{restriction_name}' to {student_name}.{dry_suffix}"
 
+        # ------------------------------------------------------------------
+        # send_reply: send a reply email to the parent
+        # ------------------------------------------------------------------
         elif tool_name == "send_reply":
             body_text = tool_input.get("body_text", "")
             reply_count[0] += 1
@@ -221,7 +424,7 @@ def _make_tool_executor(
                     db,
                     to_email=sender_email,
                     cc_email=None,
-                    subject="Re: Padea dietary support",
+                    subject="Re: Padea support",
                     body=body_text,
                     email_id=email_id,
                     from_email=f"support@{os.environ.get('APP_DOMAIN', 'padea.com.au')}",
@@ -249,21 +452,27 @@ def _build_llm_prompt(
     student_lines = "\n".join(
         f"  id={s.id!r}  name={s.fields.get('name')!r}  "
         f"year_level={s.fields.get('year_level')}  "
-        f"current_restriction_ids={s.fields.get('dietary_requirement_ids') or []}"
+        f"current_restrictions={[r.fields.get('name', r.id) for r in restrictions if r.id in (s.fields.get('dietary_requirement_ids') or [])]!r}"
         for s in students
     )
     restriction_lines = "\n".join(
-        f"  id={r.id!r}  name={r.fields.get('name', r.id)!r}"
+        f"  name={r.fields.get('name', r.id)!r}"
         for r in restrictions
     )
     return (
         f"{SYSTEM_PROMPT}\n\n"
         f"## Parent's children\n{student_lines}\n\n"
-        f"## Available dietary restrictions\n{restriction_lines}\n\n"
+        f"## Available dietary restrictions (names only)\n{restriction_lines}\n\n"
         f"## Email thread\n{thread_text}\n\n"
+        "## Action types\n"
+        "- update_dietary: {type, student_id, restriction_names: [list of names]}\n"
+        "- update_contact: {type, field, new_value}  "
+        "(field must be parent_email | parent_mobile | parent_name)\n"
+        "- request_change: {type, student_id, field, new_value, reason}  "
+        "(field must be name | year_level | subjects | email)\n"
+        "- escalate: {type, message}\n\n"
         'Respond with ONLY a JSON object — no markdown fences, no other text:\n'
-        '{"actions": [{"type": "add_restriction", "student_id": "...", "restriction_id": "..."}], '
-        '"reply": "..."}\n'
+        '{"actions": [...], "reply": "..."}\n'
         'The "actions" list may be empty. The "reply" must always be present.'
     )
 
@@ -320,11 +529,48 @@ def run_tool_loop(
         return
 
     result = _parse_llm_response(response_text)
-    executor = _make_tool_executor(db, sender_email, students, case, dry_run=False)
+    executor = _make_tool_executor(
+        db, sender_email, students, case, inbound_msg, dry_run=False
+    )
 
     tool_call_log: list[dict[str, Any]] = []
+
     for action in result.get("actions") or []:
-        if action.get("type") == "add_restriction":
+        action_type = action.get("type", "")
+
+        if action_type == "update_dietary":
+            tool_input = {
+                "student_id": action.get("student_id", ""),
+                "restriction_names": action.get("restriction_names") or [],
+            }
+            result_str = executor("update_dietary", tool_input)
+            tool_call_log.append({"tool": "update_dietary", "input": tool_input, "result": result_str})
+
+        elif action_type == "update_contact":
+            tool_input = {
+                "field": action.get("field", ""),
+                "new_value": action.get("new_value"),
+            }
+            result_str = executor("update_contact", tool_input)
+            tool_call_log.append({"tool": "update_contact", "input": tool_input, "result": result_str})
+
+        elif action_type == "request_change":
+            tool_input = {
+                "student_id": action.get("student_id", ""),
+                "field": action.get("field", ""),
+                "new_value": action.get("new_value"),
+                "reason": action.get("reason", ""),
+            }
+            result_str = executor("request_change", tool_input)
+            tool_call_log.append({"tool": "request_change", "input": tool_input, "result": result_str})
+
+        elif action_type == "escalate":
+            tool_input = {"message": action.get("message", "")}
+            result_str = executor("escalate", tool_input)
+            tool_call_log.append({"tool": "escalate", "input": tool_input, "result": result_str})
+
+        elif action_type == "add_restriction":
+            # Legacy action type (still handled for backward compat)
             tool_input = {
                 "student_id": action.get("student_id", ""),
                 "restriction_id": action.get("restriction_id", ""),
@@ -357,6 +603,138 @@ def run_tool_loop(
     log.info(
         f"Support case {case_code}: "
         f"reply_sent={reply_sent}, status={update_fields.get('status', 'Open')}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Coordinator approval/denial processing
+# ---------------------------------------------------------------------------
+
+def _try_process_approval(
+    db: Database,
+    inbound_msg: InboundMessage,
+    *,
+    dry_run: bool = False,
+) -> bool:
+    """Attempt to process a coordinator approval/denial reply.
+
+    Returns True if the message was handled as an approval/denial, False otherwise.
+    """
+    if inbound_msg.in_reply_to is None:
+        return False
+
+    # Find a Pending change whose notification_message_id matches in_reply_to
+    all_pending = db.PendingChanges.all()
+    pending: Record[PendingChangeFields] | None = None
+    for p in all_pending:
+        if (
+            p.fields.get("status") == "Pending"
+            and p.fields.get("notification_message_id") == inbound_msg.in_reply_to
+        ):
+            pending = p  # type: ignore[assignment]
+            break
+
+    if pending is None:
+        return False
+
+    # Parse the first word of the body
+    body = (inbound_msg.body_text or "").strip()
+    if not body:
+        return False
+
+    first_line = body.splitlines()[0]
+    parts = first_line.split(None, 1)
+    decision = parts[0].upper()
+
+    if decision not in ("APPROVE", "DENY"):
+        return False
+
+    coordinator_message = parts[1].strip() if len(parts) > 1 else ""
+
+    parent_email: str = pending.fields.get("parent_email", "")
+    student_id: str = pending.fields.get("student_id", "")
+    field_name: str = pending.fields.get("field_name", "")
+    new_value = pending.fields.get("new_value")
+
+    if decision == "APPROVE":
+        if not dry_run:
+            # Apply the change to the student
+            if student_id and field_name:
+                db.Students.update(student_id, {field_name: new_value})
+
+            # Update pending_change status
+            db.PendingChanges.update(
+                pending.id,
+                {
+                    "status": "Approved",
+                    "resolved_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    "coordinator_message": coordinator_message,
+                },
+            )
+
+        # Email the parent
+        reply_body = (
+            f"Good news! Your requested change to {field_name!r} has been approved.\n\n"
+            + (f"Message from the coordinator: {coordinator_message}\n\n" if coordinator_message else "")
+            + "If you have any further questions, please reply to this email."
+        )
+        if not dry_run:
+            _send_approved_denial_email(
+                db, parent_email, field_name, "approved", reply_body
+            )
+
+        log.info(
+            f"Pending change {pending.id} APPROVED by coordinator. "
+            f"Applied {field_name!r}={new_value!r} to student {student_id!r}."
+        )
+
+    else:  # DENY
+        if not dry_run:
+            db.PendingChanges.update(
+                pending.id,
+                {
+                    "status": "Denied",
+                    "resolved_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    "coordinator_message": coordinator_message,
+                },
+            )
+
+        reply_body = (
+            f"Your requested change to {field_name!r} has been reviewed and not approved "
+            f"at this time.\n\n"
+            + (f"Message from the coordinator: {coordinator_message}\n\n" if coordinator_message else "")
+            + "If you have any further questions, please reply to this email."
+        )
+        if not dry_run:
+            _send_approved_denial_email(
+                db, parent_email, field_name, "denied", reply_body
+            )
+
+        log.info(
+            f"Pending change {pending.id} DENIED by coordinator. "
+            f"Parent {parent_email!r} notified."
+        )
+
+    return True
+
+
+def _send_approved_denial_email(
+    db: Database,
+    parent_email: str,
+    field_name: str,
+    outcome: str,
+    body: str,
+) -> None:
+    """Send an outcome email to the parent via schedule_email."""
+    email_id = f"pending-change-{outcome}-{uuid.uuid4().hex[:8]}"
+    schedule_email(
+        db,
+        to_email=parent_email,
+        cc_email=None,
+        subject=f"Re: Your Padea change request ({field_name})",
+        body=body,
+        email_id=email_id,
+        from_email=f"support@{os.environ.get('APP_DOMAIN', 'padea.com.au')}",
     )
 
 
@@ -396,8 +774,11 @@ def handle_message(
 
     coordinator_email = os.environ.get("COORDINATOR_EMAIL", "")
 
-    # 1. Check if this is the coordinator emailing their own support inbox
+    # 1. Check if this is the coordinator — may be an approval/denial reply
     if coordinator_email and sender_email.lower() == coordinator_email.lower():
+        if _try_process_approval(db, inbound_msg, dry_run=dry_run):
+            return
+        # Not an approval — guard against loops
         log.warning(
             f"Support email from coordinator address {sender_email!r} — "
             f"routing to notify_coordinator to avoid loops"
@@ -468,6 +849,7 @@ if __name__ == "__main__":
                 "support_inbound_messages": db.SupportInboundMessages.all(),
                 "support_cases": db.SupportCases.all(),
                 "students": db.Students.all(),
+                "pending_changes": db.PendingChanges.all(),
             }
         except Exception as e:
             return {"error_loading_db_state": str(e)}
