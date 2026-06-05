@@ -56,6 +56,7 @@ from .email import (
     html_email,
     notify_coordinator,
     schedule_email,
+    support_help_email,
 )
 
 __all__ = [
@@ -116,6 +117,7 @@ __all__ = [
     "log",
     "resolve_manager_id",
     "schedule_email",
+    "support_help_email",
     "UnhandledEdgeCaseError",
     "self_healing_error_handler",
 ]

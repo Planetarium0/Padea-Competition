@@ -37,6 +37,7 @@ from support import (
     compose_email,
     log,
     schedule_email,
+    support_help_email,
 )
 
 
@@ -242,6 +243,7 @@ def send_links(
                 subject=subject,
                 body=body,
                 email_id=email_id,
+                reply_to=support_help_email(),
             )
             log.info(f"Queued → {to_email} ({student_name}, {len(links)} session(s))")
 

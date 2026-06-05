@@ -33,6 +33,9 @@ class TestSubtractMinutes(unittest.TestCase):
     def test_24h_format(self):
         self.assertEqual(subtract_minutes("18:30", 10), "6:20 PM")
 
+    def test_24h_with_seconds_supabase_format(self):
+        self.assertEqual(subtract_minutes("18:30:00", 10), "6:20 PM")
+
     def test_compact_12h_format(self):
         self.assertEqual(subtract_minutes("6:30PM", 10), "6:20 PM")
 

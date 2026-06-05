@@ -104,6 +104,21 @@ TOOL_SCHEMAS: list[dict] = [
         },
     },
     {
+        "name": "create_dietary_restriction",
+        "description": (
+            "Create a new dietary restriction that does not yet exist in the system. "
+            "Use only when list_dietary_restrictions confirms the restriction is absent. "
+            "After creating it, assign it to the student using update_dietary_restrictions."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+            },
+            "required": ["name"],
+        },
+    },
+    {
         "name": "send_reply",
         "description": (
             "Send a reply email to the parent. Always call this last to close the conversation."
@@ -414,6 +429,35 @@ def make_tool_executor(
 
             reply_sent[0] = True
             return "Reply sent."
+
+        # ------------------------------------------------------------------
+        # create_dietary_restriction: create a new restriction in the system
+        # ------------------------------------------------------------------
+        elif tool_name == "create_dietary_restriction":
+            name = tool_input.get("name", "").strip()
+            if not name:
+                return "Error: name must not be empty."
+
+            all_restrictions = db.DietaryRestrictions.all()
+            existing = next(
+                (r for r in all_restrictions if r.fields.get("name", "").lower() == name.lower()),
+                None,
+            )
+            if existing:
+                return (
+                    f"Restriction {existing.fields.get('name', name)!r} already exists — "
+                    f"use update_dietary_restrictions to assign it."
+                )
+
+            if not dry_run:
+                db.DietaryRestrictions.create([{"name": name}])
+
+            dry_suffix = " (dry-run: not written)" if dry_run else ""
+            return (
+                f"Created new dietary restriction {name!r}.{dry_suffix} "
+                f"Note: existing meals will not reflect this restriction until caterers "
+                f"have confirmed they can accommodate it."
+            )
 
         # ------------------------------------------------------------------
         # Legacy tool handlers — kept for backward compatibility with tests 6-9

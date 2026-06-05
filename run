@@ -27,10 +27,11 @@ Usage:
   $0 forms send {parents|students} [--dry-run] [--first] [--limit N]
   $0 caterer evaluate [--dry-run] [--limit N]
   $0 caterer switch <proposal_id> [--approve] [--dry-run]
-  $0 dietary clarify <school> [--caterer ID] [--restriction NAME] [--dry-run]
+  $0 dietary clarify <caterer> [--restriction NAME] [--dry-run]
   $0 dietary escalate [--dry-run]
   $0 dietary poll [--dry-run]
   $0 support poll [--dry-run]
+  $0 procedure {start-of-term|weekly|daily} [--dry-run]
   $0 logs [index]
   $0 test [name]
   $0 script [name]
@@ -40,6 +41,11 @@ migrate resources:
   diet, schools, caterers, contacts, menus, sessions, students, absences, exclusions, all
 
 If no resource is supplied to migrate, all migrations run in dependency order.
+
+procedure shortcuts:
+  start-of-term  forms send parents --first, then forms qr send
+  weekly         orders (generate + send), then caterer evaluate
+  daily          support poll, dietary poll, dietary escalate
 
 --limit N caps the number of emails the script will queue (testing aid).
 EOF
@@ -275,6 +281,42 @@ case "$COMMAND" in
     fix)
         shift
         $PYTHON scripts/tools/run_claude_agent.py "$@"
+        ;;
+
+    procedure)
+        SUBCOMMAND="${2:-}"
+        PASS_FLAGS=("${@:3}")
+
+        run_step() {
+            echo "==> $*"
+            "$0" "$@"
+            local rc=$?
+            if (( rc != 0 )); then
+                echo "[ERROR] Step '$*' failed (exit $rc). Aborting procedure."
+                exit $rc
+            fi
+        }
+
+        case "$SUBCOMMAND" in
+            start-of-term)
+                run_step forms send parents --first "${PASS_FLAGS[@]}"
+                run_step forms qr send "${PASS_FLAGS[@]}"
+                ;;
+            weekly)
+                run_step orders "${PASS_FLAGS[@]}"
+                run_step caterer evaluate "${PASS_FLAGS[@]}"
+                ;;
+            daily)
+                run_step support poll "${PASS_FLAGS[@]}"
+                run_step dietary poll "${PASS_FLAGS[@]}"
+                run_step dietary escalate "${PASS_FLAGS[@]}"
+                ;;
+            *)
+                echo "[ERROR] Unknown procedure: ${SUBCOMMAND:-<none>}"
+                echo "Use: procedure {start-of-term|weekly|daily} [--dry-run]"
+                exit 1
+                ;;
+        esac
         ;;
 
     *)

@@ -73,12 +73,12 @@ class LineItem:
 def subtract_minutes(time_str: str | None, minutes: int = 10) -> str:
     """Parse a time string, subtract minutes, return a formatted string.
 
-    Handles common formats like '6:30 PM', '18:30', '6:30pm'.
+    Handles common formats like '6:30 PM', '18:30', '18:30:00', '6:30pm'.
     Returns the original string unchanged if parsing fails.
     """
     if not time_str or time_str == "?":
         return time_str or "?"
-    for fmt in ("%I:%M %p", "%H:%M", "%I:%M%p"):
+    for fmt in ("%I:%M %p", "%H:%M:%S", "%H:%M", "%I:%M%p"):
         try:
             t = datetime.strptime(time_str.strip().upper(), fmt.upper())
             t -= timedelta(minutes=minutes)

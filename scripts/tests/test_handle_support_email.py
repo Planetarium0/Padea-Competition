@@ -938,5 +938,87 @@ class TestEscalation(unittest.TestCase):
         self.assertTrue(mock_send.called)
 
 
+# ---------------------------------------------------------------------------
+# 21-24. create_dietary_restriction
+# ---------------------------------------------------------------------------
+
+class TestCreateDietaryRestriction(unittest.TestCase):
+
+    # 21. create_dietary_restriction — new restriction is written to DB
+    def test_create_new_restriction(self):
+        db = _db_with_parent()
+        executor = _make_executor(db)
+
+        result = executor("create_dietary_restriction", {"name": "Halal"})
+
+        self.assertNotIn("Error", result)
+        self.assertIn("Halal", result)
+        self.assertEqual(len(db.DietaryRestrictions.created_fields), 1)
+        self.assertEqual(db.DietaryRestrictions.created_fields[0]["name"], "Halal")
+
+    # 22. create_dietary_restriction — already exists (case-insensitive) → no duplicate
+    def test_create_restriction_already_exists(self):
+        db = _db_with_parent()
+        executor = _make_executor(db)
+
+        # "Vegetarian" is already seeded in _db_with_parent
+        result = executor("create_dietary_restriction", {"name": "vegetarian"})
+
+        self.assertIn("already exists", result)
+        self.assertEqual(len(db.DietaryRestrictions.created_fields), 0)
+
+    # 23. create_dietary_restriction — dry run does not write
+    def test_create_restriction_dry_run(self):
+        db = _db_with_parent()
+        students = [_make_student()]
+        case = _make_case()
+        executor = hse._make_tool_executor(
+            db, PARENT_EMAIL, students, case, inbound_msg=None, dry_run=True
+        )
+
+        result = executor("create_dietary_restriction", {"name": "Keto"})
+
+        self.assertIn("dry-run", result)
+        self.assertEqual(len(db.DietaryRestrictions.created_fields), 0)
+
+    # 24. Full tool loop — new restriction created, assigned, and case resolved
+    @patch("support.email._send_via_sendgrid")
+    @patch("actions.inbox.handle_support_email.ask_llm")
+    def test_full_loop_create_and_assign_restriction(self, mock_ask, mock_send):
+        db = _db_with_parent()
+        case = _make_case()
+        db.SupportCases._records = [case]
+        msg = _make_inbound(body_text="My child needs a Halal meal please.")
+
+        mock_ask.return_value = json.dumps({
+            "actions": [
+                {"type": "create_dietary_restriction", "name": "Halal"},
+                {"type": "update_dietary", "student_id": STUDENT_ID, "restriction_names": ["Halal"]},
+            ],
+            "reply": (
+                "I've added Halal as a dietary requirement for Alex. "
+                "Please note that meals won't reflect this until caterers have "
+                "confirmed they can accommodate it."
+            ),
+        })
+
+        hse.run_tool_loop(db, case, msg, PARENT_EMAIL, [_make_student()])
+
+        # New restriction row created
+        self.assertEqual(len(db.DietaryRestrictions.created_fields), 1)
+        self.assertEqual(db.DietaryRestrictions.created_fields[0]["name"], "Halal")
+
+        # Student's dietary_requirement_ids updated
+        self.assertTrue(
+            any("dietary_requirement_ids" in u[1] for u in db.Students.updates),
+            f"Expected student dietary update, got={db.Students.updates}",
+        )
+
+        # Case resolved
+        self.assertTrue(
+            any("status" in u[1] and u[1]["status"] == "Resolved" for u in db.SupportCases.updates)
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

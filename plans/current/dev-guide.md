@@ -128,6 +128,9 @@ publishable anon key (today: everything; eventually: gated by RLS).
 ./run dietary escalate            # mark overdue Open/Clarifying requests Escalated + notify coordinator
 ./run dietary poll [--dry-run]    # drain dietary_inbound_messages, parse replies, run escalation
 ./run support poll [--dry-run]    # drain support_inbound_messages, run AI handler for parent emails
+./run procedure start-of-term [--dry-run]  # forms send parents --first, then forms qr send
+./run procedure weekly [--dry-run]         # orders (generate + send), then caterer evaluate
+./run procedure daily [--dry-run]          # support poll, dietary poll, dietary escalate
 ./run test [name]                 # full suite or a single test_*.py module
 ./run script <domain>/<name>      # ad-hoc: scripts/actions/<domain>/<name>.py
 ```

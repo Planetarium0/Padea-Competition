@@ -65,6 +65,12 @@ Available actions:
   You set the FULL list — if they want to add Vegetarian, include all existing
   restrictions plus Vegetarian.
 
+- **create_dietary_restriction**: Create a new dietary restriction that is not yet
+  in the system. Use this when a parent mentions a restriction that does not appear
+  in the available list. After creating it, assign it with update_dietary.
+  Always inform the parent that their meals will not have updated dietary requirements
+  until the caterers have got back to us with more information.
+
 - **update_contact**: Update parent contact details (parent_email, parent_mobile,
   or parent_name). Applied to all of the parent's students automatically.
 
@@ -77,8 +83,8 @@ Available actions:
 Guidelines:
 - Be friendly, concise, and professional.
 - Only act on students in the provided list.
-- If the request is ambiguous or no restriction matches, explain clearly and ask
-  them to contact the coordinator directly.
+- If the request is ambiguous, explain clearly and ask them to contact the
+  coordinator directly.
 - Always include a reply — never leave the parent without a response.
 - Use restriction names only (not IDs) when specifying dietary restrictions.
 """
@@ -185,6 +191,8 @@ def _build_llm_prompt(
         f"## Email thread\n{thread_text}\n\n"
         "## Action types\n"
         "- update_dietary: {type, student_id, restriction_names: [list of names]}\n"
+        "- create_dietary_restriction: {type, name}  "
+        "(use when restriction does not exist; then assign it with update_dietary)\n"
         "- update_contact: {type, field, new_value}  "
         "(field must be parent_email | parent_mobile | parent_name)\n"
         "- request_change: {type, student_id, field, new_value, reason}  "
@@ -271,6 +279,8 @@ def run_tool_loop(
                 "new_value": action.get("new_value"),
                 "reason": action.get("reason", ""),
             }
+        elif action_type == "create_dietary_restriction":
+            tool_input = {"name": action.get("name", "")}
         elif action_type == "escalate":
             tool_input = {"message": action.get("message", "")}
         elif action_type == "add_restriction":
