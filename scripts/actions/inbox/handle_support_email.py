@@ -22,7 +22,10 @@ import email.utils
 import json
 import os
 import re
+import shutil
+import subprocess
 import uuid
+from pathlib import Path
 from typing import Any
 
 from support import (
@@ -66,10 +69,14 @@ Available actions:
   restrictions plus Vegetarian.
 
 - **create_dietary_restriction**: Create a new dietary restriction that is not yet
-  in the system. Use this when a parent mentions a restriction that does not appear
-  in the available list. After creating it, assign it with update_dietary.
-  Always inform the parent that their meals will not have updated dietary requirements
-  until the caterers have got back to us with more information.
+  in the system. Use this when a parent needs a restriction that does not appear
+  in the available list, and it is also reasonable to create that new dietary restriction
+  (i.e., if a parent mentions "Allergic to Almonds", and "Nut Free" is already
+  a dietary restriction, prefer using that to creating a new one).
+  After creating it, assign it with update_dietary.
+  Always inform the parent that their the updated dietary requirements will take time
+  before they show up on the meals, since we have to wait for the caterers to get back
+  to us with the information.
 
 - **update_contact**: Update parent contact details (parent_email, parent_mobile,
   or parent_name). Applied to all of the parent's students automatically.
@@ -87,6 +94,11 @@ Guidelines:
   coordinator directly.
 - Always include a reply — never leave the parent without a response.
 - Use restriction names only (not IDs) when specifying dietary restrictions.
+- Don't promise things you aren't able to do.
+- Currently there is no mechanism for follow up emails, so don't say things
+  like "We'll be in touch once that's sorted". However, saying things like:
+  "feel free to reach out" are okay because if they email us first, then
+  we can respond.
 """
 
 
@@ -200,7 +212,8 @@ def _build_llm_prompt(
         "- escalate: {type, message}\n\n"
         'Respond with ONLY a JSON object — no markdown fences, no other text:\n'
         '{"actions": [...], "reply": "..."}\n'
-        'The "actions" list may be empty. The "reply" must always be present.'
+        'The "actions" list may be empty. The "reply" must always be present.\n'
+        'Use \\n within the "reply" string to add line breaks — they are rendered as <br> in the email.'
     )
 
 
@@ -456,6 +469,166 @@ def _send_approved_denial_email(
 
 
 # ---------------------------------------------------------------------------
+# Plan approval / rejection processing
+# ---------------------------------------------------------------------------
+
+def _spawn_implementation(plan_id: str) -> None:
+    """Spawn implement_plan.py as a fully detached background process."""
+    project_root = Path(__file__).resolve().parents[3]
+    script = project_root / "scripts" / "actions" / "system" / "implement_plan.py"
+    python = project_root / ".venv" / "bin" / "python"
+    if not python.exists():
+        found = shutil.which("python3")
+        python = Path(found) if found else Path("python3")
+
+    env = os.environ.copy()
+    scripts_dir = str(project_root / "scripts")
+    root_dir = str(project_root)
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = ":".join(
+        [scripts_dir, root_dir] + ([existing] if existing else [])
+    )
+
+    subprocess.Popen(
+        [str(python), str(script), "--plan-id", plan_id],
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env=env,
+    )
+    log.info(f"[PLAN] Implementation spawned for plan {plan_id!r}")
+
+
+def _try_process_plan_approval(
+    inbound_msg: InboundMessage,
+    *,
+    dry_run: bool = False,
+) -> bool:
+    """Attempt to process a coordinator approval or rejection of an implementation plan.
+
+    Returns True if the message was consumed as a plan verdict, False otherwise.
+    """
+    if inbound_msg.in_reply_to is None:
+        return False
+
+    from actions.system.register_edge_case import find_plan_by_message_id, update_plan
+
+    plan = find_plan_by_message_id(inbound_msg.in_reply_to)
+    if plan is None:
+        return False
+
+    if plan.get("status") != "pending":
+        log.warning(
+            f"[PLAN] Reply matches plan {plan['id']!r} "
+            f"but status is already {plan.get('status')!r} — ignoring"
+        )
+        return True
+
+    body = (inbound_msg.body_text or "").strip()
+    if not body:
+        return False
+
+    first_line = body.splitlines()[0].strip()
+    match = re.match(r"^(APPROVE|REJECT)(?:[:\s]+(.*))?$", first_line, re.IGNORECASE)
+    if not match:
+        return False
+
+    keyword = match.group(1).upper()
+    comments = (match.group(2) or "").strip()
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+    if keyword == "APPROVE":
+        if not dry_run:
+            update_plan(
+                plan["id"],
+                {
+                    "status": "approved",
+                    "approved_at": now,
+                    "approval_comments": comments or None,
+                },
+            )
+            _spawn_implementation(plan["id"])
+        log.info(
+            f"[PLAN] Coordinator approved plan {plan['id']!r}. Comments: {comments!r}"
+        )
+    else:
+        if not dry_run:
+            update_plan(
+                plan["id"],
+                {
+                    "status": "rejected",
+                    "approved_at": now,
+                    "rejection_reason": comments or "No reason given",
+                },
+            )
+        log.info(
+            f"[PLAN] Coordinator rejected plan {plan['id']!r}. Reason: {comments!r}"
+        )
+
+    return True
+
+
+# ---------------------------------------------------------------------------
+# System requirement classification for unrecognised senders
+# ---------------------------------------------------------------------------
+
+def _classify_system_requirement(
+    inbound_msg: InboundMessage,
+) -> tuple[bool, str]:
+    """Use the LLM to check whether an email from an unknown sender describes a
+    system-level requirement (needing a code change) rather than a personal
+    support request.
+
+    Returns (is_requirement, one_sentence_summary).
+    """
+    body = (inbound_msg.body_text or "").strip()
+    subject = inbound_msg.subject or ""
+
+    if not body:
+        return False, ""
+
+    prompt = (
+        "You are an assistant for Padea, an after-school tutoring program that organises "
+        "catered dinners at partner high schools.\n\n"
+        "An email has arrived from an unrecognised sender. Determine whether it describes "
+        "a SYSTEM REQUIREMENT — a change to how the software or operations should work — "
+        "or a PERSONAL SUPPORT REQUEST for a specific person.\n\n"
+        "Examples of system requirements:\n"
+        "- A caterer says their Tuesday menu differs from their Wednesday menu\n"
+        "- A caterer changes their minimum order quantity\n"
+        "- A school changes its delivery address\n"
+        "- A policy change affects how orders are generated\n\n"
+        "Examples of personal support requests:\n"
+        "- A parent asks to update their child's dietary restrictions\n"
+        "- Someone has a billing question\n"
+        "- A specific order was incorrect\n\n"
+        f"Subject: {subject}\n"
+        f"Body:\n{body[:1200]}\n\n"
+        "Respond with ONLY a JSON object (no markdown fences):\n"
+        '{"is_system_requirement": true or false, '
+        '"summary": "One sentence describing the requirement, if applicable, otherwise empty string"}'
+    )
+
+    response = ask_llm(prompt)
+    if response is None:
+        return False, ""
+
+    cleaned = re.sub(r"```(?:json)?\n?", "", response).strip()
+    try:
+        data = json.loads(cleaned)
+        return bool(data.get("is_system_requirement")), data.get("summary", "")
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*\}", cleaned, re.DOTALL)
+        if m:
+            try:
+                data = json.loads(m.group(0))
+                return bool(data.get("is_system_requirement")), data.get("summary", "")
+            except json.JSONDecodeError:
+                pass
+    return False, ""
+
+
+# ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
 
@@ -495,6 +668,8 @@ def handle_message(
     if coordinator_email and sender_email.lower() == coordinator_email.lower():
         if _try_process_approval(db, inbound_msg, dry_run=dry_run):
             return
+        if _try_process_plan_approval(inbound_msg, dry_run=dry_run):
+            return
         # Not an approval — guard against loops
         log.warning(
             f"Support email from coordinator address {sender_email!r} — "
@@ -514,6 +689,16 @@ def handle_message(
     ]
 
     if not students:
+        # Check if this is a system requirement from an external contact (e.g. caterer).
+        is_req, summary = _classify_system_requirement(inbound_msg)
+        if is_req and summary and not dry_run:
+            from actions.system.register_edge_case import register_edge_case
+            register_edge_case(summary, source="email")
+            log.info(
+                f"[PLAN] Auto-registered system requirement from {sender_email!r}: {summary!r}"
+            )
+            return
+
         log.warning(f"Unrecognised sender {sender_email!r} — notifying coordinator")
         notify_coordinator(
             f"unknown-parent-{inbound_msg.message_id or uuid.uuid4().hex[:8]}",

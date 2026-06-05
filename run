@@ -36,6 +36,8 @@ Usage:
   $0 logs [index]
   $0 test [name]
   $0 script [name]
+  $0 edge-case "<description>" [--source manual|email|failure] [--dry-run]
+  $0 edge-case --from-failure [--dry-run]
   $0 fix [--latest-error|--run-and-heal CMD|...]
 
 migrate resources:
@@ -271,7 +273,7 @@ case "$COMMAND" in
                 ;;
             *)
                 echo "[ERROR] Unknown emails subcommand: ${SUBCOMMAND:-<none>}"
-                echo "Use: emails retry [--dry-run]"
+                echo "Use: emails retry [--dry-run] [--limit N]"
                 exit 1
                 ;;
         esac
@@ -293,6 +295,21 @@ case "$COMMAND" in
 
     logs)
         $PYTHON scripts/tools/view_llm_logs.py "${@:2}"
+        ;;
+
+    edge-case)
+        if [[ "${2:-}" == "--from-failure" ]]; then
+            echo "Registering latest failure as an edge case..."
+            $PYTHON scripts/actions/system/register_edge_case.py --from-failure "${@:3}"
+        else
+            DESCRIPTION="${2:-}"
+            if [[ -z "$DESCRIPTION" ]]; then
+                echo "[ERROR] Usage: $0 edge-case \"<description>\" | $0 edge-case --from-failure"
+                exit 1
+            fi
+            echo "Registering edge case..."
+            $PYTHON scripts/actions/system/register_edge_case.py --description "$DESCRIPTION" "${@:3}"
+        fi
         ;;
 
     fix)
@@ -329,8 +346,10 @@ case "$COMMAND" in
                 run_step dietary escalate "${PASS_FLAGS[@]}"
                 run_step dietary clarify "${PASS_FLAGS[@]}"
                 run_step emails retry "${PASS_FLAGS[@]}"
-                # Attempt self-healing on any captured failure from this run.
-                "$0" fix --latest-error || true
+                # Attempt self-healing; if the agent can't fix it, escalate as an edge case.
+                if ! "$0" fix --latest-error; then
+                    "$0" edge-case --from-failure --source failure || true
+                fi
                 ;;
             *)
                 echo "[ERROR] Unknown procedure: ${SUBCOMMAND:-<none>}"
