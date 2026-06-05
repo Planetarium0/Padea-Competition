@@ -1,20 +1,23 @@
 """
-clarify_dietary.py — Ask a caterer to confirm dietary information for MAYBE items.
+clarify_dietary.py — Ask caterers to confirm dietary information for MAYBE items.
 
-For a given caterer:
+For each caterer (or a single named caterer):
   - Finds all sessions it serves (across all schools).
   - Computes the union of dietary restriction IDs for students in those sessions.
   - Computes (item × restriction) pairs where the existing 3-step ladder
     returns MAYBE (no positive tag, no legend block, no keyword hit).
   - Builds a dietary_clarification_requests row recording the open questions.
   - Sends one email to the caterer listing the items and restrictions to confirm.
+  - Clears the caterer's pending_dietary_clarify flag if set.
 
 After the sweep, runs the escalation check so any prior-term requests that
 have crossed the 7-day mark are also picked up in the same command.
 
 Usage:
-  python scripts/actions/dietary/clarify_dietary.py <caterer_name_or_id>
+  python scripts/actions/dietary/clarify_dietary.py [<caterer_name_or_id>]
             [--restriction <name>] [--dry-run]
+
+  Omit <caterer_name_or_id> to sweep all caterers.
 """
 
 from __future__ import annotations
@@ -304,6 +307,39 @@ def run_sweep(
 
 
 # ---------------------------------------------------------------------------
+# All-caterers sweep
+# ---------------------------------------------------------------------------
+
+def run_all_sweeps(db: Database, *, dry_run: bool = False) -> int:
+    """Run the clarification sweep for every caterer.
+
+    Caterers with ``pending_dietary_clarify = true`` are swept first (those
+    were flagged by a recent coordinator-approved switch).  The flag is
+    cleared after each such caterer's sweep, whether or not a new request
+    was created (an existing Open request already covers them).
+
+    Returns the total number of new requests created (or that would be
+    created in dry-run mode).
+    """
+    data = ClarifyData.load(db)
+    total = 0
+
+    flagged = [c for c in data.caterers if c.fields.get("pending_dietary_clarify")]
+    unflagged = [c for c in data.caterers if not c.fields.get("pending_dietary_clarify")]
+
+    for caterer in flagged + unflagged:
+        cid   = caterer.id
+        cname = caterer.fields.get("name", cid)
+        total += run_sweep(db, caterer_id=cid, caterer_name=cname, dry_run=dry_run)
+        if caterer.fields.get("pending_dietary_clarify") and not dry_run:
+            db.Caterers.update(cid, {"pending_dietary_clarify": False})
+            log.info(f"  Cleared pending_dietary_clarify flag for {cname!r}")
+
+    log.info(f"All-caterer sweep complete: {total} new request(s).")
+    return total
+
+
+# ---------------------------------------------------------------------------
 # Caterer resolution helper
 # ---------------------------------------------------------------------------
 
@@ -342,17 +378,20 @@ if __name__ == "__main__":
     from support import self_healing_error_handler
 
     parser = argparse.ArgumentParser(
-        description="Ask a caterer to confirm dietary information for MAYBE items",
+        description="Ask caterer(s) to confirm dietary information for MAYBE items",
     )
     parser.add_argument(
         "caterer",
-        help="Caterer name (e.g. 'Café Deluxe') or record UUID",
+        nargs="?",
+        default=None,
+        help="Caterer name (e.g. 'Café Deluxe') or record UUID. "
+             "Omit to sweep all caterers.",
     )
     parser.add_argument(
         "--restriction",
         dest="restriction_name",
         default=None,
-        help="Limit sweep to one restriction (e.g. 'Vegan')",
+        help="Limit sweep to one restriction (e.g. 'Vegan'). Single-caterer mode only.",
     )
     parser.add_argument(
         "--dry-run",
@@ -377,16 +416,19 @@ if __name__ == "__main__":
 
     with self_healing_error_handler("clarify_dietary", state_provider=db_state_provider):
         db = Database.from_env()
-        caterers = db.Caterers.all()
-        caterer_id, caterer_name = resolve_caterer(args.caterer, caterers)
 
-        run_sweep(
-            db,
-            caterer_id=caterer_id,
-            caterer_name=caterer_name,
-            restriction_name_filter=args.restriction_name,
-            dry_run=args.dry_run,
-        )
+        if args.caterer is None:
+            run_all_sweeps(db, dry_run=args.dry_run)
+        else:
+            caterers = db.Caterers.all()
+            caterer_id, caterer_name = resolve_caterer(args.caterer, caterers)
+            run_sweep(
+                db,
+                caterer_id=caterer_id,
+                caterer_name=caterer_name,
+                restriction_name_filter=args.restriction_name,
+                dry_run=args.dry_run,
+            )
 
         # Run escalation sweep so prior-term open requests that have crossed
         # the 7-day mark are also picked up in the same command.

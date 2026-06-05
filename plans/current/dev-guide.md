@@ -123,14 +123,15 @@ publishable anon key (today: everything; eventually: gated by RLS).
 ./run caterer switch <id>         # execute an Approved switch
 ./run forms qr [send]             # generate or email per-session QR codes
 ./run forms send {parents|students}  # email preference links direct to people
-./run dietary clarify <caterer>    # ask caterer for MAYBE item confirmation; also runs escalation
+./run dietary clarify              # sweep all caterers for MAYBE items; also runs escalation
+./run dietary clarify <caterer>    # same sweep, one named caterer only
 ./run dietary clarify <caterer> --restriction <name>  # single restriction only
 ./run dietary escalate            # mark overdue Open/Clarifying requests Escalated + notify coordinator
 ./run dietary poll [--dry-run]    # drain dietary_inbound_messages, parse replies, run escalation
 ./run support poll [--dry-run]    # drain support_inbound_messages, run AI handler for parent emails
 ./run procedure start-of-term [--dry-run]  # forms send parents --first, then forms qr send
 ./run procedure weekly [--dry-run]         # orders (generate + send), then caterer evaluate
-./run procedure daily [--dry-run]          # support poll, dietary poll, dietary escalate
+./run procedure daily [--dry-run]          # support poll, dietary poll, dietary escalate, dietary clarify
 ./run test [name]                 # full suite or a single test_*.py module
 ./run script <domain>/<name>      # ad-hoc: scripts/actions/<domain>/<name>.py
 ```

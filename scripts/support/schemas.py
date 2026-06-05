@@ -55,6 +55,7 @@ class Caterer(_Base):
     delivery_fee: Optional[float] = None
     delivery_fee_structure: Optional[DeliveryFeeStructure] = None
     notes: Optional[str] = None
+    pending_dietary_clarify: Optional[bool] = None
     # View-aggregated
     legend_tag_ids: List[str] = Field(default_factory=list)
     able_to_serve_school_ids: List[str] = Field(default_factory=list)

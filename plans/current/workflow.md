@@ -98,19 +98,33 @@ Coordinator decides →  Approve  →  /api equivalent / supabase call →
                        Reject   →  proposal.status = Rejected
 ```
 
-## Dietary clarification loop (coordinator-initiated, term-start)
+## Dietary clarification loop
 
 ```
-Coordinator runs     →  ./run dietary clarify <school>
-  (after parent forms     Per caterer serving the school:
-  are in and student        walk (menu items × student restriction union)
-  restrictions are          through the 3-step ladder
-  entered)                  Collect every MAYBE triple
-                            Build dietary_clarification_requests row
-                            Send one email per caterer listing open items
-                            Print: caterer name, open-question count,
-                                   7-day clock expiry
-                          Also runs escalation sweep for prior-term requests
+Daily (./run procedure daily)
+  →  ./run dietary clarify   (no arg = all caterers)
+       Per caterer:
+         walk (menu items × student restriction union)
+         through the 3-step ladder
+         Collect every MAYBE triple
+         If no Open/Escalated request exists for caterer:
+           Build dietary_clarification_requests row
+           Send one email listing open items
+         If caterer.pending_dietary_clarify is true:
+           Clear the flag (even if no new request was needed)
+       Also runs escalation sweep for prior-term requests
+
+  Switch-triggered clarify:
+       When the coordinator approves a caterer switch in the webapp,
+       approve_caterer_switch sets pending_dietary_clarify = true on the
+       incoming caterer.  The flag is consumed at the next daily run,
+       ensuring the newly-assigned caterer is swept promptly.
+
+Coordinator-targeted run:
+  →  ./run dietary clarify <caterer>
+       Same sweep, restricted to one named caterer.
+       Useful at term-start after parent forms are in and student
+       restrictions are entered.
 
 7 days later        →  ./run dietary escalate  (or auto-triggered at end of clarify)
   (or any time after)     Walk Open requests where sent_at + 7d < now()

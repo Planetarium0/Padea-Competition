@@ -77,6 +77,7 @@ CatererFields = TypedDict(
         "delivery_fee": float,
         "delivery_fee_structure": DeliveryFeeStructure,
         "notes": str,
+        "pending_dietary_clarify": bool,
         # Aggregated by caterers_view
         "legend_tag_ids": list[str],
         "able_to_serve_school_ids": list[str],

@@ -27,11 +27,11 @@ Usage:
   $0 forms send {parents|students} [--dry-run] [--first] [--limit N]
   $0 caterer evaluate [--dry-run] [--limit N]
   $0 caterer switch <proposal_id> [--approve] [--dry-run]
-  $0 dietary clarify <caterer> [--restriction NAME] [--dry-run]
+  $0 dietary clarify [<caterer>] [--restriction NAME] [--dry-run]
   $0 dietary escalate [--dry-run]
   $0 dietary poll [--dry-run]
   $0 support poll [--dry-run]
-  $0 procedure {start-of-term|weekly|daily} [--dry-run]
+  $0 procedure {start-of-term|weekly|polling} [--dry-run]
   $0 logs [index]
   $0 test [name]
   $0 script [name]
@@ -45,7 +45,7 @@ If no resource is supplied to migrate, all migrations run in dependency order.
 procedure shortcuts:
   start-of-term  forms send parents --first, then forms qr send
   weekly         orders (generate + send), then caterer evaluate
-  daily          support poll, dietary poll, dietary escalate
+  polling          support poll, dietary poll, dietary escalate, dietary clarify
 
 --limit N caps the number of emails the script will queue (testing aid).
 EOF
@@ -222,12 +222,13 @@ case "$COMMAND" in
         case "$SUBCOMMAND" in
             clarify)
                 CATERER="${3:-}"
-                if [[ -z "$CATERER" ]]; then
-                    echo "[ERROR] Usage: $0 dietary clarify <caterer_name_or_id> [--restriction NAME] [--dry-run]"
-                    exit 1
+                if [[ -z "$CATERER" || "$CATERER" == --* ]]; then
+                    echo "Running dietary clarification sweep for all caterers..."
+                    $PYTHON scripts/actions/dietary/clarify_dietary.py "${@:3}"
+                else
+                    echo "Running dietary clarification sweep for '$CATERER'..."
+                    $PYTHON scripts/actions/dietary/clarify_dietary.py "$CATERER" "${@:4}"
                 fi
-                echo "Running dietary clarification sweep for '$CATERER'..."
-                $PYTHON scripts/actions/dietary/clarify_dietary.py "$CATERER" "${@:4}"
                 ;;
             escalate)
                 echo "Running dietary escalation check..."
@@ -306,14 +307,15 @@ case "$COMMAND" in
                 run_step orders "${PASS_FLAGS[@]}"
                 run_step caterer evaluate "${PASS_FLAGS[@]}"
                 ;;
-            daily)
+            polling)
                 run_step support poll "${PASS_FLAGS[@]}"
                 run_step dietary poll "${PASS_FLAGS[@]}"
                 run_step dietary escalate "${PASS_FLAGS[@]}"
+                run_step dietary clarify "${PASS_FLAGS[@]}"
                 ;;
             *)
                 echo "[ERROR] Unknown procedure: ${SUBCOMMAND:-<none>}"
-                echo "Use: procedure {start-of-term|weekly|daily} [--dry-run]"
+                echo "Use: procedure {start-of-term|weekly|polling} [--dry-run]"
                 exit 1
                 ;;
         esac
