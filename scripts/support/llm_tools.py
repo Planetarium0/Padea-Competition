@@ -366,9 +366,9 @@ def make_tool_executor(
                 if inbound_msg is not None:
                     thread_text = _build_thread_text_local(prior_messages, inbound_msg)
 
-                subject = f"[Padea] Parent escalation — {sender_email}"
+                subject = f"[Padea] Escalation — {sender_email}"
                 body = (
-                    f"A parent has requested to speak with someone directly.\n\n"
+                    f"An email has been flagged for escalation.\n\n"
                     f"Parent: {sender_email}\n"
                     f"Message: {message}\n\n"
                     + (f"Email thread:\n\n{thread_text}" if thread_text else "")
@@ -397,14 +397,17 @@ def make_tool_executor(
 
             html_body = _email_mod.compose_email([_email_mod.Text(body)])
             if not dry_run:
+                orig_subject = (inbound_msg.subject or "Padea support") if inbound_msg else "Padea support"
+                reply_subject = orig_subject if orig_subject.lower().startswith("re:") else f"Re: {orig_subject}"
                 _email_mod.schedule_email(
                     db,
                     to_email=sender_email,
                     cc_email=None,
-                    subject="Re: Padea support",
+                    subject=reply_subject,
                     body=html_body,
                     email_id=email_id,
                     from_email=f"support@{os.environ.get('APP_DOMAIN', 'padea.com.au')}",
+                    in_reply_to_header=inbound_msg.message_id if inbound_msg else None,
                 )
             else:
                 log.info(f"[DRY RUN] Would send reply to {sender_email}: {body[:80]}...")
