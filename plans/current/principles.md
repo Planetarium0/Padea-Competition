@@ -99,6 +99,15 @@ minimal human intervention.
   in pure-memory — i.e. it depends on something the test harness cannot
   see. If any of those still has an open path, keep patching.
 
+- **Promote un-patchable failures to implementation plans.** When the
+  polling procedure's self-healing pass (`./run fix --latest-error`)
+  cannot resolve a failure, it automatically runs
+  `./run edge-case --from-failure --source failure`. This drafts a
+  human-readable plan via LLM and emails the coordinator for
+  APPROVE / REJECT. On approval the plan is implemented by a sandboxed
+  Claude Code agent and committed. See *Implementation manager* in
+  `workflow.md` for the full flow.
+
 ## 3. One dispatcher, one entrypoint per goal
 
 - **All operations go through `./run`.** No scripts are run directly in

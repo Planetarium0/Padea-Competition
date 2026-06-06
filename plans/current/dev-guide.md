@@ -49,6 +49,8 @@ code, not before.
 │   │   ├── email.py               schedule_email — audit-log + SendGrid dispatch.
 │   │   ├── inbound.py             InboundMailbox protocol + SupabaseInboundInbox adapter.
 │   │   ├── error_handler.py       self_healing_error_handler context manager.
+│   │   ├── llm_tools.py           Tool schemas + executor factory for the support-email LLM loop.
+│   │   ├── mcp_server.py          Minimal JSON-RPC 2.0 MCP server (stdio) for support tools.
 │   │   └── support.py             log, ask_llm, env bootstrap.
 │   ├── tools/                Dev/ops tools (not imported as library modules).
 │   │   └── run_claude_agent.py    Sandboxed agent harness.
@@ -59,11 +61,14 @@ code, not before.
 │   │   ├── caterers/              evaluate_caterers, execute_caterer_switch, cache_pdf
 │   │   ├── forms/                 generate_qr, send_qr_emails, send_meals_links
 │   │   ├── inbox/                 poll_support_inbox, handle_support_email
+│   │   ├── system/                register_edge_case, implement_plan
 │   │   └── clear_database.py
 │   ├── migrations/           Destructive seed scripts (PDFs/Excel → DB).
 │   └── tests/                Pure-in-memory tests (MockDatabase).
 ├── cache/
 │   ├── failures/             Auto-generated failure snapshots + patch prompts.
+│   ├── plans/                Edge-case plan JSON files (pending/approved/implemented/failed).
+│   ├── resolved/             Moved-here artifacts once a failure is patched by the harness.
 │   ├── *.txt                 PDF text extractions for migrations.
 │   └── dietary_mappings.json LLM-mapped raw dietary strings → standard names.
 ├── graphify-out/             Knowledge graph (use `graphify query …`).
@@ -86,7 +91,7 @@ Decide first what kind of code it is.
 | New table / column / constraint | `supabase/migrations/<timestamp>_<desc>.sql` + Pydantic in `schemas.py` + TypedDict in `records.py` + view if many-to-many |
 | New dietary-restriction logic | `scripts/support/compatibility.py` *and* `webapp/app.js` (mirror) |
 | New webapp page | `webapp/<name>.html` + `<name>.js`; talks to Supabase via `supabase_client.js`. No Python proxy. |
-| New test | Mirror the action: `scripts/tests/test_<verb>.py` (flat, no subdirs). Regression for a captured failure: `test_edge_cases.py`. |
+| New test | Mirror the action: `scripts/tests/test_<verb>.py` (flat, no subdirs). Regression for a captured failure: `test_edge_cases.py`. Pipeline/integration tests for the edge-case system: `test_edge_case_pipeline.py`. |
 | Anything one-off / exploratory | Don't add it under `scripts/`. Run it from a notebook or a REPL. |
 
 If you're tempted to put a helper "temporarily" in an `actions/` file
@@ -135,6 +140,8 @@ publishable anon key (today: everything; eventually: gated by RLS).
 ./run procedure weekly [--dry-run]         # orders (generate + send), then caterer evaluate
 ./run procedure polling [--dry-run]        # support poll, dietary poll, escalate, clarify, emails retry, fix
 ./run fix [--latest-error|--run-and-heal CMD|...]  # self-healing agent harness
+./run edge-case "<description>" [--source manual|email|failure] [--dry-run]  # register a new edge case
+./run edge-case --from-failure [--dry-run]  # register latest captured failure as an edge case
 ./run test [name]                 # full suite or a single test_*.py module
 ./run script <domain>/<name>      # ad-hoc: scripts/actions/<domain>/<name>.py
 ```
@@ -187,7 +194,10 @@ revert-on-unauthorized). Invoke it via `./run fix --latest-error` or
 `./run fix --run-and-heal "<command>"`.
 
 `./run procedure polling` runs the harness automatically after every
-polling cycle — the system is self-healing in normal operation.
+polling cycle. If the harness cannot fix the failure, polling
+automatically falls through to `./run edge-case --from-failure
+--source failure`, which registers the failure as a human-gated
+implementation plan (see *Implementation manager* in `workflow.md`).
 
 ## Keeping graphify and docs in sync
 

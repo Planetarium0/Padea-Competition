@@ -762,9 +762,9 @@
 			"typeName": "binding"
 		},
 		{
-			"x": 912.086104443636,
-			"y": 1190.9494003076325,
-			"z": 0.41636799892769727,
+			"x": 4175.127467028607,
+			"y": 1826.340804524538,
+			"z": 0.15808035735219364,
 			"meta": {},
 			"id": "camera:page:page",
 			"typeName": "camera"
@@ -1367,18 +1367,8 @@
 		{
 			"editingShapeId": null,
 			"croppingShapeId": null,
-			"selectedShapeIds": [
-				"shape:GGew42DA7tgn2iCpsfset",
-				"shape:x_gxlhEIw8f2t0mBm6Z2v",
-				"shape:dz8CwFD1Liv8HKPJoMsXB",
-				"shape:PqDiVIuXQ73ldWV7Ks-dZ",
-				"shape:wcf1UV6DjrzR5kAfUMVhS",
-				"shape:3D9IwUeam7HHw2I7T18TZ",
-				"shape:Hf0ES-bx-sKmz6uhO5AvY",
-				"shape:I6ynyGw2hFL3xAynNyp1O",
-				"shape:9evOnu0tZM3EyqtJsC78T"
-			],
-			"hoveredShapeId": "shape:dz8CwFD1Liv8HKPJoMsXB",
+			"selectedShapeIds": [],
+			"hoveredShapeId": null,
 			"erasingShapeIds": [],
 			"hintingShapeIds": [],
 			"focusedGroupId": null,
@@ -2655,6 +2645,14 @@
 			"typeName": "binding"
 		},
 		{
+			"name": "",
+			"color": "#7B66DC",
+			"imageUrl": "",
+			"meta": {},
+			"id": "user:Gfcewx1MajPCOat09CCb6",
+			"typeName": "user"
+		},
+		{
 			"x": 1728.2343917124253,
 			"y": 377.4781247922374,
 			"rotation": 0,
@@ -3020,8 +3018,8 @@
 			"screenBounds": {
 				"x": 0,
 				"y": 0,
-				"w": 2655,
-				"h": 641.6666259765625
+				"w": 2519.16650390625,
+				"h": 575.8333129882812
 			},
 			"insets": [
 				false,

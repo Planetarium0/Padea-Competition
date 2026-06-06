@@ -162,6 +162,56 @@ Note: MAYBE verdicts remain assignable via explicit student preference throughou
 The clarification loop is a hygiene pass that converts MAYBEs to OK/NO over time;
 it does not gate orders. Autonomous fallback assignment only uses OK items.
 
+## Implementation manager (edge-case pipeline)
+
+When a runtime failure cannot be self-healed automatically, or when any actor
+identifies a missing behaviour, the system registers it as a human-gated
+implementation plan.
+
+```
+Trigger (any of):
+  • ./run edge-case "<description>" [--source manual|email|failure]
+  • ./run edge-case --from-failure              (from latest capture)
+  • Support email classified as a system requirement  (handle_support_email.py)
+  • Polling procedure fallback after ./run fix fails  (automatic)
+
+  →  register_edge_case.py
+       Generates a plan ID (plan_<ts>_<slug>)
+       Calls LLM to draft: title + plan_markdown
+         (reads plans/current/principles.md as context)
+       Saves plan to cache/plans/<plan_id>.json  (status: pending)
+       Emails coordinator with plan for APPROVE / REJECT
+
+Coordinator replies to the email:
+  • APPROVE [: optional comments]
+  • REJECT: reason
+
+  →  handle_support_email.py (_try_process_plan_approval)
+       Matches the reply via In-Reply-To message-id header
+       On APPROVE:
+         Updates plan status → approved, records comments
+         Spawns implement_plan.py as a detached background process
+       On REJECT:
+         Updates plan status → rejected, records reason
+         No further action
+
+  →  implement_plan.py (background)
+       Updates plan status → implementing
+       Builds a rich prompt from description + plan_markdown + comments
+       Runs Claude Code via orchestrate_self_healing() (sandboxed)
+       On success:
+         Updates plan status → implemented
+         Moves harness artifacts to cache/resolved/
+         Emails coordinator: "Implementation Complete"
+       On failure:
+         Updates plan status → failed
+         Emails coordinator: "Implementation Failed" + agent log tail
+```
+
+Plans are filesystem-only: `cache/plans/<plan_id>.json`. They are not
+in Supabase. The coordinator's email reply is the sole approval mechanism.
+Implement always commits — the agent must pass `./run test` before committing.
+
 ## Decision points (where business rules concentrate)
 
 The places an agent is most likely to need to think carefully, with the
