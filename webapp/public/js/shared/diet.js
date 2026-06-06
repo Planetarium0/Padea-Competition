@@ -1,4 +1,5 @@
 // Dietary logic shared across meals.js and manage.js.
+// Hierarchy computation and meal compatibility checking.
 
 export function buildHierarchyMaps(restrictions, negativeKeywords = {}) {
   const idToName = {};
@@ -65,6 +66,7 @@ export function checkCompatibility(item, studentReqIds, maps) {
   const legendTagIdSet = maps.legendTagIdSet || new Set();
 
   const issues = [];
+
   for (const reqId of studentReqIds) {
     const reqName = maps.idToName[reqId];
     if (!reqName || reqName === "Opted out of Catering") continue;

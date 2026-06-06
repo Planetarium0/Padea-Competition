@@ -1,6 +1,5 @@
 import { describe, test, expect } from 'vitest'
 import {
-  TAG_SHORT, CONSTRAINT_PHRASE,
   buildHierarchyMaps, checkCompatibility,
   buildVariantMap, bestVariantSeverity,
 } from '../public/js/shared/diet.js'
@@ -354,24 +353,45 @@ describe('bestVariantSeverity', () => {
   })
 })
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── buildHierarchyMaps — DB-driven display fields ─────────────────────────────
 
-describe('TAG_SHORT', () => {
-  test('common shorthand labels are correct', () => {
-    expect(TAG_SHORT['Gluten Free']).toBe('GF')
-    expect(TAG_SHORT['Dairy Free']).toBe('DF')
-    expect(TAG_SHORT['Vegetarian']).toBe('Veg')
-    expect(TAG_SHORT['Vegan']).toBe('Vegan')
-    expect(TAG_SHORT['Halal']).toBe('Halal')
+describe('buildHierarchyMaps — tag_short and constraint_phrase from DB', () => {
+  const RESTRICTIONS_WITH_DISPLAY = [
+    { id: 'gf',  name: 'Gluten Free', superset_ids: [], tag_short: 'GF',    constraint_phrase: 'gluten' },
+    { id: 'veg', name: 'Vegetarian',  superset_ids: [], tag_short: 'Veg',   constraint_phrase: 'meat' },
+    { id: 'sf',  name: 'Soy Free',    superset_ids: [], tag_short: 'SF',    constraint_phrase: 'soy' },
+    { id: 'new', name: 'No Almonds',  superset_ids: [], tag_short: null,    constraint_phrase: null },
+  ]
+  const m = buildHierarchyMaps(RESTRICTIONS_WITH_DISPLAY)
+
+  test('tagShortByName uses tag_short from DB', () => {
+    expect(m.tagShortByName['Gluten Free']).toBe('GF')
+    expect(m.tagShortByName['Soy Free']).toBe('SF')
   })
-})
 
-describe('CONSTRAINT_PHRASE', () => {
-  test('common phrases are correct', () => {
-    expect(CONSTRAINT_PHRASE['Gluten Free']).toBe('gluten')
-    expect(CONSTRAINT_PHRASE['Vegetarian']).toBe('meat')
-    expect(CONSTRAINT_PHRASE['Vegan']).toBe('animal products')
-    expect(CONSTRAINT_PHRASE['No Red Meat']).toBe('red meat')
-    expect(CONSTRAINT_PHRASE['Halal']).toBe('non-halal ingredients')
+  test('tagShortByName falls back to restriction name when tag_short is null', () => {
+    expect(m.tagShortByName['No Almonds']).toBe('No Almonds')
+  })
+
+  test('constraintPhraseByName uses constraint_phrase from DB', () => {
+    expect(m.constraintPhraseByName['Gluten Free']).toBe('gluten')
+    expect(m.constraintPhraseByName['Soy Free']).toBe('soy')
+  })
+
+  test('constraintPhraseByName falls back to lowercased name when constraint_phrase is null', () => {
+    expect(m.constraintPhraseByName['No Almonds']).toBe('no almonds')
+  })
+
+  test('checkCompatibility label uses constraint_phrase from maps', () => {
+    const item = { name: 'Bread', dietary_tag_ids: [] }
+    const { issues } = checkCompatibility(item, ['gf'], m)
+    expect(issues[0].label).toBe('May contain gluten')
+    expect(issues[0].phrase).toBe('gluten')
+  })
+
+  test('checkCompatibility label falls back gracefully for null constraint_phrase', () => {
+    const item = { name: 'Mixed nuts', dietary_tag_ids: [] }
+    const { issues } = checkCompatibility(item, ['new'], m)
+    expect(issues[0].label).toBe('May contain no almonds')
   })
 })

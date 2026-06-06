@@ -129,7 +129,7 @@ ALL MENU ITEMS FROM THIS CATERER:
 
 Variants are alternate preparations of the same base dish (e.g. a gluten-free version of a
 regular item). A caterer's answer about a base item does not automatically apply to its
-variants — treat each item independently unless the caterer explicitly says otherwise.
+variants.
 
 OPEN QUESTIONS (items we still need answers for):
 {questions_text if questions_text else '  (none — all questions already answered)'}
@@ -154,6 +154,9 @@ or contains, with no unknowns remaining). If so, include it in earned_legends.
 If some answers are ambiguous or missing, compose a SHORT clarifying question
 (one paragraph maximum) in clarification_questions. Keep it polite and specific.
 Leave clarification_questions empty if everything is now clear.
+
+Err on the side of caution. If you aren't sure, mark it still unknown and ask a
+clarifying question.
 
 IMPORTANT: You must respond with ONLY a JSON object, no other text. Use item and restriction
 names exactly as they appear in the lists above. The JSON must have exactly these keys:
@@ -387,9 +390,8 @@ def parse_reply(
             )
             if contact_email:
                 email_id = f"{request_code}-clar-{clarification_rounds + 1}"
-                subject = (
-                    f"[{request_code}] Padea dietary follow-up — {caterer_name}"
-                )
+                orig_subject = message.subject or f"[{request_code}] Padea dietary check — {caterer_name}"
+                subject = orig_subject if orig_subject.lower().startswith("re:") else f"Re: {orig_subject}"
                 schedule_email(
                     db,
                     to_email=contact_email,
