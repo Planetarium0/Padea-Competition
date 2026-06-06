@@ -2,7 +2,7 @@ import { describe, test, expect } from 'vitest'
 import {
   TAG_SHORT, CONSTRAINT_PHRASE,
   buildHierarchyMaps, checkCompatibility,
-  buildVariantMap, bestVariantSeverity, filterItemsByDay,
+  buildVariantMap, bestVariantSeverity,
 } from '../public/js/shared/diet.js'
 
 // ── Fixture data ──────────────────────────────────────────────────────────────
@@ -373,52 +373,5 @@ describe('CONSTRAINT_PHRASE', () => {
     expect(CONSTRAINT_PHRASE['Vegan']).toBe('animal products')
     expect(CONSTRAINT_PHRASE['No Red Meat']).toBe('red meat')
     expect(CONSTRAINT_PHRASE['Halal']).toBe('non-halal ingredients')
-  })
-})
-
-// ── filterItemsByDay ──────────────────────────────────────────────────────────
-
-describe('filterItemsByDay', () => {
-  const items = [
-    { id: 'taco',    name: 'Crispy Chicken Taco', unavailable_days: ['Tuesday'] },
-    { id: 'burrito', name: 'Cali Burrito',         unavailable_days: ['Monday'] },
-    { id: 'bowl',    name: 'Rice Bowl',             unavailable_days: [] },
-    { id: 'pizza',   name: 'Pizza' /* no field */ },
-  ]
-
-  test('removes items unavailable on the given day', () => {
-    const result = filterItemsByDay(items, 'Tuesday')
-    expect(result.map(i => i.id)).not.toContain('taco')
-    expect(result.map(i => i.id)).toContain('burrito')
-    expect(result.map(i => i.id)).toContain('bowl')
-    expect(result.map(i => i.id)).toContain('pizza')
-  })
-
-  test('keeps all items when none blocked on that day', () => {
-    const result = filterItemsByDay(items, 'Wednesday')
-    expect(result).toHaveLength(items.length)
-  })
-
-  test('item with no unavailable_days field is never filtered', () => {
-    const result = filterItemsByDay(items, 'Tuesday')
-    expect(result.map(i => i.id)).toContain('pizza')
-  })
-
-  test('null session day returns full list unchanged', () => {
-    expect(filterItemsByDay(items, null)).toEqual(items)
-  })
-
-  test('empty string session day returns full list unchanged', () => {
-    expect(filterItemsByDay(items, '')).toEqual(items)
-  })
-
-  test('Monday blocks only Monday-unavailable items', () => {
-    const result = filterItemsByDay(items, 'Monday')
-    expect(result.map(i => i.id)).toContain('taco')
-    expect(result.map(i => i.id)).not.toContain('burrito')
-  })
-
-  test('empty items list returns empty list', () => {
-    expect(filterItemsByDay([], 'Tuesday')).toEqual([])
   })
 })

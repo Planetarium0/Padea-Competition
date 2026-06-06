@@ -70,17 +70,6 @@ DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 VARIETY_THRESHOLD = 10
 
 
-def available_items_for_day(
-    caterer_menu: list[Record[MenuItemFields]],
-    session_day: str,
-) -> list[Record[MenuItemFields]]:
-    """Return only items that are available on the given weekday."""
-    return [
-        item for item in caterer_menu
-        if session_day not in (item.fields.get("unavailable_days") or [])
-    ]
-
-
 # ---------------------------------------------------------------------------
 # Per-student assignment record
 # ---------------------------------------------------------------------------
@@ -583,13 +572,8 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
         cid = sess_fields.get("caterer_id")
         if not cid:
             continue
-        session_day  = sess_fields.get("day", "")
-        session_date = week_dates.get(session_day)
-        menu_ids = {
-            item.id for item in available_items_for_day(
-                index.menu_items_by_caterer.get(cid, []), session_day
-            )
-        }
+        session_date = week_dates.get(sess_fields.get("day", ""))
+        menu_ids = {item.id for item in index.menu_items_by_caterer.get(cid, [])}
         for stu in index.students_by_session.get(sess_id, []):
             if (stu.id, sess_id) in index.absent_pairs:
                 continue
@@ -641,9 +625,7 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
             log.warning(f"Session '{sess_label}': caterer has no menu items — skipping.")
             continue
 
-        day_menu     = available_items_for_day(caterer_menu, day)
         caterer_menu_ids = {item.id for item in caterer_menu}
-        day_menu_ids = {item.id for item in day_menu}
         enrolled = index.students_by_session.get(sess_id, [])
         log.info(f"Session '{sess_label}' ({day}): {len(enrolled)} enrolled students")
 
@@ -678,12 +660,7 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
                 if pref_id in caterer_menu_ids:
                     pref_fields = index.menu_item_by_id.get(pref_id, {})
                     pref_name   = pref_fields.get("name", "?")
-                    if pref_id not in day_menu_ids:
-                        log.failure(
-                            f"  {stu_name}: preference '{pref_name}' is unavailable on {day} — "
-                            "falling back to a compatible item."
-                        )
-                    elif not is_item_compatible(pref_fields, dietary_ids, index.dietary_hierarchy, legend_tag_ids):
+                    if not is_item_compatible(pref_fields, dietary_ids, index.dietary_hierarchy, legend_tag_ids):
                         # Definite incompatibility — refuse the override and
                         # force-swap to a compatible fallback below.
                         dietary_names = resolve_dietary_names(dietary_ids, index.dietary_hierarchy)
@@ -703,13 +680,13 @@ def register_orders(db: Database | None = None, dry_run: bool = False) -> None:
                 use_variety = explicit_pref_counts[caterer_id] < VARIETY_THRESHOLD
                 if use_variety:
                     item_id = assign_variety_meal(
-                        dietary_ids, day_menu, batch.item_counts, index,
+                        dietary_ids, caterer_menu, batch.item_counts, index,
                         max_items=caterer_max_variety.get(caterer_id),
                         caterer_legend_tag_ids=legend_tag_ids,
                     )
                 else:
                     item_id = assign_fallback_meal(
-                        dietary_ids, day_menu, batch.item_counts, index,
+                        dietary_ids, caterer_menu, batch.item_counts, index,
                         caterer_legend_tag_ids=legend_tag_ids,
                     )
                 if item_id is None:

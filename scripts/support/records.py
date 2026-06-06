@@ -96,7 +96,6 @@ MenuItemFields = TypedDict(
         "notes": str,
         # Aggregated by menu_items_view
         "dietary_tag_ids": list[str],
-        "unavailable_days": list[str],
     },
     total=False,
 )

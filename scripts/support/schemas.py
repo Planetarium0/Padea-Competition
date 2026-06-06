@@ -70,7 +70,6 @@ class MenuItem(_Base):
     notes: Optional[str] = None
     # View-aggregated
     dietary_tag_ids: List[str] = Field(default_factory=list)
-    unavailable_days: List[DayName] = Field(default_factory=list)
 
 
 class DietaryRestriction(_Base):
