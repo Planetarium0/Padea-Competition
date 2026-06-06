@@ -1,17 +1,29 @@
 from __future__ import annotations
 
-import json
-import os
 import re
 import sys
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any
 
-from support import Database, log, ask_llm
+from pydantic import BaseModel, Field
+
+from support import Database, ask_llm_json, log
 
 
-class _ParsedContact(TypedDict, total=False):
-    Caterer_Name: str  # placeholder; we read by exact key below
+# ---------------------------------------------------------------------------
+# Pydantic model for LLM response
+# ---------------------------------------------------------------------------
+
+class _CatererContact(BaseModel):
+    caterer_name: str = Field(alias="Caterer Name")
+    contact_name: str | None = Field(alias="Contact Name", default=None)
+    contact_email: str | None = Field(alias="Contact Email", default=None)
+    chef_name: str | None = Field(alias="Chef Name", default=None)
+    chef_email: str | None = Field(alias="Chef Email", default=None)
+    chef_wants_cc: bool = Field(alias="Chef Wants CC", default=False)
+    able_to_serve_schools: list[str] = Field(alias="Able to Serve Schools", default_factory=list)
+    notes: str | None = Field(alias="Notes", default=None)
+    model_config = {"populate_by_name": True}
 
 
 def _resolve_school(raw_name: str, canonical_schools: list[str]) -> str | None:
@@ -106,14 +118,6 @@ def _parse_contacts_heuristic(
     return results
 
 
-def _extract_json_block(resp: str) -> str:
-    if "```json" in resp:
-        return resp.split("```json")[1].split("```")[0].strip()
-    if "```" in resp:
-        return resp.split("```")[1].split("```")[0].strip()
-    return resp
-
-
 def run(db: Database | None = None) -> None:
     db = db or Database.from_env()
     log.info("Migrating caterer-contacts.pdf → Supabase")
@@ -131,13 +135,9 @@ def run(db: Database | None = None) -> None:
     canonical_schools = [r.fields["name"] for r in schools_records if "name" in r.fields]
     school_name_to_id = {r.fields["name"]: r.id for r in schools_records if "name" in r.fields}
 
-    parsed_data: list[dict[str, Any]] | None = None
-    key = os.environ.get("CLAUDE_CODE_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
-
-    if key:
-        log.info("Using Claude LLM for batched contact parsing...")
-        school_list_str = "\n".join(f'- "{n}"' for n in canonical_schools)
-        prompt = f"""You are a data extraction assistant.
+    log.info("Using Claude LLM for batched contact parsing...")
+    school_list_str = "\n".join(f'- "{n}"' for n in canonical_schools)
+    prompt = f"""You are a data extraction assistant.
 Extract contact information for each caterer from the following raw text.
 Return a JSON array of objects, where each object represents one caterer and has exactly these keys:
 - "Caterer Name" (string)
@@ -157,15 +157,24 @@ Raw Text:
 {raw_text}
 ```
 """
-        resp = ask_llm(prompt)
-        if resp:
-            try:
-                parsed_data = json.loads(_extract_json_block(resp))
-                log.info("LLM successfully parsed all contact blocks!")
-            except Exception as e:
-                log.error(f"LLM returned malformed JSON: {e}. Falling back to heuristic.")
-
-    if not parsed_data:
+    parsed_llm = ask_llm_json(prompt, list[_CatererContact])
+    if parsed_llm is not None:
+        log.info("LLM successfully parsed all contact blocks!")
+        parsed_data: list[dict[str, Any]] = [
+            {
+                "Caterer Name": c.caterer_name,
+                "Contact Name": c.contact_name,
+                "Contact Email": c.contact_email,
+                "Chef Name": c.chef_name,
+                "Chef Email": c.chef_email,
+                "Chef Wants CC": c.chef_wants_cc,
+                "Able to Serve Schools": c.able_to_serve_schools,
+                "Notes": c.notes,
+            }
+            for c in parsed_llm
+        ]
+    else:
+        log.warning("LLM unavailable or returned invalid data. Falling back to heuristic.")
         parsed_data = _parse_contacts_heuristic(raw_text, canonical_schools)
 
     caterers_records = db.Caterers.all()

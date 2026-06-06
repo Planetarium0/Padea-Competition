@@ -19,7 +19,6 @@ from __future__ import annotations
 import argparse
 import datetime
 import email.utils
-import json
 import os
 import re
 import shutil
@@ -30,12 +29,14 @@ from dataclasses import field as dataclass_field
 from pathlib import Path
 from typing import Any, Literal
 
+from pydantic import BaseModel
+
 from support import (
     Database,
     PendingChangeFields,
     Record,
     SupportCaseFields,
-    ask_llm,
+    ask_llm_json,
     log,
     notify_coordinator,
     schedule_email,
@@ -47,6 +48,32 @@ from support.llm_tools import make_tool_executor
 
 # Allow tests to reach executor factory via this module (backward-compat alias)
 _make_tool_executor = make_tool_executor
+
+
+# ---------------------------------------------------------------------------
+# Pydantic models for LLM responses
+# ---------------------------------------------------------------------------
+
+class _SupportEmailAction(BaseModel):
+    """One action the LLM wants to take in response to a support email."""
+    type: str
+    student_id: str | None = None
+    restriction_names: list[str] | None = None
+    field: str | None = None
+    new_value: Any = None
+    reason: str | None = None
+    name: str | None = None
+    tag_short: str | None = None
+    constraint_phrase: str | None = None
+    message: str | None = None
+
+class _SupportEmailResponse(BaseModel):
+    actions: list[_SupportEmailAction] = []
+    reply: str = ""
+
+class _SystemRequirementResponse(BaseModel):
+    is_system_requirement: bool
+    summary: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -157,28 +184,26 @@ Your job is to:
 
 Available actions:
 
-- **update_dietary**: Set a student's dietary restrictions by name.
-  You set the FULL list — if they want to add Vegetarian, include all existing
-  restrictions plus Vegetarian.
+- **update_dietary_restrictions**: Set a student's dietary restrictions by name.
+  Provide the FULL replacement list of restriction names (empty array clears all).
 
-- **create_dietary_restriction**: Create a new dietary restriction that is not yet
-  in the system. Use this when a parent needs a restriction that does not appear
-  in the available list, and it is also reasonable to create that new dietary restriction
-  (i.e., if a parent mentions "Allergic to Almonds", and "Nut Free" is already
-  a dietary restriction, prefer using that to creating a new one).
-  After creating it, assign it with update_dietary.
-  Always inform the parent that their the updated dietary requirements will take time
+- **create_dietary_restriction**: Create a new dietary restriction that does not yet
+  exist in the system. Use only when the restriction is absent from the available list
+  and it is reasonable to create it (i.e., if a parent mentions "Allergic to Almonds",
+  and "Nut Free" is already a dietary restriction, prefer using that to creating a new
+  one). After creating it, assign it with update_dietary_restrictions.
+  Always inform the parent that their updated dietary requirements will take time
   before they show up on the meals, since we have to wait for the caterers to get back
   to us with the information.
 
-- **update_contact**: Update parent contact details (parent_email, parent_mobile,
+- **update_contact_detail**: Update a parent contact field (parent_email, parent_mobile,
   or parent_name). Applied to all of the parent's students automatically.
 
-- **request_change**: Request coordinator approval for a structural change to a
-  student record (name, year_level, subjects, or student email).
+- **submit_change_request**: Submit a change to a student's structural field for
+  coordinator approval (name, year_level, subjects, or email).
 
-- **escalate**: Forward a message to the coordinator when the parent wants to
-  speak with someone directly or the request cannot be handled automatically.
+- **escalate_to_coordinator**: Forward this case to the coordinator for human handling.
+  Use when the request cannot be automated or the parent asks to speak with someone.
 
 Guidelines:
 - Be friendly, concise, and professional.
@@ -361,34 +386,19 @@ def _build_llm_prompt(
         f"## Available dietary restrictions (names only)\n{restriction_lines}\n\n"
         f"## Email thread\n{thread_text}\n\n"
         "## Action types\n"
-        "- update_dietary: {type, student_id, restriction_names: [list of names]}\n"
+        "- update_dietary_restrictions: {type, student_id, restriction_names: [list of names]}\n"
         "- create_dietary_restriction: {type, name}  "
-        "(use when restriction does not exist; then assign it with update_dietary)\n"
-        "- update_contact: {type, field, new_value}  "
+        "(use when restriction does not exist; then assign it with update_dietary_restrictions)\n"
+        "- update_contact_detail: {type, field, new_value}  "
         "(field must be parent_email | parent_mobile | parent_name)\n"
-        "- request_change: {type, student_id, field, new_value, reason}  "
+        "- submit_change_request: {type, student_id, field, new_value, reason}  "
         "(field must be name | year_level | subjects | email)\n"
-        "- escalate: {type, message}\n\n"
+        "- escalate_to_coordinator: {type, message}\n\n"
         'Respond with ONLY a JSON object — no markdown fences, no other text:\n'
         '{"actions": [...], "reply": "..."}\n'
         'The "actions" list may be empty. The "reply" must always be present.\n'
         'Use \\n within the "reply" string to add line breaks — they are rendered as <br> in the email.'
     )
-
-
-def _parse_llm_response(text: str) -> dict[str, Any]:
-    cleaned = re.sub(r"```(?:json)?\n?", "", text).strip()
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError:
-        m = re.search(r"\{.*\}", cleaned, re.DOTALL)
-        if m:
-            try:
-                return json.loads(m.group(0))
-            except json.JSONDecodeError:
-                pass
-    log.warning(f"Could not parse LLM response as JSON: {text[:200]!r}")
-    return {}
 
 
 # ---------------------------------------------------------------------------
@@ -405,10 +415,10 @@ def run_tool_loop(
     identity: SenderIdentity | None = None,
     dry_run: bool = False,
 ) -> None:
-    """Process one inbound support message via ask_llm (single-turn JSON response).
+    """Process one inbound support message via ask_llm_json (single-turn JSON response).
 
     Injects students and restrictions into the prompt upfront, calls the LLM once,
-    parses the JSON response, then dispatches each action to the tool executor.
+    validates the JSON response, then dispatches each action to the tool executor.
     """
     case_code = case.fields.get("case_code", case.id)
 
@@ -421,59 +431,26 @@ def run_tool_loop(
     thread_text = _build_thread_text(prior_messages, inbound_msg)
     prompt = _build_llm_prompt(students, restrictions, thread_text, identity=identity)
 
-    response_text = ask_llm(prompt)
+    response = ask_llm_json(prompt, _SupportEmailResponse)
 
-    if response_text is None:
+    if response is None:
         log.failure(f"LLM returned no response for support case {case_code}")
         notify_coordinator(case.id, reason=sender_email, num_open_questions=1)
         return
 
-    result = _parse_llm_response(response_text)
     executor = make_tool_executor(db, sender_email, students, case, inbound_msg, dry_run=False)
     tool_call_log: list[dict[str, Any]] = []
 
-    for action in result.get("actions") or []:
-        action_type = action.get("type", "")
-
-        if action_type == "update_dietary":
-            tool_input = {
-                "student_id": action.get("student_id", ""),
-                "restriction_names": action.get("restriction_names") or [],
-            }
-        elif action_type == "update_contact":
-            tool_input = {
-                "field": action.get("field", ""),
-                "new_value": action.get("new_value"),
-            }
-        elif action_type == "request_change":
-            tool_input = {
-                "student_id": action.get("student_id", ""),
-                "field": action.get("field", ""),
-                "new_value": action.get("new_value"),
-                "reason": action.get("reason", ""),
-            }
-        elif action_type == "create_dietary_restriction":
-            tool_input = {"name": action.get("name", "")}
-        elif action_type == "escalate":
-            tool_input = {"message": action.get("message", "")}
-        elif action_type == "add_restriction":
-            tool_input = {
-                "student_id": action.get("student_id", ""),
-                "restriction_id": action.get("restriction_id", ""),
-            }
-            action_type = "add_dietary_restriction"
-        else:
-            continue
-
-        result_str = executor(action_type, tool_input)
-        tool_call_log.append({"tool": action_type, "input": tool_input, "result": result_str})
+    for action in response.actions:
+        tool_input = action.model_dump(exclude={"type"}, exclude_none=True)
+        result_str = executor(action.type, tool_input)
+        tool_call_log.append({"tool": action.type, "input": tool_input, "result": result_str})
 
     reply_sent = False
-    reply_text = result.get("reply", "")
-    if reply_text:
-        result_str = executor("send_reply", {"body": reply_text})
+    if response.reply:
+        result_str = executor("send_reply", {"body": response.reply})
         reply_sent = True
-        tool_call_log.append({"tool": "send_reply", "input": {"body": reply_text}, "result": result_str})
+        tool_call_log.append({"tool": "send_reply", "input": {"body": response.reply}, "result": result_str})
 
     updated_messages = list(prior_messages) + [{
         "direction": "inbound",
@@ -769,23 +746,10 @@ def _classify_system_requirement(
         '"summary": "One sentence describing the requirement, if applicable, otherwise empty string"}'
     )
 
-    response = ask_llm(prompt)
-    if response is None:
+    result = ask_llm_json(prompt, _SystemRequirementResponse)
+    if result is None:
         return False, ""
-
-    cleaned = re.sub(r"```(?:json)?\n?", "", response).strip()
-    try:
-        data = json.loads(cleaned)
-        return bool(data.get("is_system_requirement")), data.get("summary", "")
-    except json.JSONDecodeError:
-        m = re.search(r"\{.*\}", cleaned, re.DOTALL)
-        if m:
-            try:
-                data = json.loads(m.group(0))
-                return bool(data.get("is_system_requirement")), data.get("summary", "")
-            except json.JSONDecodeError:
-                pass
-    return False, ""
+    return result.is_system_requirement, result.summary
 
 
 # ---------------------------------------------------------------------------

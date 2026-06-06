@@ -195,8 +195,9 @@ def implement_plan(plan_id: str, *, dry_run: bool = False) -> bool:
         update_plan(plan_id, {"status": "approved", "implementation_log": "[dry-run]"})
         return True
 
+    modified_before = run_claude_agent.get_git_modified_files()
     success, agent_log = run_claude_agent.orchestrate_self_healing(
-        prompt, modified_before=[]
+        prompt, modified_before=modified_before
     )
     human_log = run_claude_agent.extract_agent_text(agent_log)
 

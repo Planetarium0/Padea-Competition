@@ -1,13 +1,34 @@
 from __future__ import annotations
 
-import json
-import os
 import re
 import sys
 from pathlib import Path
 from typing import Any
 
-from support import Database, MenuItemFields, log, ask_llm
+from pydantic import BaseModel, Field
+
+from support import Database, MenuItemFields, ask_llm_json, log
+
+# ---------------------------------------------------------------------------
+# Pydantic models for LLM response
+# ---------------------------------------------------------------------------
+
+class _MenuItem(BaseModel):
+    menu_item_name: str = Field(alias="Menu Item Name")
+    dietary_tags: list[str] = Field(alias="Dietary Tags", default_factory=list)
+    has_vegetarian_option: bool = Field(alias="Has Vegetarian Option", default=False)
+    notes: str | None = Field(alias="Notes", default=None)
+    model_config = {"populate_by_name": True}
+
+class _CatererMenu(BaseModel):
+    caterer_name: str = Field(alias="Caterer Name")
+    price_per_item: float = Field(alias="Price per Item")
+    price_includes_gst: bool = Field(alias="Price Includes GST")
+    delivery_fee: float = Field(alias="Delivery Fee")
+    delivery_fee_structure: str = Field(alias="Delivery Fee Structure")
+    items: list[_MenuItem] = Field(alias="Items", default_factory=list)
+    model_config = {"populate_by_name": True}
+
 
 # Codes that may appear in a caterer's Dietary Legend, mapped to the
 # standard Dietary Restriction name they correspond to. VO means a
@@ -95,14 +116,6 @@ def _parse_menus_heuristic(text: str) -> list[dict[str, Any]]:
     return caterer_menus
 
 
-def _extract_json_block(resp: str) -> str:
-    if "```json" in resp:
-        return resp.split("```json")[1].split("```")[0].strip()
-    if "```" in resp:
-        return resp.split("```")[1].split("```")[0].strip()
-    return resp
-
-
 def run(db: Database | None = None) -> None:
     db = db or Database.from_env()
     log.info("Migrating caterer-menus.pdf → Supabase (Menu Items)")
@@ -115,12 +128,8 @@ def run(db: Database | None = None) -> None:
         sys.exit(1)
     raw_text = txt_path.read_text(encoding="utf-8")
 
-    parsed_menus: list[dict[str, Any]] | None = None
-    key = os.environ.get("CLAUDE_CODE_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
-
-    if key:
-        log.info("Using Claude LLM for batched menu parsing...")
-        prompt = f"""You are a data extraction assistant.
+    log.info("Using Claude LLM for batched menu parsing...")
+    prompt = f"""You are a data extraction assistant.
 Extract the menu items and delivery pricing structure for each caterer from the following raw menu text.
 Return a JSON array of objects, where each object represents one caterer and has exactly these keys:
 - "Caterer Name" (string, e.g. "Lakehouse Victoria Point")
@@ -141,15 +150,30 @@ Raw Menu Text:
 {raw_text}
 ```
 """
-        resp = ask_llm(prompt)
-        if resp:
-            try:
-                parsed_menus = json.loads(_extract_json_block(resp))
-                log.info("LLM successfully parsed all menus!")
-            except Exception as e:
-                log.error(f"LLM returned malformed JSON: {e}. Falling back to heuristic.")
-
-    if not parsed_menus:
+    parsed_llm = ask_llm_json(prompt, list[_CatererMenu])
+    if parsed_llm is not None:
+        log.info("LLM successfully parsed all menus!")
+        parsed_menus: list[dict[str, Any]] = [
+            {
+                "Caterer Name": m.caterer_name,
+                "Price per Item": m.price_per_item,
+                "Price Includes GST": m.price_includes_gst,
+                "Delivery Fee": m.delivery_fee,
+                "Delivery Fee Structure": m.delivery_fee_structure,
+                "Items": [
+                    {
+                        "Menu Item Name": i.menu_item_name,
+                        "Dietary Tags": i.dietary_tags,
+                        "Has Vegetarian Option": i.has_vegetarian_option,
+                        "Notes": i.notes,
+                    }
+                    for i in m.items
+                ],
+            }
+            for m in parsed_llm
+        ]
+    else:
+        log.warning("LLM unavailable or returned invalid data. Falling back to heuristic.")
         parsed_menus = _parse_menus_heuristic(raw_text)
 
     caterers_records = db.Caterers.all()

@@ -1,36 +1,4 @@
 // Dietary logic shared across meals.js and manage.js.
-// Single source of truth for tag labels, constraint phrases,
-// hierarchy computation, and meal compatibility checking.
-
-export const TAG_SHORT = {
-  "Gluten Free": "GF",
-  "Dairy Free": "DF",
-  "Nut Free": "NF",
-  "Vegetarian": "Veg",
-  "Vegan": "Vegan",
-  "Halal": "Halal",
-  "Kosher": "Kosher",
-  "Pescatarian": "Pesc",
-};
-
-// Plain-language phrase for each constraint, used in reason labels.
-export const CONSTRAINT_PHRASE = {
-  "Gluten Free": "gluten",
-  "Dairy Free": "dairy",
-  "Nut Free": "nuts",
-  "Vegetarian": "meat",
-  "Vegan": "animal products",
-  "Pescatarian": "non-fish meat",
-  "Halal": "non-halal ingredients",
-  "Kosher": "non-kosher ingredients",
-  "No Beef": "beef",
-  "No Pork": "pork",
-  "No Lamb": "lamb",
-  "No Fish": "fish",
-  "No Shellfish": "shellfish",
-  "No Seafood": "seafood",
-  "No Red Meat": "red meat",
-};
 
 export function buildHierarchyMaps(restrictions, negativeKeywords = {}) {
   const idToName = {};
@@ -73,8 +41,8 @@ export function buildHierarchyMaps(restrictions, negativeKeywords = {}) {
   const tagShortByName = {};
   const constraintPhraseByName = {};
   for (const r of restrictions) {
-    tagShortByName[r.name] = r.tag_short || TAG_SHORT[r.name] || r.name;
-    constraintPhraseByName[r.name] = r.constraint_phrase || CONSTRAINT_PHRASE[r.name] || r.name.toLowerCase();
+    tagShortByName[r.name] = r.tag_short || r.name;
+    constraintPhraseByName[r.name] = r.constraint_phrase || r.name.toLowerCase();
   }
 
   // legendTagIdSet is populated later once the caterer record is fetched.
@@ -104,7 +72,7 @@ export function checkCompatibility(item, studentReqIds, maps) {
     const closure = maps.subsetClosure[reqId] || new Set([reqId]);
     if (itemTagIds.some(t => closure.has(t))) continue;
 
-    const phrase = maps.constraintPhraseByName?.[reqName] || CONSTRAINT_PHRASE[reqName] || reqName.toLowerCase();
+    const phrase = maps.constraintPhraseByName?.[reqName] || reqName.toLowerCase();
 
     // Legend-based definite incompatibility: if a transitive superset of this
     // constraint is in the caterer's Dietary Legend and the item lacks any

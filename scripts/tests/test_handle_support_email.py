@@ -10,26 +10,25 @@ Coverage:
   3.  Known parent, new case created with correct parent_email
   4.  In-Reply-To matches open case → case reused (not new)
   5.  In-Reply-To matches resolved case → new case created
-  6.  add_dietary_restriction — valid student
-  7.  add_dietary_restriction — wrong student (not linked to parent)
-  8.  add_dietary_restriction — already has restriction (idempotent)
-  9.  add_dietary_restriction — invalid restriction_id
+  6.  update_dietary_restrictions — valid student
+  7.  update_dietary_restrictions — wrong student (not linked to parent)
+  8.  update_dietary_restrictions — full replacement (already has restriction)
+  9.  update_dietary_restrictions — invalid restriction name
   10. send_reply tool — schedule_email called with correct args
   11. Full tool loop — restriction added + reply sent → case resolved
   12. Full tool loop — only reply sent (no restriction) → case resolved
-  13. No API key → notify_coordinator called, no exception
+  13. LLM unavailable → notify_coordinator
   14. Dry run — no DB writes
   15. In-Reply-To threading — resolved case → creates a new case
-  16. update_contact — applies to all parent's students
-  17. request_change — creates pending_changes row + sends coordinator email
+  16. update_contact_detail — applies to all parent's students
+  17. submit_change_request — creates pending_changes row + sends coordinator email
   18. Approval flow — APPROVE applies change, parent notified
   19. Denial flow — DENY rejects change, parent notified
-  20. Escalation — escalate action sends coordinator email
+  20. Escalation — escalate_to_coordinator action sends coordinator email
 """
 from __future__ import annotations
 
 import datetime
-import json
 import os
 import unittest
 
@@ -261,25 +260,24 @@ def _make_executor(db: MockDatabase, students: list[Record] | None = None):
 
 class TestToolExecutor(unittest.TestCase):
 
-    # 6. add_dietary_restriction — valid student
+    # 6. update_dietary_restrictions — valid student
     @patch("support.email._send_via_sendgrid")
     def test_add_restriction_valid_student(self, mock_send):
         db = _db_with_parent()
         executor = _make_executor(db)
 
-        result = executor("add_dietary_restriction", {
+        result = executor("update_dietary_restrictions", {
             "student_id": STUDENT_ID,
-            "restriction_id": RESTRICTION_VEG_ID,
+            "restriction_names": ["Vegetarian"],
         })
 
-        self.assertIn("Added", result)
         self.assertIn("Vegetarian", result)
         # Check DB update was called
         self.assertEqual(len(db.Students.updates), 1)
         updated_ids = db.Students.updates[0][1]["dietary_requirement_ids"]
         self.assertIn(RESTRICTION_VEG_ID, updated_ids)
 
-    # 7. add_dietary_restriction — wrong student (not linked to parent)
+    # 7. update_dietary_restrictions — wrong student (not linked to parent)
     @patch("support.email._send_via_sendgrid")
     def test_add_restriction_wrong_student(self, mock_send):
         db = _db_with_parent()
@@ -289,39 +287,40 @@ class TestToolExecutor(unittest.TestCase):
 
         executor = _make_executor(db)
 
-        result = executor("add_dietary_restriction", {
+        result = executor("update_dietary_restrictions", {
             "student_id": STUDENT_B_ID,
-            "restriction_id": RESTRICTION_VEG_ID,
+            "restriction_names": ["Vegetarian"],
         })
 
         self.assertIn("Error", result)
         # No DB writes for students
         self.assertEqual(len(db.Students.updates), 0)
 
-    # 8. add_dietary_restriction — already has restriction
+    # 8. update_dietary_restrictions — full replacement (already has restriction)
     @patch("support.email._send_via_sendgrid")
     def test_add_restriction_already_has_it(self, mock_send):
         db = _db_with_parent(restriction_ids=[RESTRICTION_VEG_ID])
         executor = _make_executor(db)
 
-        result = executor("add_dietary_restriction", {
+        result = executor("update_dietary_restrictions", {
             "student_id": STUDENT_ID,
-            "restriction_id": RESTRICTION_VEG_ID,
+            "restriction_names": ["Vegetarian"],
         })
 
-        # Should report no change, not add duplicate
-        self.assertIn("already has", result)
-        self.assertEqual(len(db.Students.updates), 0)
+        # Full replacement — should succeed (not report "already has")
+        self.assertNotIn("Error", result)
+        # DB update IS called (replacing the list)
+        self.assertEqual(len(db.Students.updates), 1)
 
-    # 9. add_dietary_restriction — invalid restriction_id
+    # 9. update_dietary_restrictions — invalid restriction name
     @patch("support.email._send_via_sendgrid")
     def test_add_restriction_invalid_restriction(self, mock_send):
         db = _db_with_parent()
         executor = _make_executor(db)
 
-        result = executor("add_dietary_restriction", {
+        result = executor("update_dietary_restrictions", {
             "student_id": STUDENT_ID,
-            "restriction_id": "nonexistent-restriction",
+            "restriction_names": ["nonexistent-restriction-name"],
         })
 
         self.assertIn("Error", result)
@@ -348,17 +347,17 @@ class TestToolExecutor(unittest.TestCase):
 class TestFullToolLoopResolved(unittest.TestCase):
 
     @patch("support.email._send_via_sendgrid")
-    @patch("actions.inbox.handle_support_email.ask_llm")
-    def test_restriction_added_reply_sent_case_resolved(self, mock_ask, mock_send):
+    @patch("actions.inbox.handle_support_email.ask_llm_json")
+    def test_restriction_added_reply_sent_case_resolved(self, mock_ask_json, mock_send):
         db = _db_with_parent()
         case = _make_case()
         db.SupportCases._records = [case]
         msg = _make_inbound()
 
-        mock_ask.return_value = json.dumps({
-            "actions": [{"type": "update_dietary", "student_id": STUDENT_ID, "restriction_names": ["Vegetarian"]}],
-            "reply": "I've set Vegetarian for Alex Smith.",
-        })
+        mock_ask_json.return_value = hse._SupportEmailResponse(
+            actions=[hse._SupportEmailAction(type="update_dietary_restrictions", student_id=STUDENT_ID, restriction_names=["Vegetarian"])],
+            reply="I've set Vegetarian for Alex Smith.",
+        )
 
         hse.run_tool_loop(db, case, msg, PARENT_EMAIL, [_make_student()])
 
@@ -379,17 +378,17 @@ class TestFullToolLoopResolved(unittest.TestCase):
 class TestFullToolLoopReplyOnly(unittest.TestCase):
 
     @patch("support.email._send_via_sendgrid")
-    @patch("actions.inbox.handle_support_email.ask_llm")
-    def test_reply_only_case_resolved(self, mock_ask, mock_send):
+    @patch("actions.inbox.handle_support_email.ask_llm_json")
+    def test_reply_only_case_resolved(self, mock_ask_json, mock_send):
         db = _db_with_parent()
         case = _make_case()
         db.SupportCases._records = [case]
         msg = _make_inbound(body_text="I just had a question, thanks!")
 
-        mock_ask.return_value = json.dumps({
-            "actions": [],
-            "reply": "Thanks for your message!",
-        })
+        mock_ask_json.return_value = hse._SupportEmailResponse(
+            actions=[],
+            reply="Thanks for your message!",
+        )
 
         hse.run_tool_loop(db, case, msg, PARENT_EMAIL, [_make_student()])
 
@@ -399,13 +398,13 @@ class TestFullToolLoopReplyOnly(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# 13. No API key → notify_coordinator
+# 13. LLM unavailable → notify_coordinator
 # ---------------------------------------------------------------------------
 
 class TestNoApiKey(unittest.TestCase):
 
-    @patch("actions.inbox.handle_support_email.ask_llm", return_value=None)
-    def test_ask_llm_none_notifies_coordinator(self, mock_ask):
+    @patch("actions.inbox.handle_support_email.ask_llm_json", return_value=None)
+    def test_ask_llm_none_notifies_coordinator(self, mock_ask_json):
         db = _db_with_parent()
         case = _make_case()
         msg = _make_inbound()
@@ -520,7 +519,7 @@ class TestUpdateContact(unittest.TestCase):
             db, PARENT_EMAIL, students, case, inbound_msg=None, dry_run=False
         )
 
-        result = executor("update_contact", {
+        result = executor("update_contact_detail", {
             "field": "parent_mobile",
             "new_value": "0412345678",
         })
@@ -539,8 +538,8 @@ class TestUpdateContact(unittest.TestCase):
         db = _db_with_parent()
         executor = _make_executor(db)
 
-        result = executor("update_contact", {
-            "field": "year_level",  # not allowed for update_contact
+        result = executor("update_contact_detail", {
+            "field": "year_level",  # not allowed for update_contact_detail
             "new_value": 11,
         })
 
@@ -556,7 +555,7 @@ class TestUpdateContact(unittest.TestCase):
             db, PARENT_EMAIL, students, case, inbound_msg=None, dry_run=True
         )
 
-        result = executor("update_contact", {
+        result = executor("update_contact_detail", {
             "field": "parent_name",
             "new_value": "Jane Smith",
         })
@@ -581,7 +580,7 @@ class TestRequestChange(unittest.TestCase):
             db, PARENT_EMAIL, students, case, inbound_msg=None, dry_run=False
         )
 
-        result = executor("request_change", {
+        result = executor("submit_change_request", {
             "student_id": STUDENT_ID,
             "field": "year_level",
             "new_value": 11,
@@ -606,7 +605,7 @@ class TestRequestChange(unittest.TestCase):
             db, PARENT_EMAIL, students, case, inbound_msg=None, dry_run=False
         )
 
-        executor("request_change", {
+        executor("submit_change_request", {
             "student_id": STUDENT_ID,
             "field": "name",
             "new_value": "Alexander Smith",
@@ -633,7 +632,7 @@ class TestRequestChange(unittest.TestCase):
         )
 
         with patch.dict(os.environ, {"COORDINATOR_EMAIL": COORDINATOR_EMAIL}, clear=False):
-            executor("request_change", {
+            executor("submit_change_request", {
                 "student_id": STUDENT_ID,
                 "field": "year_level",
                 "new_value": 11,
@@ -650,9 +649,9 @@ class TestRequestChange(unittest.TestCase):
         db = _db_with_parent()
         executor = _make_executor(db)
 
-        result = executor("request_change", {
+        result = executor("submit_change_request", {
             "student_id": STUDENT_ID,
-            "field": "parent_mobile",  # should use update_contact for this
+            "field": "parent_mobile",  # should use update_contact_detail for this
             "new_value": "0412345678",
             "reason": "",
         })
@@ -667,7 +666,7 @@ class TestRequestChange(unittest.TestCase):
         db.Students._records.append(other_student)
         executor = _make_executor(db)
 
-        result = executor("request_change", {
+        result = executor("submit_change_request", {
             "student_id": STUDENT_B_ID,
             "field": "year_level",
             "new_value": 11,
@@ -686,7 +685,7 @@ class TestRequestChange(unittest.TestCase):
             db, PARENT_EMAIL, students, case, inbound_msg=None, dry_run=True
         )
 
-        result = executor("request_change", {
+        result = executor("submit_change_request", {
             "student_id": STUDENT_ID,
             "field": "year_level",
             "new_value": 11,
@@ -890,7 +889,7 @@ class TestEscalation(unittest.TestCase):
         )
 
         with patch.dict(os.environ, {"COORDINATOR_EMAIL": COORDINATOR_EMAIL}, clear=False):
-            result = executor("escalate", {"message": "Please call me, this is urgent."})
+            result = executor("escalate_to_coordinator", {"message": "Please call me, this is urgent."})
 
         self.assertNotIn("Error", result)
         mock_send.assert_called_once()
@@ -909,23 +908,23 @@ class TestEscalation(unittest.TestCase):
         )
 
         with patch.dict(os.environ, {"COORDINATOR_EMAIL": COORDINATOR_EMAIL}, clear=False):
-            result = executor("escalate", {"message": "Please call me."})
+            result = executor("escalate_to_coordinator", {"message": "Please call me."})
 
         self.assertIn("dry-run", result)
         mock_send.assert_not_called()
 
-    @patch("actions.inbox.handle_support_email.ask_llm")
+    @patch("actions.inbox.handle_support_email.ask_llm_json")
     @patch("support.email._send_via_sendgrid")
-    def test_full_loop_escalate(self, mock_send, mock_ask):
+    def test_full_loop_escalate(self, mock_send, mock_ask_json):
         db = _db_with_parent()
         case = _make_case()
         db.SupportCases._records = [case]
         msg = _make_inbound(body_text="I want to speak to a coordinator NOW.")
 
-        mock_ask.return_value = json.dumps({
-            "actions": [{"type": "escalate", "message": "Parent is very upset."}],
-            "reply": "I've escalated your request to the coordinator.",
-        })
+        mock_ask_json.return_value = hse._SupportEmailResponse(
+            actions=[hse._SupportEmailAction(type="escalate_to_coordinator", message="Parent is very upset.")],
+            reply="I've escalated your request to the coordinator.",
+        )
 
         with patch.dict(os.environ, {"COORDINATOR_EMAIL": COORDINATOR_EMAIL}, clear=False):
             hse.run_tool_loop(db, case, msg, PARENT_EMAIL, [_make_student()])
@@ -983,24 +982,24 @@ class TestCreateDietaryRestriction(unittest.TestCase):
 
     # 24. Full tool loop — new restriction created, assigned, and case resolved
     @patch("support.email._send_via_sendgrid")
-    @patch("actions.inbox.handle_support_email.ask_llm")
-    def test_full_loop_create_and_assign_restriction(self, mock_ask, mock_send):
+    @patch("actions.inbox.handle_support_email.ask_llm_json")
+    def test_full_loop_create_and_assign_restriction(self, mock_ask_json, mock_send):
         db = _db_with_parent()
         case = _make_case()
         db.SupportCases._records = [case]
         msg = _make_inbound(body_text="My child needs a Halal meal please.")
 
-        mock_ask.return_value = json.dumps({
-            "actions": [
-                {"type": "create_dietary_restriction", "name": "Halal"},
-                {"type": "update_dietary", "student_id": STUDENT_ID, "restriction_names": ["Halal"]},
+        mock_ask_json.return_value = hse._SupportEmailResponse(
+            actions=[
+                hse._SupportEmailAction(type="create_dietary_restriction", name="Halal"),
+                hse._SupportEmailAction(type="update_dietary_restrictions", student_id=STUDENT_ID, restriction_names=["Halal"]),
             ],
-            "reply": (
+            reply=(
                 "I've added Halal as a dietary requirement for Alex. "
                 "Please note that meals won't reflect this until caterers have "
                 "confirmed they can accommodate it."
             ),
-        })
+        )
 
         hse.run_tool_loop(db, case, msg, PARENT_EMAIL, [_make_student()])
 

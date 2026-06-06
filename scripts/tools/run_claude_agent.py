@@ -204,7 +204,6 @@ def run_claude(prompt: str, env: dict[str, str]) -> tuple[bool, str]:
         claude_path,
         "-p", prompt,
         "--output-format", "stream-json",
-        "--verbose",
         "--permission-mode", "acceptEdits"
     ]
 

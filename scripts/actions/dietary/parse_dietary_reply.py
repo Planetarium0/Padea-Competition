@@ -19,15 +19,15 @@ from __future__ import annotations
 
 import argparse
 import datetime
-import json
 import os
-import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
+
+from pydantic import BaseModel
 
 from support import (
     Database,
     Record,
-    ask_llm,
+    ask_llm_json,
     log,
     notify_coordinator,
     schedule_email,
@@ -38,6 +38,30 @@ if TYPE_CHECKING:
     pass
 
 MAX_CLARIFICATION_ROUNDS = 2
+
+
+# ---------------------------------------------------------------------------
+# Pydantic models for LLM responses
+# ---------------------------------------------------------------------------
+
+class _ConfidentWrite(BaseModel):
+    item_name: str
+    restriction_name: str
+    answer: Literal["compatible", "contains"]
+
+class _EarnedLegend(BaseModel):
+    restriction_name: str
+    rationale: str = ""
+
+class _StillUnknown(BaseModel):
+    item_name: str
+    restriction_name: str
+
+class _DietaryReplyExtraction(BaseModel):
+    confident_writes: list[_ConfidentWrite] = []
+    earned_legends: list[_EarnedLegend] = []
+    clarification_questions: list[str] = []
+    still_unknown: list[_StillUnknown] = []
 
 
 # ---------------------------------------------------------------------------
@@ -152,21 +176,6 @@ names exactly as they appear in the lists above. The JSON must have exactly thes
 Return only valid JSON. Do not include any explanatory text before or after the JSON.
 """
     return prompt
-
-
-# ---------------------------------------------------------------------------
-# JSON extraction helper
-# ---------------------------------------------------------------------------
-
-def _extract_json(text: str) -> dict[str, Any] | None:
-    """Find and parse the first {...} block in text."""
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if not match:
-        return None
-    try:
-        return json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return None
 
 
 # ---------------------------------------------------------------------------
@@ -287,52 +296,34 @@ def parse_reply(
         all_caterer_items=caterer_items,
     )
 
-    llm_response = ask_llm(prompt)
-    if llm_response is None:
-        log.warning(
-            f"parse_reply: ask_llm returned None for request {request_code!r} — "
-            f"no state change"
-        )
-        return
-
-    extraction = _extract_json(llm_response)
+    extraction = ask_llm_json(prompt, _DietaryReplyExtraction)
     if extraction is None:
-        log.warning(
-            f"parse_reply: could not extract JSON from LLM response for "
-            f"request {request_code!r} — no state change. Response:\n{llm_response[:500]}"
+        log.failure(
+            f"parse_reply: LLM returned no parseable response for request {request_code!r} — no state change"
         )
         return
 
     # Map name-keyed LLM output back to IDs
-    def _resolve_write(w: dict) -> dict | None:
-        mid = item_id_map.get(w.get("item_name", ""))
-        rid = restriction_id_map.get(w.get("restriction_name", ""))
+    def _resolve_write(w: _ConfidentWrite | _StillUnknown) -> dict | None:
+        mid = item_id_map.get(w.item_name)
+        rid = restriction_id_map.get(w.restriction_name)
         if not mid or not rid:
-            log.warning(
-                f"  parse_reply: could not resolve name→id for "
-                f"item={w.get('item_name')!r} restriction={w.get('restriction_name')!r} — skipping"
-            )
+            log.warning(f"  parse_reply: could not resolve name→id for item={w.item_name!r} restriction={w.restriction_name!r} — skipping")
             return None
-        return {"menu_item_id": mid, "restriction_id": rid, "answer": w.get("answer")}
+        answer = w.answer if isinstance(w, _ConfidentWrite) else None
+        return {"menu_item_id": mid, "restriction_id": rid, "answer": answer}
 
-    def _resolve_legend(leg: dict) -> dict | None:
-        rid = restriction_id_map.get(leg.get("restriction_name", ""))
+    def _resolve_legend(leg: _EarnedLegend) -> dict | None:
+        rid = restriction_id_map.get(leg.restriction_name)
         if not rid:
-            log.warning(
-                f"  parse_reply: could not resolve restriction name→id for "
-                f"{leg.get('restriction_name')!r} — skipping legend"
-            )
+            log.warning(f"  parse_reply: could not resolve restriction name→id for {leg.restriction_name!r} — skipping legend")
             return None
-        return {"restriction_id": rid, "rationale": leg.get("rationale")}
+        return {"restriction_id": rid, "rationale": leg.rationale}
 
-    raw_writes: list[dict] = extraction.get("confident_writes") or []
-    raw_legends: list[dict] = extraction.get("earned_legends") or []
-    raw_unknown: list[dict] = extraction.get("still_unknown") or []
-
-    confident_writes: list[dict] = [r for w in raw_writes if (r := _resolve_write(w)) is not None]
-    earned_legends: list[dict] = [r for leg in raw_legends if (r := _resolve_legend(leg)) is not None]
-    clarification_questions: list[str] = extraction.get("clarification_questions") or []
-    still_unknown: list[dict] = [r for w in raw_unknown if (r := _resolve_write(w)) is not None]
+    confident_writes: list[dict] = [r for w in extraction.confident_writes if (r := _resolve_write(w)) is not None]
+    earned_legends: list[dict] = [r for leg in extraction.earned_legends if (r := _resolve_legend(leg)) is not None]
+    clarification_questions: list[str] = extraction.clarification_questions
+    still_unknown: list[dict] = [r for w in extraction.still_unknown if (r := _resolve_write(w)) is not None]
 
     today_str = datetime.date.today().isoformat()
     now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -358,7 +349,7 @@ def parse_reply(
         "sent_at": message.received_at.isoformat() if message.received_at else now_str,
         "message_id": message.message_id,
         "body": message.body_text or "",
-        "parsed_extraction": extraction,
+        "parsed_extraction": extraction.model_dump(),
     }
     updated_messages = existing_messages + [inbound_entry]
 

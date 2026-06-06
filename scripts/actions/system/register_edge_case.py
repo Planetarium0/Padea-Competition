@@ -21,7 +21,9 @@ import re
 from pathlib import Path
 from typing import Any
 
-from support import ask_llm, log, self_healing_error_handler
+from pydantic import BaseModel
+
+from support import ask_llm_json, log, self_healing_error_handler
 from support.email import (
     Alert,
     Card,
@@ -35,6 +37,16 @@ from support.email import (
 )
 
 _PLANS_DIR = Path(__file__).resolve().parents[3] / "cache" / "plans"
+
+
+# ---------------------------------------------------------------------------
+# Pydantic model for LLM plan draft response
+# ---------------------------------------------------------------------------
+
+class _PlanDraftResponse(BaseModel):
+    title: str = "Edge case"
+    summary_markdown: str = ""
+    plan_markdown: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -138,31 +150,13 @@ def draft_plan(description: str) -> tuple[str, str, str]:
         '## Webapp Impact\\nNone or describe impact and changes needed"}'
     )
 
-    response = ask_llm(prompt)
-    if response is None:
+    result = ask_llm_json(prompt, _PlanDraftResponse)
+    if result is None:
         fallback_summary = f"- {description}\n- *(LLM unavailable — plan must be written manually)*"
         fallback_plan = f"## Summary\n{description}\n\n*(LLM unavailable — plan must be written manually)*"
         return "Edge case", fallback_summary, fallback_plan
 
-    cleaned = re.sub(r"```(?:json)?\n?", "", response).strip()
-    try:
-        data = json.loads(cleaned)
-        title = data.get("title", "Edge case")
-        summary = data.get("summary_markdown", f"- {description}")
-        plan = data.get("plan_markdown", response)
-        return title, summary, plan
-    except json.JSONDecodeError:
-        m = re.search(r"\{.*\}", cleaned, re.DOTALL)
-        if m:
-            try:
-                data = json.loads(m.group(0))
-                title = data.get("title", "Edge case")
-                summary = data.get("summary_markdown", f"- {description}")
-                plan = data.get("plan_markdown", response)
-                return title, summary, plan
-            except json.JSONDecodeError:
-                pass
-    return "Edge case", f"- {description}", response
+    return result.title or "Edge case", result.summary_markdown or f"- {description}", result.plan_markdown or f"## Summary\n{description}"
 
 
 # ---------------------------------------------------------------------------

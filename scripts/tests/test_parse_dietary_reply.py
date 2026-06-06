@@ -1,18 +1,17 @@
 """
 Tests for parse_dietary_reply.parse_reply.
 
-All tests use MockDatabase and patch ask_llm in parse_dietary_reply.
+All tests use MockDatabase and patch ask_llm_json in parse_dietary_reply.
 No real Supabase or Anthropic API calls are made.
 """
 from __future__ import annotations
 
 import datetime
-import json
 import os
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 _SCRIPTS = Path(__file__).resolve().parents[1]
 if str(_SCRIPTS) not in sys.path:
@@ -22,7 +21,13 @@ os.environ.setdefault("PADEA_TEST_MODE", "1")
 
 from support import Record
 from support.inbound import InboundMessage
-from actions.dietary.parse_dietary_reply import parse_reply, _extract_json
+from actions.dietary.parse_dietary_reply import (
+    parse_reply,
+    _DietaryReplyExtraction,
+    _ConfidentWrite,
+    _EarnedLegend,
+    _StillUnknown,
+)
 
 from mock_db import MockDatabase
 from fixtures import (
@@ -105,13 +110,13 @@ def _llm_response(
     earned_legends: list[dict] | None = None,
     clarification_questions: list[str] | None = None,
     still_unknown: list[dict] | None = None,
-) -> str:
-    return json.dumps({
-        "confident_writes": confident_writes or [],
-        "earned_legends": earned_legends or [],
-        "clarification_questions": clarification_questions or [],
-        "still_unknown": still_unknown or [],
-    })
+) -> _DietaryReplyExtraction:
+    return _DietaryReplyExtraction(
+        confident_writes=[_ConfidentWrite(**w) for w in (confident_writes or [])],
+        earned_legends=[_EarnedLegend(**leg) for leg in (earned_legends or [])],
+        clarification_questions=clarification_questions or [],
+        still_unknown=[_StillUnknown(**u) for u in (still_unknown or [])],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -120,8 +125,8 @@ def _llm_response(
 
 class TestParseReply(unittest.TestCase):
 
-    def _parse(self, db, request, message, llm_text: str, dry_run: bool = False):
-        with patch("actions.dietary.parse_dietary_reply.ask_llm", return_value=llm_text):
+    def _parse(self, db, request, message, llm_response: _DietaryReplyExtraction, dry_run: bool = False):
+        with patch("actions.dietary.parse_dietary_reply.ask_llm_json", return_value=llm_response):
             parse_reply(db, request, message, dry_run=dry_run)
 
     # 1. Sweeping confirmation → Resolved, all tags written
@@ -219,7 +224,7 @@ class TestParseReply(unittest.TestCase):
             still_unknown=[{"item_name": "Chicken Fried Rice", "restriction_name": "Vegetarian"}],
         )
 
-        with patch("actions.dietary.parse_dietary_reply.ask_llm", return_value=llm), \
+        with patch("actions.dietary.parse_dietary_reply.ask_llm_json", return_value=llm), \
              patch("actions.dietary.parse_dietary_reply.schedule_email") as mock_email:
             parse_reply(db, request, msg)
 
@@ -266,7 +271,7 @@ class TestParseReply(unittest.TestCase):
             still_unknown=[{"item_name": "Chicken Fried Rice", "restriction_name": "Vegetarian"}],
         )
 
-        with patch("actions.dietary.parse_dietary_reply.ask_llm", return_value=llm), \
+        with patch("actions.dietary.parse_dietary_reply.ask_llm_json", return_value=llm), \
              patch("actions.dietary.parse_dietary_reply.notify_coordinator") as mock_notify:
             parse_reply(db, request, msg)
 
@@ -296,24 +301,24 @@ class TestParseReply(unittest.TestCase):
         self.assertTrue(len(legend_updates) > 0)
         self.assertIn(DIET_VEG_ID, legend_updates[0]["legend_tag_ids"])
 
-    # 8. LLM returns invalid JSON → no state change, no crash
+    # 8. ask_llm_json returns None (LLM unavailable or invalid) → no state change, no crash
     def test_invalid_json_no_state_change(self):
         db = _make_db()
         request = _make_request()
         msg = _make_message()
 
-        with patch("actions.dietary.parse_dietary_reply.ask_llm", return_value="Sorry I can't answer"):
+        with patch("actions.dietary.parse_dietary_reply.ask_llm_json", return_value=None):
             parse_reply(db, request, msg)
 
         self.assertEqual(len(db.DietaryClarificationRequests.updates), 0)
 
-    # 9. ask_llm returns None → logs failure, no state change
+    # 9. ask_llm_json returns None → logs failure, no state change
     def test_ask_llm_none_no_state_change(self):
         db = _make_db()
         request = _make_request()
         msg = _make_message()
 
-        with patch("actions.dietary.parse_dietary_reply.ask_llm", return_value=None):
+        with patch("actions.dietary.parse_dietary_reply.ask_llm_json", return_value=None):
             parse_reply(db, request, msg)
 
         self.assertEqual(len(db.DietaryClarificationRequests.updates), 0)
@@ -327,7 +332,7 @@ class TestParseReply(unittest.TestCase):
             clarification_questions=["Could not understand the reply — please confirm?"],
         )
 
-        with patch("actions.dietary.parse_dietary_reply.ask_llm", return_value=llm), \
+        with patch("actions.dietary.parse_dietary_reply.ask_llm_json", return_value=llm), \
              patch("actions.dietary.parse_dietary_reply.schedule_email"):
             parse_reply(db, request, msg)
 
@@ -369,7 +374,7 @@ class TestParseReply(unittest.TestCase):
             ]
         )
 
-        with patch("actions.dietary.parse_dietary_reply.ask_llm", return_value=llm), \
+        with patch("actions.dietary.parse_dietary_reply.ask_llm_json", return_value=llm), \
              patch("actions.dietary.parse_dietary_reply.schedule_email") as mock_email:
             parse_reply(db, request, msg)
 
@@ -453,27 +458,6 @@ class TestParseReply(unittest.TestCase):
 
         self.assertEqual(len(db.DietaryClarificationRequests.updates), 0)
         self.assertEqual(len(db.MenuItems.updates), 0)
-
-
-class TestExtractJson(unittest.TestCase):
-
-    def test_valid_json(self):
-        text = '{"a": 1, "b": [2, 3]}'
-        result = _extract_json(text)
-        self.assertEqual(result, {"a": 1, "b": [2, 3]})
-
-    def test_json_in_prose(self):
-        text = 'Here is my answer: {"x": "y"} — hope that helps!'
-        result = _extract_json(text)
-        self.assertEqual(result, {"x": "y"})
-
-    def test_no_json_returns_none(self):
-        result = _extract_json("No JSON here at all.")
-        self.assertIsNone(result)
-
-    def test_malformed_json_returns_none(self):
-        result = _extract_json("{not valid json at all}")
-        self.assertIsNone(result)
 
 
 if __name__ == "__main__":

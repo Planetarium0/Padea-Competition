@@ -1,13 +1,25 @@
 from __future__ import annotations
 
-import json
-import os
 import re
 import sys
 from pathlib import Path
 from typing import Any, cast
 
-from support import Database, ExclusionFields, YearLevel, log, ask_llm
+from pydantic import BaseModel, Field
+
+from support import Database, ExclusionFields, YearLevel, ask_llm_json, log
+
+
+# ---------------------------------------------------------------------------
+# Pydantic model for LLM response
+# ---------------------------------------------------------------------------
+
+class _ExclusionRecord(BaseModel):
+    school: str = Field(alias="School")
+    date: str = Field(alias="Date")
+    affected_year_levels: list[str] = Field(alias="Affected Year Levels", default_factory=list)
+    reason: str = Field(alias="Reason", default="Cancelled")
+    model_config = {"populate_by_name": True}
 
 
 _MONTHS: dict[str, int] = {
@@ -74,14 +86,6 @@ def _parse_exclusions_heuristic(
     return results
 
 
-def _extract_json_block(resp: str) -> str:
-    if "```json" in resp:
-        return resp.split("```json")[1].split("```")[0].strip()
-    if "```" in resp:
-        return resp.split("```")[1].split("```")[0].strip()
-    return resp
-
-
 def run(db: Database | None = None) -> None:
     db = db or Database.from_env()
     log.info("Migrating exclusions.pdf → Supabase")
@@ -100,13 +104,9 @@ def run(db: Database | None = None) -> None:
     canonical_schools = [r.fields["name"] for r in schools if "name" in r.fields]
     school_name_to_id = {r.fields["name"]: r.id for r in schools if "name" in r.fields}
 
-    parsed_exclusions: list[dict[str, Any]] | None = None
-    key = os.environ.get("CLAUDE_CODE_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
-
-    if key:
-        log.info("Using Claude LLM for batched exclusions parsing...")
-        school_list_str = "\n".join(f'- "{n}"' for n in canonical_schools)
-        prompt = f"""You are a data extraction assistant.
+    log.info("Using Claude LLM for batched exclusions parsing...")
+    school_list_str = "\n".join(f'- "{n}"' for n in canonical_schools)
+    prompt = f"""You are a data extraction assistant.
 Extract the cancelled school sessions from the following text.
 Return a JSON array of objects, where each object represents one exclusion and has exactly these keys:
 - "School" (string, chosen from the standard school names below)
@@ -124,15 +124,20 @@ Raw Text:
 {raw_text}
 ```
 """
-        resp = ask_llm(prompt)
-        if resp:
-            try:
-                parsed_exclusions = json.loads(_extract_json_block(resp))
-                log.info("LLM successfully parsed all exclusions!")
-            except Exception as e:
-                log.error(f"LLM returned malformed JSON: {e}. Falling back to heuristic.")
-
-    if not parsed_exclusions:
+    parsed_llm = ask_llm_json(prompt, list[_ExclusionRecord])
+    if parsed_llm is not None:
+        log.info("LLM successfully parsed all exclusions!")
+        parsed_exclusions: list[dict[str, Any]] = [
+            {
+                "School": e.school,
+                "Date": e.date,
+                "Affected Year Levels": e.affected_year_levels,
+                "Reason": e.reason,
+            }
+            for e in parsed_llm
+        ]
+    else:
+        log.warning("LLM unavailable or returned invalid data. Falling back to heuristic.")
         parsed_exclusions = _parse_exclusions_heuristic(raw_text, canonical_schools)
 
     records: list[ExclusionFields] = []

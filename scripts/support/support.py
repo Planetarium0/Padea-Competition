@@ -15,7 +15,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from dotenv import load_dotenv
 
@@ -112,234 +112,72 @@ log.setLevel(_log_level)
 # LLM helper
 # ---------------------------------------------------------------------------
 
-_LLM_LOG_FILE = Path(__file__).parents[2] / "cache" / "llm_logs" / "llm_calls.jsonl"
-
-
-def _log_llm_call(prompt: str, response: str | None, thinking: str | None, source: str) -> None:
-    _LLM_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    entry = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "source": source,
-        "prompt": prompt,
-        "thinking": thinking,
-        "response": response,
-    }
-    with _LLM_LOG_FILE.open("a") as f:
-        f.write(json.dumps(entry) + "\n")
-
-
 def ask_llm(prompt: str) -> str | None:
-    """Send a prompt to Claude via the Anthropic SDK, or fall back to the Claude CLI.
+    """Send a prompt to Claude via the Claude CLI.
 
-    Returns the model's text response, or ``None`` if both routes fail.
-    Logs every call (prompt, thinking, response) to cache/llm_logs/llm_calls.jsonl.
+    Returns the model's text response, or ``None`` if the CLI call fails.
     """
     import subprocess
-
-    key = os.environ.get("CLAUDE_CODE_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
-    if key:
-        try:
-            from anthropic import Anthropic
-
-            client = Anthropic(api_key=key)
-            response = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=4000,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            text: str | None = None
-            thinking_text: str | None = None
-            for block in response.content:
-                if block.type == "thinking":
-                    thinking_text = getattr(block, "thinking", None)
-                elif block.type == "text":
-                    text = getattr(block, "text", None)
-            _log_llm_call(prompt, text, thinking_text, source="api")
-            return text
-        except Exception as e:
-            log.error(f"Error calling Anthropic API: {e}")
-            _log_llm_call(prompt, None, None, source="api-error")
-            return None
-    else:
-        log.warning("No Claude or Anthropic API key found. Falling back to Claude CLI.")
-        try:
-            result = subprocess.run(
-                ["claude", "-p", prompt],
-                capture_output=True,
-                text=True,
-                timeout=500,
-            )
-            if result.returncode == 0:
-                text = result.stdout.strip() or None
-                _log_llm_call(prompt, text, None, source="cli")
-                return text
-            log.error(f"Claude CLI returned exit code {result.returncode}: {result.stderr[:200]}")
-            _log_llm_call(prompt, None, None, source="cli-error")
-            return None
-        except FileNotFoundError:
-            log.error("Claude CLI not found. Install it or set ANTHROPIC_API_KEY.")
-            _log_llm_call(prompt, None, None, source="cli-missing")
-            return None
-        except Exception as e:
-            log.error(f"Error calling Claude CLI: {e}")
-            _log_llm_call(prompt, None, None, source="cli-error")
-            return None
-
-
-def ask_llm_with_tools(
-    prompt: str,
-    system: str,
-    executor: Any,          # callable (tool_name, tool_input) -> str
-    tools: list[dict],
-    *,
-    parent_email: str | None = None,
-    case_id: str | None = None,
-) -> bool | None:
-    """[WIP — not currently wired in] Multi-turn LLM conversation with tool calling.
-
-    Intended to replace ask_llm for support email handling once the approach is
-    validated. The CLI/MCP path requires the claude CLI with --mcp-config support.
-
-    Returns ``True`` on success, ``None`` on total failure.
-    Logs every call to cache/llm_logs/llm_calls.jsonl (source "api-tools" / "cli-mcp").
-    """
-    import json as _json
-    import subprocess
-
-    key = os.environ.get("CLAUDE_CODE_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
-    logged_prompt = f"[SYSTEM]\n{system}\n\n[USER]\n{prompt}"
-
-    if key:
-        try:
-            from anthropic import Anthropic
-
-            client = Anthropic(api_key=key)
-            messages: list[dict] = [{"role": "user", "content": prompt}]
-            tool_call_log: list[dict] = []
-            response = None
-
-            while True:
-                response = client.messages.create(
-                    model="claude-sonnet-4-6",
-                    max_tokens=4000,
-                    system=system,
-                    messages=messages,
-                    tools=tools,
-                )
-                messages.append({"role": "assistant", "content": response.content})
-
-                tool_results = []
-                for block in response.content:
-                    if block.type == "tool_use":
-                        tool_result = executor(block.name, block.input)
-                        tool_call_log.append({
-                            "tool": block.name,
-                            "input": block.input,
-                            "result": tool_result,
-                        })
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": tool_result,
-                        })
-
-                if not tool_results:
-                    break  # no more tool calls, done
-
-                messages.append({"role": "user", "content": tool_results})
-
-            final_text: str | None = None
-            if response is not None:
-                for block in response.content:
-                    if hasattr(block, "text"):
-                        final_text = block.text
-                        break
-            response_log = _json.dumps({"tool_calls": tool_call_log, "final_text": final_text})
-            _log_llm_call(logged_prompt, response_log, None, source="api-tools")
-            return True
-
-        except Exception as e:
-            log.error(f"Error calling Anthropic API (with tools): {e}")
-            _log_llm_call(logged_prompt, None, None, source="api-tools-error")
-            return None
-
-    # ------------------------------------------------------------------
-    # CLI path — Claude CLI with MCP server
-    # ------------------------------------------------------------------
-    log.warning("No Claude or Anthropic API key found. Falling back to Claude CLI (MCP).")
-
-    import os as _os
-    import tempfile
-
-    mcp_server = Path(__file__).resolve().parent / "mcp_server.py"
-    python = Path(__file__).resolve().parents[2] / ".venv" / "bin" / "python"
-
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as log_f:
-        log_path = log_f.name
-
-    config = {
-        "mcpServers": {
-            "padea-support": {
-                "command": str(python),
-                "args": [
-                    str(mcp_server),
-                    "--parent-email", parent_email or "",
-                    "--case-id", case_id or "",
-                    "--log-file", log_path,
-                ],
-            }
-        }
-    }
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as cfg_f:
-        _json.dump(config, cfg_f)
-        cfg_path = cfg_f.name
 
     try:
         result = subprocess.run(
-            ["claude", "-p", f"{system}\n\n{prompt}", "--mcp-config", cfg_path],
-            capture_output=True, text=True, timeout=180,
+            ["claude", "-p", prompt],
+            capture_output=True,
+            text=True,
+            timeout=500,
         )
-        if result.returncode != 0:
-            log.error(
-                f"Claude CLI (MCP) returned {result.returncode}: {result.stderr[:200]}"
-            )
-            _log_llm_call(logged_prompt, None, None, source="cli-mcp-error")
-            return None
-
-        # Read back the tool log and replay send_reply to update executor state
-        tool_calls: list[dict] = []
-        try:
-            with open(log_path) as f:
-                log_data = _json.load(f)
-            tool_calls = log_data.get("tool_calls", [])
-            for entry in tool_calls:
-                if entry["tool"] == "send_reply":
-                    executor.reply_sent[0] = True
-        except Exception:
-            pass
-
-        final_text = result.stdout.strip() or None
-        response_log = _json.dumps({"tool_calls": tool_calls, "final_text": final_text})
-        _log_llm_call(logged_prompt, response_log, None, source="cli-mcp")
-        return True
-
+        if result.returncode == 0:
+            return result.stdout.strip() or None
+        log.error(f"Claude CLI returned exit code {result.returncode}: {result.stderr[:200]}")
+        return None
     except FileNotFoundError:
-        log.error("Claude CLI not found. Install it or set ANTHROPIC_API_KEY.")
-        _log_llm_call(logged_prompt, None, None, source="cli-mcp-missing")
+        log.error("Claude CLI not found.")
         return None
     except Exception as e:
-        log.failure(f"Error calling Claude CLI (MCP): {e}")
-        _log_llm_call(logged_prompt, None, None, source="cli-mcp-error")
+        log.error(f"Error calling Claude CLI: {e}")
         return None
-    finally:
-        try:
-            _os.unlink(cfg_path)
-        except FileNotFoundError:
-            pass
-        try:
-            _os.unlink(log_path)
-        except FileNotFoundError:
-            pass
+
+
+T = TypeVar("T")
+
+def _extract_llm_json(text: str) -> Any:
+    """Strip markdown fences and return the first parseable JSON value, or raise ValueError."""
+    import re as _re
+    cleaned = _re.sub(r"```(?:json)?\n?", "", text).strip()
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        m = _re.search(r"[\[{].*[\]}", cleaned, _re.DOTALL)
+        if m:
+            return json.loads(m.group(0))
+    raise ValueError(f"No JSON found in LLM response: {cleaned[:200]!r}")
+
+
+def ask_llm_json(prompt: str, response_type: "type[T]") -> "T | None":
+    """Ask the LLM for a JSON response and validate it with Pydantic.
+
+    Returns a validated model instance, or None if the LLM call fails or the
+    response can't be parsed/validated.  ``response_type`` must be a
+    ``pydantic.BaseModel`` subclass or a type accepted by ``pydantic.TypeAdapter``
+    (e.g. ``list[SomeModel]``).
+    """
+    from pydantic import BaseModel, TypeAdapter, ValidationError
+
+    text = ask_llm(prompt)
+    if text is None:
+        return None
+    try:
+        data = _extract_llm_json(text)
+    except (ValueError, json.JSONDecodeError):
+        log.warning(f"Could not parse LLM response as JSON: {text[:200]!r}")
+        return None
+    try:
+        if isinstance(response_type, type) and issubclass(response_type, BaseModel):
+            return response_type.model_validate(data)
+        return TypeAdapter(response_type).validate_python(data)
+    except ValidationError as exc:
+        log.warning(f"LLM response failed Pydantic validation ({response_type.__name__ if hasattr(response_type, '__name__') else response_type}): {exc}")
+        return None
 
 
 __all__ = [
@@ -347,7 +185,7 @@ __all__ = [
     "Record",
     "Table",
     "ask_llm",
-    "ask_llm_with_tools",
+    "ask_llm_json",
     "log",
     "VERBOSE",
 ]

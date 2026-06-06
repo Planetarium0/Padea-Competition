@@ -475,64 +475,6 @@ def make_tool_executor(
                 f"have confirmed they can accommodate it."
             )
 
-        # ------------------------------------------------------------------
-        # Legacy tool handlers — kept for backward compatibility with tests 6-9
-        # ------------------------------------------------------------------
-
-        # update_dietary: old name for update_dietary_restrictions (different params)
-        elif tool_name == "update_dietary":
-            return execute("update_dietary_restrictions", tool_input)
-
-        # update_contact: old name for update_contact_detail
-        elif tool_name == "update_contact":
-            return execute("update_contact_detail", tool_input)
-
-        # request_change: old name for submit_change_request
-        elif tool_name == "request_change":
-            return execute("submit_change_request", tool_input)
-
-        # escalate: old name for escalate_to_coordinator
-        elif tool_name == "escalate":
-            return execute("escalate_to_coordinator", tool_input)
-
-        # add_dietary_restriction: legacy handler (kept for test compatibility, tests 6-9)
-        elif tool_name == "add_dietary_restriction":
-            student_id = tool_input.get("student_id", "")
-            restriction_id = tool_input.get("restriction_id", "")
-
-            # Re-fetch the student from DB (security: re-validate ownership)
-            student = db.Students.get(student_id)
-            if student is None:
-                return f"Error: student {student_id!r} not found."
-            if student.fields.get("parent_email") != sender_email:
-                return (
-                    f"Error: student {student_id!r} does not belong to {sender_email!r}. "
-                    f"No change made."
-                )
-
-            # Validate restriction exists
-            restriction = db.DietaryRestrictions.get(restriction_id)
-            if restriction is None:
-                return f"Error: restriction {restriction_id!r} not found."
-
-            # Load current list, add if not present
-            current_ids: list[str] = list(student.fields.get("dietary_requirement_ids") or [])
-            if restriction_id in current_ids:
-                restriction_name = restriction.fields.get("name", restriction_id)
-                student_name = student.fields.get("name", student_id)
-                return (
-                    f"{student_name} already has '{restriction_name}' — no change needed."
-                )
-
-            current_ids.append(restriction_id)
-            if not dry_run:
-                db.Students.update(student_id, {"dietary_requirement_ids": current_ids})
-
-            restriction_name = restriction.fields.get("name", restriction_id)
-            student_name = student.fields.get("name", student_id)
-            dry_suffix = " (dry-run: not written)" if dry_run else ""
-            return f"Added '{restriction_name}' to {student_name}.{dry_suffix}"
-
         else:
             return f"Error: unknown tool {tool_name!r}."
 
