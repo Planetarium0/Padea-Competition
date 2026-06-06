@@ -143,11 +143,13 @@ T = TypeVar("T")
 def _extract_llm_json(text: str) -> Any:
     """Strip markdown fences and return the first parseable JSON value, or raise ValueError."""
     import re as _re
-    cleaned = _re.sub(r"```(?:json)?\n?", "", text).strip()
+    cleaned = text.strip()
+    cleaned = _re.sub(r"^```(?:json)?\n?", "", cleaned)
+    cleaned = _re.sub(r"\n?```\s*$", "", cleaned).strip()
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
-        m = _re.search(r"[\[{].*[\]}", cleaned, _re.DOTALL)
+        m = _re.search(r"[\[{].*[\]}]", cleaned, _re.DOTALL)
         if m:
             return json.loads(m.group(0))
     raise ValueError(f"No JSON found in LLM response: {cleaned[:200]!r}")

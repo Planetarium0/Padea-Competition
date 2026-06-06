@@ -295,3 +295,42 @@ class TestSendMealsLinksResendApiKeyMissing(unittest.TestCase):
             )
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+
+class TestExtractLlmJsonUnterminatedCharSet(unittest.TestCase):
+    """Regression for failure_20260606_231948_poll_support_inbox.
+
+    _extract_llm_json had a regex with an unterminated character set:
+        the pattern  [\\[{].*[\\]}  -- missing closing bracket
+    This raised re.PatternError on every call, breaking register_edge_case
+    (and any other ask_llm_json call) whenever the LLM response wasn't
+    clean JSON.
+    """
+
+    def test_extract_llm_json_with_markdown_fence(self) -> None:
+        from support.support import _extract_llm_json
+
+        wrapped = '```json\n{"key": "value"}\n```'
+        result = _extract_llm_json(wrapped)
+        self.assertEqual(result, {"key": "value"})
+
+    def test_extract_llm_json_embedded_in_prose(self) -> None:
+        from support.support import _extract_llm_json
+
+        prose = 'Here is the result: {"title": "Test", "score": 1}'
+        result = _extract_llm_json(prose)
+        self.assertEqual(result["title"], "Test")
+
+    def test_extract_llm_json_raises_on_no_json(self) -> None:
+        from support.support import _extract_llm_json
+
+        with self.assertRaises(ValueError):
+            _extract_llm_json("No JSON here at all.")
+
+    def test_extract_llm_json_preserves_inner_fences(self) -> None:
+        from support.support import _extract_llm_json
+
+        # A fence that is NOT at the start/end must not be stripped.
+        text = '```json\n{"note": "use ```backticks``` here"}\n```'
+        result = _extract_llm_json(text)
+        self.assertEqual(result["note"], "use ```backticks``` here")
