@@ -68,10 +68,20 @@ export function buildHierarchyMaps(restrictions, negativeKeywords = {}) {
     subsetClosure[r.id] = descendants(r.id);
     supersetClosure[r.id] = ancestors(r.id);
   }
+
+  // Build display maps from DB fields, falling back to the hardcoded constants.
+  const tagShortByName = {};
+  const constraintPhraseByName = {};
+  for (const r of restrictions) {
+    tagShortByName[r.name] = r.tag_short || TAG_SHORT[r.name] || r.name;
+    constraintPhraseByName[r.name] = r.constraint_phrase || CONSTRAINT_PHRASE[r.name] || r.name.toLowerCase();
+  }
+
   // legendTagIdSet is populated later once the caterer record is fetched.
   return {
     idToName, nameToId, subsetClosure, supersetClosure,
     negativeKeywords, legendTagIdSet: new Set(),
+    tagShortByName, constraintPhraseByName,
   };
 }
 
@@ -94,7 +104,7 @@ export function checkCompatibility(item, studentReqIds, maps) {
     const closure = maps.subsetClosure[reqId] || new Set([reqId]);
     if (itemTagIds.some(t => closure.has(t))) continue;
 
-    const phrase = CONSTRAINT_PHRASE[reqName] || reqName.toLowerCase();
+    const phrase = maps.constraintPhraseByName?.[reqName] || CONSTRAINT_PHRASE[reqName] || reqName.toLowerCase();
 
     // Legend-based definite incompatibility: if a transitive superset of this
     // constraint is in the caterer's Dietary Legend and the item lacks any
@@ -111,7 +121,7 @@ export function checkCompatibility(item, studentReqIds, maps) {
         }
       }
       if (definitelyNo) {
-        issues.push({ name: reqName, severity: "no", label: `Contains ${phrase}` });
+        issues.push({ name: reqName, severity: "no", label: `Contains ${phrase}`, phrase });
         continue;
       }
     }
@@ -119,9 +129,9 @@ export function checkCompatibility(item, studentReqIds, maps) {
     // No legend verdict — fall back to name-keyword heuristic.
     const kws = maps.negativeKeywords?.[reqName];
     if (kws && kws.some(k => itemNameLower.includes(k)))
-      issues.push({ name: reqName, severity: "no", label: `Contains ${phrase}` });
+      issues.push({ name: reqName, severity: "no", label: `Contains ${phrase}`, phrase });
     else
-      issues.push({ name: reqName, severity: "maybe", label: `May contain ${phrase}` });
+      issues.push({ name: reqName, severity: "maybe", label: `May contain ${phrase}`, phrase });
   }
 
   if (!issues.length) return { compatible: true, severity: "ok", issues };

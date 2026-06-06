@@ -467,7 +467,7 @@ const app = {
 
     // Uncertain ("maybe") — let the student override with confirmation.
     const phrases = issues
-      .map(i => CONSTRAINT_PHRASE[i.name] || i.name.toLowerCase())
+      .map(i => i.phrase || i.name.toLowerCase())
       .join(", ");
     openConfirm({
       title: "Are you sure?",
@@ -539,7 +539,7 @@ function renderTicket(ticket, student) {
   tagsEl.innerHTML = tagIds.map(tid => {
     const name = maps?.idToName[tid];
     if (!name) return "";
-    return `<span class="tag">${escapeHtml(TAG_SHORT[name] || name)}</span>`;
+    return `<span class="tag">${escapeHtml(maps?.tagShortByName?.[name] || name)}</span>`;
   }).join("");
 
   document.getElementById("ticket-allergy-banner").classList.add("hidden");
@@ -763,7 +763,7 @@ function renderMealList() {
     const tagsHtml = tagIds.map(tid => {
       const tName = maps.idToName[tid];
       if (!tName) return "";
-      const short = TAG_SHORT[tName] || tName;
+      const short = maps.tagShortByName?.[tName] || tName;
       return `<span class="tag">${escapeHtml(short)}</span>`;
     }).join("");
 
@@ -1011,7 +1011,7 @@ function showVariantModal(options, selectedId, maps, reqs) {
     const tagsHtml = tagIds.map(tid => {
       const tName = maps?.idToName[tid];
       if (!tName) return "";
-      return `<span class="tag">${escapeHtml(TAG_SHORT[tName] || tName)}</span>`;
+      return `<span class="tag">${escapeHtml(maps?.tagShortByName?.[tName] || tName)}</span>`;
     }).join("");
     const reasonText = issues.map(i => i.label).join(" · ");
     const reasonHtml = reasonText

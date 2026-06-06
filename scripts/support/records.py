@@ -105,6 +105,8 @@ DietaryRestrictionFields = TypedDict(
     {
         "id": str,
         "name": str,
+        "tag_short": str,
+        "constraint_phrase": str,
         # Aggregated by dietary_restrictions_view
         "superset_ids": list[str],
         "subset_ids": list[str],

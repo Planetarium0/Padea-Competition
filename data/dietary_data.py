@@ -47,6 +47,38 @@ DIETARY_HIERARCHY: list[tuple[str, list[str]]] = [
     ("Opted out of Catering", []),
 ]
 
+# Short display labels shown on meal tags.
+TAG_SHORT: dict[str, str] = {
+    "Gluten Free":  "GF",
+    "Dairy Free":   "DF",
+    "Nut Free":     "NF",
+    "Vegetarian":   "Veg",
+    "Vegan":        "Vegan",
+    "Halal":        "Halal",
+    "Kosher":       "Kosher",
+    "Pescatarian":  "Pesc",
+}
+
+# Plain-language phrase for each constraint, used in "Contains X" / "May contain X" labels.
+CONSTRAINT_PHRASE: dict[str, str] = {
+    "Gluten Free":   "gluten",
+    "Dairy Free":    "dairy",
+    "Nut Free":      "nuts",
+    "Vegetarian":    "meat",
+    "Vegan":         "animal products",
+    "Pescatarian":   "non-fish meat",
+    "Halal":         "non-halal ingredients",
+    "Kosher":        "non-kosher ingredients",
+    "No Beef":       "beef",
+    "No Pork":       "pork",
+    "No Lamb":       "lamb",
+    "No Fish":       "fish",
+    "No Shellfish":  "shellfish",
+    "No Seafood":    "seafood",
+    "No Red Meat":   "red meat",
+}
+
+
 def all_restriction_names() -> list[str]:
     """Flat list of all restriction names, including those only referenced
     as supersets — so the migration can create every record before linking."""

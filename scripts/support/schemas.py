@@ -75,6 +75,8 @@ class MenuItem(_Base):
 class DietaryRestriction(_Base):
     id: Optional[str] = None
     name: Optional[str] = None
+    tag_short: Optional[str] = None
+    constraint_phrase: Optional[str] = None
     # View-aggregated
     superset_ids: List[str] = Field(default_factory=list)
     subset_ids: List[str] = Field(default_factory=list)

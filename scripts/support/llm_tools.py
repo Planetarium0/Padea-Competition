@@ -114,6 +114,14 @@ TOOL_SCHEMAS: list[dict] = [
             "type": "object",
             "properties": {
                 "name": {"type": "string"},
+                "tag_short": {
+                    "type": "string",
+                    "description": "Short label shown on meal tags (e.g. 'GF' for Gluten Free). Optional.",
+                },
+                "constraint_phrase": {
+                    "type": "string",
+                    "description": "Plain-language ingredient phrase used in 'Contains X' labels (e.g. 'gluten'). Optional.",
+                },
             },
             "required": ["name"],
         },
@@ -449,8 +457,16 @@ def make_tool_executor(
                     f"use update_dietary_restrictions to assign it."
                 )
 
+            create_data: dict[str, Any] = {"name": name}
+            tag_short = (tool_input.get("tag_short") or "").strip()
+            constraint_phrase = (tool_input.get("constraint_phrase") or "").strip()
+            if tag_short:
+                create_data["tag_short"] = tag_short
+            if constraint_phrase:
+                create_data["constraint_phrase"] = constraint_phrase
+
             if not dry_run:
-                db.DietaryRestrictions.create([{"name": name}])
+                db.DietaryRestrictions.create([create_data])
 
             dry_suffix = " (dry-run: not written)" if dry_run else ""
             return (

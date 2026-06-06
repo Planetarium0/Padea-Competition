@@ -107,8 +107,13 @@ def _read_doc(filename: str) -> str:
         return f"({filename} not found)"
 
 
-def draft_plan(description: str) -> tuple[str, str]:
-    """Use LLM to draft a title and implementation plan. Returns (title, plan_markdown)."""
+def draft_plan(description: str) -> tuple[str, str, str]:
+    """Use LLM to draft a title, summary, and full implementation plan.
+
+    Returns (title, summary_markdown, plan_markdown).
+    summary_markdown is 3-5 bullet points for the coordinator email.
+    plan_markdown is the full detailed plan stored in cache and fed to the agent.
+    """
     principles = _read_doc("principles.md")
 
     prompt = (
@@ -119,12 +124,15 @@ def draft_plan(description: str) -> tuple[str, str]:
         "## Edge Case / Requirement\n"
         f"{description}\n\n"
         "## Your Task\n"
-        "Draft a concise, high-level implementation plan,\n"
-        "talk about what things need to be changed and how.\n"
-        "Write mostly in natural language,\n"
-        "code should be included only when it is directly relevant.\n\n"
+        "Draft an implementation plan. You must produce two versions:\n"
+        "1. summary_markdown: 3-5 concise bullet points covering what will change and why.\n"
+        "   This is shown to the coordinator in the approval email — keep it scannable.\n"
+        "2. plan_markdown: a full, detailed implementation plan with all context the\n"
+        "   implementing agent needs. Write mostly in natural language; include code\n"
+        "   only when directly relevant.\n\n"
         "Respond with ONLY a JSON object (no markdown fences, no other text):\n"
         '{"title": "Short descriptive title (max 8 words)", '
+        '"summary_markdown": "- bullet 1\\n- bullet 2\\n- bullet 3", '
         '"plan_markdown": "## Summary\\n...\\n\\n## Code Changes\\n...\\n\\n'
         '## Tests\\n...\\n\\n## Documentation Updates\\nNone or list changes\\n\\n'
         '## Webapp Impact\\nNone or describe impact and changes needed"}'
@@ -132,24 +140,29 @@ def draft_plan(description: str) -> tuple[str, str]:
 
     response = ask_llm(prompt)
     if response is None:
-        return (
-            "Edge case",
-            f"## Summary\n{description}\n\n*(LLM unavailable — plan must be written manually)*",
-        )
+        fallback_summary = f"- {description}\n- *(LLM unavailable — plan must be written manually)*"
+        fallback_plan = f"## Summary\n{description}\n\n*(LLM unavailable — plan must be written manually)*"
+        return "Edge case", fallback_summary, fallback_plan
 
     cleaned = re.sub(r"```(?:json)?\n?", "", response).strip()
     try:
         data = json.loads(cleaned)
-        return data.get("title", "Edge case"), data.get("plan_markdown", response)
+        title = data.get("title", "Edge case")
+        summary = data.get("summary_markdown", f"- {description}")
+        plan = data.get("plan_markdown", response)
+        return title, summary, plan
     except json.JSONDecodeError:
         m = re.search(r"\{.*\}", cleaned, re.DOTALL)
         if m:
             try:
                 data = json.loads(m.group(0))
-                return data.get("title", "Edge case"), data.get("plan_markdown", response)
+                title = data.get("title", "Edge case")
+                summary = data.get("summary_markdown", f"- {description}")
+                plan = data.get("plan_markdown", response)
+                return title, summary, plan
             except json.JSONDecodeError:
                 pass
-    return "Edge case", response
+    return "Edge case", f"- {description}", response
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +181,7 @@ def send_approval_email(plan: dict[str, Any], *, dry_run: bool = False) -> None:
     plan_id = plan["id"]
     title = plan["title"]
     description = plan["description"]
-    plan_markdown = plan["plan_markdown"]
+    summary_markdown = plan.get("summary_markdown") or plan["plan_markdown"]
     source_labels = {
         "manual": "manual entry",
         "email": "support email",
@@ -188,7 +201,7 @@ def send_approval_email(plan: dict[str, Any], *, dry_run: bool = False) -> None:
         ]),
         Card([
             Heading("Proposed Implementation"),
-            Text(plan_markdown),
+            Text(summary_markdown),
         ]),
         Divider(),
         Alert([
@@ -247,7 +260,7 @@ def register_edge_case(
     log.info(f"[PLAN] Registering edge case as {plan_id}")
 
     log.info("[PLAN] Drafting implementation plan via LLM...")
-    title, plan_markdown = draft_plan(description)
+    title, summary_markdown, plan_markdown = draft_plan(description)
     log.info(f"[PLAN] Drafted: {title!r}")
 
     plan: dict[str, Any] = {
@@ -256,6 +269,7 @@ def register_edge_case(
         "source": source,
         "description": description,
         "title": title,
+        "summary_markdown": summary_markdown,
         "plan_markdown": plan_markdown,
         "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "notification_message_id": _notification_message_id(plan_id),

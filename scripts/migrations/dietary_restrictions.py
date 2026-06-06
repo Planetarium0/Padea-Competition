@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from support import Database, DietaryRestrictionFields, log
-from data.dietary_data import DIETARY_HIERARCHY, all_restriction_names
+from data.dietary_data import CONSTRAINT_PHRASE, DIETARY_HIERARCHY, TAG_SHORT, all_restriction_names
 
 
 def run(db: Database | None = None) -> None:
@@ -13,8 +13,12 @@ def run(db: Database | None = None) -> None:
     # we try to link Supersets in pass 2.
     names = all_restriction_names()
     log.info(f"Creating {len(names)} Dietary Restriction records...")
-    seed_records: list[DietaryRestrictionFields] = [
-        {"name": n}
+    seed_records: list[dict] = [
+        {
+            "name": n,
+            **({"tag_short": TAG_SHORT[n]} if n in TAG_SHORT else {}),
+            **({"constraint_phrase": CONSTRAINT_PHRASE[n]} if n in CONSTRAINT_PHRASE else {}),
+        }
         for n in names
     ]
     db.DietaryRestrictions.create(seed_records)

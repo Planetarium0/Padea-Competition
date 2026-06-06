@@ -428,8 +428,9 @@ async function loadTodayOrder(sId, sessId) {
 
     document.getElementById("order-meal-name").textContent = mealName;
     document.getElementById("order-meal-tags").innerHTML = mealTags.map(tid => {
-      const name = allRestrictions.find(r => r.id === tid)?.name;
-      return name ? `<span class="tag">${escapeHtml(TAG_SHORT[name] || name)}</span>` : "";
+      const r = allRestrictions.find(r => r.id === tid);
+      if (!r) return "";
+      return `<span class="tag">${escapeHtml(r.tag_short || r.name)}</span>`;
     }).join("");
     document.getElementById("order-card").classList.remove("hidden");
   } catch {
@@ -492,7 +493,7 @@ function renderMealList() {
     const tagIds   = item.dietary_tag_ids || [];
     const tagsHtml = tagIds.map(tid => {
       const tName = dietMaps.idToName[tid];
-      return tName ? `<span class="tag">${escapeHtml(TAG_SHORT[tName] || tName)}</span>` : "";
+      return tName ? `<span class="tag">${escapeHtml(dietMaps.tagShortByName?.[tName] || tName)}</span>` : "";
     }).join("");
 
     const variants    = variantMap[item.id] || [];
@@ -614,7 +615,7 @@ function openVariantPicker(parentId) {
     const tagIds   = item.dietary_tag_ids || [];
     const tagsHtml = tagIds.map(tid => {
       const tName = dietMaps?.idToName[tid];
-      return tName ? `<span class="tag">${escapeHtml(TAG_SHORT[tName] || tName)}</span>` : "";
+      return tName ? `<span class="tag">${escapeHtml(dietMaps?.tagShortByName?.[tName] || tName)}</span>` : "";
     }).join("");
     const reasonHtml = issues.length
       ? `<div class="meal-reason meal-reason-${severity}">${escapeHtml(issues.map(i => i.label).join(" · "))}</div>` : "";
