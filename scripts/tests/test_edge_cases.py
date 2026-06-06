@@ -218,6 +218,196 @@ class TestSendOrdersDuplicateEmailCode(unittest.TestCase):
         mock_send.assert_not_called()
 
 
+class TestDayBlockedMenuItems(unittest.TestCase):
+    """Regression tests for day-specific menu item availability (Big Chicken edge case).
+
+    Crispy Chicken Taco is unavailable on Tuesdays;
+    Cali Burrito is unavailable on Mondays.
+    """
+
+    _CATERER_ID = "recBigChicken"
+    _SESSION_ID = "recSession01"
+    _STU_ID     = "recStudent01"
+    _TACO_ID    = "recTaco0001"
+    _BURRITO_ID = "recBurrito01"
+    _WRAP_ID    = "recWrap00001"
+
+    def _make_db(
+        self,
+        session_day: str,
+        *,
+        taco_unavailable_days: list | None = None,
+        burrito_unavailable_days: list | None = None,
+        student_preference_id: str | None = None,
+        extra_students: list | None = None,
+    ) -> "MockDatabase":
+        db = MockDatabase()
+        db.DietaryRestrictions._records = []
+        db.Caterers._records = [Record(id=self._CATERER_ID, fields={
+            "name": "Big Chicken",
+            "able_to_serve_school_ids": ["recSchool01"],
+        })]
+        db.MenuItems._records = [
+            Record(id=self._TACO_ID, fields={
+                "name": "Crispy Chicken Taco",
+                "caterer_id": self._CATERER_ID,
+                "dietary_tag_ids": [],
+                "unavailable_days": taco_unavailable_days if taco_unavailable_days is not None else [],
+            }),
+            Record(id=self._BURRITO_ID, fields={
+                "name": "Cali Burrito",
+                "caterer_id": self._CATERER_ID,
+                "dietary_tag_ids": [],
+                "unavailable_days": burrito_unavailable_days if burrito_unavailable_days is not None else [],
+            }),
+            Record(id=self._WRAP_ID, fields={
+                "name": "Chicken Wrap",
+                "caterer_id": self._CATERER_ID,
+                "dietary_tag_ids": [],
+                "unavailable_days": [],
+            }),
+        ]
+        db.Sessions._records = [Record(id=self._SESSION_ID, fields={
+            "session_code": "BigChicken-Session",
+            "school_id": "recSchool01",
+            "caterer_id": self._CATERER_ID,
+            "day": session_day,
+        })]
+        students = [Record(id=self._STU_ID, fields={
+            "name": "Test Student",
+            "dietary_requirement_ids": [],
+            "session_ids": [self._SESSION_ID],
+            "meal_preference_id": student_preference_id,
+        })]
+        if extra_students:
+            students.extend(extra_students)
+        db.Students._records = students
+        db.Absences._records = []
+        db.Exclusions._records = []
+        db.CatererFeedback._records = []
+        db.Orders._records = []
+        db.WeeklyOrders._records = []
+        return db
+
+    def _assigned_item_ids(self, db: "MockDatabase") -> list:
+        return [o.get("menu_item_id") for o in db.Orders.created_fields]
+
+    def test_available_items_for_day_filters_blocked_items(self) -> None:
+        from actions.orders.register_orders import available_items_for_day
+        from support import Record
+
+        taco    = Record(id=self._TACO_ID,    fields={"name": "Taco",    "unavailable_days": ["Tuesday"]})
+        burrito = Record(id=self._BURRITO_ID, fields={"name": "Burrito", "unavailable_days": ["Monday"]})
+        wrap    = Record(id=self._WRAP_ID,    fields={"name": "Wrap",    "unavailable_days": []})
+
+        tuesday_menu = available_items_for_day([taco, burrito, wrap], "Tuesday")
+        self.assertNotIn(self._TACO_ID, {i.id for i in tuesday_menu})
+        self.assertIn(self._BURRITO_ID, {i.id for i in tuesday_menu})
+        self.assertIn(self._WRAP_ID,    {i.id for i in tuesday_menu})
+
+        monday_menu = available_items_for_day([taco, burrito, wrap], "Monday")
+        self.assertIn(self._TACO_ID,       {i.id for i in monday_menu})
+        self.assertNotIn(self._BURRITO_ID, {i.id for i in monday_menu})
+
+    def test_day_blocked_item_excluded_from_fallback_tuesday(self) -> None:
+        """Taco blocked on Tuesdays — student fallback must not assign the Taco."""
+        from actions.orders.register_orders import register_orders
+
+        db = self._make_db("Tuesday", taco_unavailable_days=["Tuesday"])
+        register_orders(db, dry_run=False)
+
+        assigned = self._assigned_item_ids(db)
+        self.assertGreater(len(assigned), 0, "Student should be assigned a meal")
+        self.assertNotIn(self._TACO_ID, assigned,
+            "Taco must not be assigned on Tuesday when it is day-blocked")
+
+    def test_same_item_available_on_other_day(self) -> None:
+        """Taco unavailable Tuesday but available Monday — Monday fallback may use it."""
+        from actions.orders.register_orders import register_orders
+
+        db = self._make_db("Monday", taco_unavailable_days=["Tuesday"])
+        register_orders(db, dry_run=False)
+
+        # With no preference and variety fallback, the Taco is a valid candidate
+        # on Monday. We can't assert it IS assigned (random pick), but we verify
+        # the pipeline completes and assigns something (not an error).
+        assigned = self._assigned_item_ids(db)
+        self.assertEqual(len(assigned), 1, "Student on Monday should receive a meal")
+        self.assertIn(assigned[0], {self._TACO_ID, self._BURRITO_ID, self._WRAP_ID})
+
+    def test_explicit_preference_blocked_by_day_falls_back_and_logs_failure(self) -> None:
+        """Student's explicit preference is day-blocked → fallback + log.failure recorded."""
+        import support.error_handler as eh_module
+        import tempfile, shutil
+        from pathlib import Path
+        from actions.orders.register_orders import register_orders
+        from support.error_handler import self_healing_error_handler
+
+        db = self._make_db(
+            "Tuesday",
+            taco_unavailable_days=["Tuesday"],
+            student_preference_id=self._TACO_ID,  # preference is the blocked item
+        )
+
+        tmp = Path(tempfile.mkdtemp(prefix="padea_regression_dayblock_"))
+        try:
+            with mock.patch.object(eh_module, "_FAILURES_DIR", tmp):
+                with self_healing_error_handler("register_orders_day_block_test"):
+                    register_orders(db, dry_run=False)
+
+            # A failure artifact must have been written because the preference was blocked.
+            jsons = sorted(tmp.glob("failure_*.json"))
+            self.assertEqual(len(jsons), 1,
+                "Day-blocked preference should write a failure artifact")
+
+            import json as _json
+            payload = _json.loads(jsons[0].read_text(encoding="utf-8"))
+            self.assertTrue(len(payload["logged_failures"]) >= 1,
+                "At least one logged_failure for the blocked preference")
+            failure_msg = payload["logged_failures"][0]
+            self.assertIn("Tuesday", failure_msg)
+
+            # Student should still receive a meal (fell back to an available item).
+            assigned = self._assigned_item_ids(db)
+            self.assertEqual(len(assigned), 1, "Fallback must assign a meal even when preference blocked")
+            self.assertNotIn(self._TACO_ID, assigned)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_min_qty_enforcement_only_considers_day_available_items(self) -> None:
+        """After day filtering, enforce_min_qty swap targets are all day-available.
+
+        Setup: Tuesday session, Taco blocked. 5 students assigned — the pipeline
+        must produce assignments with only Burrito/Wrap, and min-qty enforcement
+        (if triggered) must not reintroduce the Taco.
+        """
+        from actions.orders.register_orders import register_orders
+
+        extra = [
+            Record(id=f"recStu0{i}", fields={
+                "name": f"Student {i}",
+                "dietary_requirement_ids": [],
+                "session_ids": [self._SESSION_ID],
+                "meal_preference_id": None,
+            })
+            for i in range(2, 6)
+        ]
+        db = self._make_db(
+            "Tuesday",
+            taco_unavailable_days=["Tuesday"],
+            extra_students=extra,
+        )
+        register_orders(db, dry_run=False)
+
+        # Orders are grouped by item, so assert on total quantity and item IDs used.
+        total_meals = sum(o.get("quantity", 0) for o in db.Orders.created_fields)
+        self.assertEqual(total_meals, 5, "All 5 students should be assigned a meal")
+        assigned_items = self._assigned_item_ids(db)
+        for item_id in assigned_items:
+            self.assertNotEqual(item_id, self._TACO_ID,
+                "Day-blocked Taco must not appear in any assignment after min-qty enforcement")
+
+
 class TestSendMealsLinksResendApiKeyMissing(unittest.TestCase):
     """Regression for failure_20260603_201520_send_meals_links.
 

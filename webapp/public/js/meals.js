@@ -20,7 +20,7 @@
  */
 
 import { supabase } from './shared/supabase_client.js'
-import { TAG_SHORT, CONSTRAINT_PHRASE, buildHierarchyMaps, checkCompatibility, buildVariantMap, bestVariantSeverity } from './shared/diet.js'
+import { TAG_SHORT, CONSTRAINT_PHRASE, buildHierarchyMaps, checkCompatibility, buildVariantMap, bestVariantSeverity, filterItemsByDay } from './shared/diet.js'
 import { escapeHtml, toast, showError, openConfirm, closeConfirm, confirmModalYes, confirmModalNo } from './shared/ui.js'
 
 
@@ -425,7 +425,8 @@ const app = {
     const parent = state.menuItems.find(i => i.id === parentId);
     if (!parent) return;
     const variants = state.variantMap[parentId] || [];
-    const allOptions = [parent, ...variants];
+    const sessionDay = state.session?.day;
+    const allOptions = filterItemsByDay([parent, ...variants], sessionDay);
     const reqs = state.student?.dietary_requirement_ids || [];
     const maps = state.dietMaps;
 
@@ -742,8 +743,9 @@ function renderMealList() {
     return;
   }
 
-  // Exclude variants from the main list — they appear only inside the variant picker.
-  const displayItems = state.menuItems.filter(i => !i.is_variant);
+  // Exclude variants and day-blocked items from the main list.
+  const sessionDay = state.session?.day;
+  const displayItems = filterItemsByDay(state.menuItems, sessionDay).filter(i => !i.is_variant);
 
   // Bucket items: compatible / possibly-compatible / definitely-incompatible.
   // For items with variants, use the best severity across all options.

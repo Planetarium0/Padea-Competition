@@ -129,6 +129,11 @@ export function checkCompatibility(item, studentReqIds, maps) {
   return { compatible: false, severity, issues };
 }
 
+export function filterItemsByDay(items, sessionDay) {
+  if (!sessionDay) return items;
+  return items.filter(item => !(item.unavailable_days ?? []).includes(sessionDay));
+}
+
 export function buildVariantMap(items) {
   const map = {};
   for (const item of items)
