@@ -163,7 +163,12 @@ Deno.serve(async (req: Request) => {
     if (typeof v === "string") rawPayload[k] = v;
   }
 
-  const { error } = await supabase.from("dietary_inbound_messages").insert({
+  // Route to support_inbound_messages if the recipient local part is "support"
+  // (i.e. support@reply.<domain>); dietary replies use replies+CODE@reply.<domain>
+  const localPart = toAddress.split("@")[0] ?? "";
+  const table = localPart === "support" ? "support_inbound_messages" : "dietary_inbound_messages";
+
+  const { error } = await supabase.from(table).insert({
     from_address: fromAddress,
     subject,
     body_text: parsedBody,

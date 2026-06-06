@@ -822,11 +822,14 @@ def handle_message(
 
     coordinator_email = os.environ.get("COORDINATOR_EMAIL", "")
 
-    # 1. Check if this is the coordinator — may be an approval/denial reply
+    # 1a. Plan approval/rejection — check before role-based routing so replies from
+    #     the developer address (which doubles as coordinator in dev mode) are handled.
+    if _try_process_plan_approval(inbound_msg, dry_run=dry_run):
+        return
+
+    # 1b. Check if this is the coordinator — may be an approval/denial reply
     if coordinator_email and sender_email.lower() == coordinator_email.lower():
         if _try_process_approval(db, inbound_msg, dry_run=dry_run):
-            return
-        if _try_process_plan_approval(inbound_msg, dry_run=dry_run):
             return
         # Not an approval — guard against loops
         log.warning(

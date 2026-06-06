@@ -198,6 +198,7 @@ def implement_plan(plan_id: str, *, dry_run: bool = False) -> bool:
     success, agent_log = run_claude_agent.orchestrate_self_healing(
         prompt, modified_before=[]
     )
+    human_log = run_claude_agent.extract_agent_text(agent_log)
 
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
@@ -207,7 +208,7 @@ def implement_plan(plan_id: str, *, dry_run: bool = False) -> bool:
             {
                 "status": "implemented",
                 "implemented_at": now,
-                "implementation_log": agent_log[:10000],
+                "implementation_log": human_log[:10000] or agent_log[:10000],
             },
         )
         log.info(f"[PLAN] Implementation succeeded for {plan_id!r}")
@@ -217,12 +218,12 @@ def implement_plan(plan_id: str, *, dry_run: bool = False) -> bool:
             {
                 "status": "failed",
                 "implemented_at": now,
-                "implementation_log": agent_log[:10000],
+                "implementation_log": human_log[:10000] or agent_log[:10000],
             },
         )
         log.error(f"[PLAN] Implementation failed for {plan_id!r}")
 
-    _send_completion_email(plan, success=success, agent_log=agent_log)
+    _send_completion_email(plan, success=success, agent_log=human_log or agent_log[-2000:])
     return success
 
 

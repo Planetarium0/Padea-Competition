@@ -161,6 +161,31 @@ def _stream_tee(src, buf: list[bytes]) -> None:
     src.close()
 
 
+def extract_agent_text(stream_json_log: str) -> str:
+    """Extract human-readable assistant text from a captured stream-json log.
+
+    Returns the concatenated text blocks from all assistant messages, or the
+    raw log tail if parsing fails (so the caller always gets something useful).
+    """
+    import json as _json
+    parts: list[str] = []
+    for line in stream_json_log.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = _json.loads(line)
+            if event.get("type") == "assistant":
+                for block in event.get("message", {}).get("content", []):
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        text = block.get("text", "")
+                        if text:
+                            parts.append(text)
+        except (ValueError, KeyError, TypeError):
+            continue
+    return "\n".join(parts).strip()
+
+
 def run_claude(prompt: str, env: dict[str, str]) -> tuple[bool, str]:
     """Invokes Claude Code in the restricted environment.
 
@@ -179,6 +204,7 @@ def run_claude(prompt: str, env: dict[str, str]) -> tuple[bool, str]:
         claude_path,
         "-p", prompt,
         "--output-format", "stream-json",
+        "--verbose",
         "--permission-mode", "acceptEdits"
     ]
 
@@ -324,6 +350,11 @@ def orchestrate_self_healing(prompt: str, modified_before: list[str]) -> tuple[b
     # 2. Audit modified files
     modified_after = get_git_modified_files()
     new_modifications = [f for f in modified_after if f not in modified_before]
+
+    # If the agent failed AND made no edits, there is nothing to validate — bail early.
+    if not success and not new_modifications:
+        print("[-] Agent produced no output and no file changes — treating as failure.")
+        return False, log
 
     unauthorized_edits = []
     for file in new_modifications:
